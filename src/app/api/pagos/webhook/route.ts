@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mpPayment } from "@/lib/mercadopago";
+import { getMpPayment } from "@/lib/mercadopago";
 import { prisma } from "@/lib/prisma";
 import { createHmac } from "crypto";
 import type { TransactionStatus, OrderStatus } from "@prisma/client";
@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Consultar el pago en MP para obtener el estado real
-    const payment = await mpPayment.get({ id: paymentId });
+    const payment = await getMpPayment().get({ id: paymentId });
 
     const mpStatus = payment.status ?? "pending";
     const externalRef = payment.external_reference;

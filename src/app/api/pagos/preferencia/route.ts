@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mpPreference } from "@/lib/mercadopago";
+import { getMpPreference } from "@/lib/mercadopago";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL!;
 
-    const preference = await mpPreference.create({
+    const preference = await getMpPreference().create({
       body: {
         external_reference: order.id,
         items: order.items.map((item) => ({

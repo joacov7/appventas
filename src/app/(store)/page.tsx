@@ -1,9 +1,9 @@
+export const dynamic = "force-dynamic";
+
 import { prisma } from "@/lib/prisma";
 import { ProductCard } from "@/components/store/ProductCard";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
-
-export const revalidate = 60;
 
 export default async function HomePage() {
   const [featuredProducts, categories] = await Promise.all([
@@ -79,13 +79,16 @@ export default async function HomePage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
             {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={{
-                ...product,
-                variants: product.variants.map(v => ({
-                  ...v,
-                  price: Number(v.price),
-                })),
-              }} />
+              <ProductCard
+                key={product.id}
+                product={{
+                  ...product,
+                  variants: product.variants.map((v) => ({
+                    ...v,
+                    price: Number(v.price),
+                  })),
+                }}
+              />
             ))}
           </div>
         )}

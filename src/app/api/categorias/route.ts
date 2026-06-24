@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
 import { z } from "zod";
 
 export async function GET() {
@@ -22,9 +21,6 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  // TODO: reactivar cuando configures Google OAuth
-  // const session = await auth();
-  // if (session?.user?.role !== "ADMIN") return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
   try {
     const body = schema.parse(await req.json());
     const category = await prisma.category.create({ data: body });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { z } from "zod";
 
 export async function GET() {
@@ -21,6 +22,10 @@ const schema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session || session.user?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
+  }
   try {
     const body = schema.parse(await req.json());
     const category = await prisma.category.create({ data: body });

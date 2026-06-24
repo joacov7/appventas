@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
 
 const STATUS_LABEL: Record<string, string> = {
   PENDING: "Pendiente", PROCESSING: "En proceso", SHIPPED: "Enviado",
@@ -16,7 +17,7 @@ async function getOrders() {
     const { prisma } = await import("@/lib/prisma");
     return await prisma.order.findMany({
       orderBy: { createdAt: "desc" },
-      take: 50,
+      take: 100,
       include: { _count: { select: { items: true } } },
     });
   } catch {
@@ -42,7 +43,11 @@ export default async function OrdenesPage() {
           <tbody className="divide-y divide-gray-50">
             {orders.map((order) => (
               <tr key={order.id} className="hover:bg-gray-50 transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-gray-500">{order.id.slice(0, 8)}…</td>
+                <td className="px-4 py-3">
+                  <Link href={`/admin/ordenes/${order.id}`} className="font-mono text-xs text-emerald-600 hover:underline">
+                    {order.id.slice(0, 8)}…
+                  </Link>
+                </td>
                 <td className="px-4 py-3 text-gray-700">{order.guestEmail ?? order.userId ?? "—"}</td>
                 <td className="px-4 py-3 text-gray-600">{order._count.items}</td>
                 <td className="px-4 py-3 font-semibold">

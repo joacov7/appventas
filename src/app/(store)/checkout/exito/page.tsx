@@ -2,7 +2,14 @@ import Link from "next/link";
 import { CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
-export default function ExitoPage() {
+interface Props {
+  searchParams: Promise<{ payment_id?: string; external_reference?: string; status?: string }>;
+}
+
+export default async function ExitoPage({ searchParams }: Props) {
+  const params = await searchParams;
+  const orderId = params.external_reference;
+
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
       <div className="text-center space-y-5 max-w-md">
@@ -11,6 +18,11 @@ export default function ExitoPage() {
         <p className="text-gray-500">
           Tu compra fue procesada con éxito. Recibirás un email de confirmación en breve.
         </p>
+        {orderId && (
+          <p className="text-xs text-gray-400 font-mono bg-gray-50 px-3 py-2 rounded-lg">
+            Orden: {orderId.slice(0, 8)}…
+          </p>
+        )}
         <Link href="/">
           <Button size="lg">Seguir comprando</Button>
         </Link>

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { auth } from "@/lib/auth";
 import { z } from "zod";
 
 export async function GET(req: NextRequest) {
@@ -52,13 +53,14 @@ const createProductSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session || session.user?.role !== "ADMIN") {
+    return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
+  }
   try {
     const body = createProductSchema.parse(await req.json());
     const product = await prisma.product.create({
-      data: {
-        ...body,
-        variants: { create: body.variants },
-      },
+      data: { ...body, variants: { create: body.variants } },
       include: { variants: true, category: true },
     });
     return NextResponse.json(product, { status: 201 });
@@ -66,7 +68,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
-    console.error(error);
     return NextResponse.json({ error: "Error al crear producto" }, { status: 500 });
   }
 }

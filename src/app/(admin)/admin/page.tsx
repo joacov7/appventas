@@ -1,21 +1,28 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
 import { Package, ShoppingBag, DollarSign, Users } from "lucide-react";
 
-export default async function AdminDashboard() {
-  const [totalProducts, totalOrders, pendingOrders, approvedTransactionsAgg] =
-    await Promise.all([
-      prisma.product.count({ where: { active: true } }),
-      prisma.order.count(),
-      prisma.order.count({ where: { status: "PENDING" } }),
-      prisma.transaction.aggregate({
-        where: { status: "APPROVED" },
-        _sum: { amount: true },
-      }),
-    ]);
+async function getStats() {
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    const [totalProducts, totalOrders, pendingOrders, approvedTransactionsAgg] =
+      await Promise.all([
+        prisma.product.count({ where: { active: true } }),
+        prisma.order.count(),
+        prisma.order.count({ where: { status: "PENDING" } }),
+        prisma.transaction.aggregate({
+          where: { status: "APPROVED" },
+          _sum: { amount: true },
+        }),
+      ]);
+    return { totalProducts, totalOrders, pendingOrders, revenue: Number(approvedTransactionsAgg._sum.amount ?? 0) };
+  } catch {
+    return { totalProducts: 0, totalOrders: 0, pendingOrders: 0, revenue: 0 };
+  }
+}
 
-  const revenue = Number(approvedTransactionsAgg._sum.amount ?? 0);
+export default async function AdminDashboard() {
+  const { totalProducts, totalOrders, pendingOrders, revenue } = await getStats();
 
   const stats = [
     { label: "Productos activos", value: totalProducts, icon: Package, color: "text-emerald-600 bg-emerald-50" },

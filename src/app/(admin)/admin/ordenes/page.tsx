@@ -1,33 +1,31 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/Badge";
-import Link from "next/link";
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING: "Pendiente",
-  PROCESSING: "En proceso",
-  SHIPPED: "Enviado",
-  DELIVERED: "Entregado",
-  CANCELLED: "Cancelado",
-  REFUNDED: "Reembolsado",
+  PENDING: "Pendiente", PROCESSING: "En proceso", SHIPPED: "Enviado",
+  DELIVERED: "Entregado", CANCELLED: "Cancelado", REFUNDED: "Reembolsado",
+};
+const STATUS_VARIANT: Record<string, "default" | "success" | "warning" | "danger" | "info"> = {
+  PENDING: "warning", PROCESSING: "info", SHIPPED: "info",
+  DELIVERED: "success", CANCELLED: "danger", REFUNDED: "default",
 };
 
-const STATUS_VARIANT: Record<string, "default" | "success" | "warning" | "danger" | "info"> = {
-  PENDING: "warning",
-  PROCESSING: "info",
-  SHIPPED: "info",
-  DELIVERED: "success",
-  CANCELLED: "danger",
-  REFUNDED: "default",
-};
+async function getOrders() {
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    return await prisma.order.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 50,
+      include: { _count: { select: { items: true } } },
+    });
+  } catch {
+    return [];
+  }
+}
 
 export default async function OrdenesPage() {
-  const orders = await prisma.order.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 50,
-    include: { _count: { select: { items: true } } },
-  });
+  const orders = await getOrders();
 
   return (
     <div>

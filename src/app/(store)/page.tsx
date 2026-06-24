@@ -1,26 +1,36 @@
 export const dynamic = "force-dynamic";
 
-import { prisma } from "@/lib/prisma";
 import { ProductCard } from "@/components/store/ProductCard";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
+import type { ProductPublic } from "@/types/product";
+
+async function getHomeData() {
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    const [featuredProducts, categories] = await Promise.all([
+      prisma.product.findMany({
+        where: { active: true, featured: true },
+        include: {
+          category: { select: { id: true, name: true, slug: true } },
+          variants: { where: { active: true }, orderBy: { price: "asc" } },
+        },
+        take: 8,
+        orderBy: { createdAt: "desc" },
+      }),
+      prisma.category.findMany({
+        where: { active: true },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+    return { featuredProducts, categories };
+  } catch {
+    return { featuredProducts: [], categories: [] };
+  }
+}
 
 export default async function HomePage() {
-  const [featuredProducts, categories] = await Promise.all([
-    prisma.product.findMany({
-      where: { active: true, featured: true },
-      include: {
-        category: { select: { id: true, name: true, slug: true } },
-        variants: { where: { active: true }, orderBy: { price: "asc" } },
-      },
-      take: 8,
-      orderBy: { createdAt: "desc" },
-    }),
-    prisma.category.findMany({
-      where: { active: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const { featuredProducts, categories } = await getHomeData();
 
   return (
     <div>
@@ -78,7 +88,7 @@ export default async function HomePage() {
           </p>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-            {featuredProducts.map((product) => (
+            {(featuredProducts as ProductPublic[]).map((product) => (
               <ProductCard
                 key={product.id}
                 product={{

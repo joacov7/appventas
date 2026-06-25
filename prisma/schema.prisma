@@ -211,6 +211,21 @@ model Transaction {
   @@map("transactions")
 }
 
+// ─── ENVÍOS ───────────────────────────────────────────────────────────────
+
+model ShippingOption {
+  id           String   @id @default(cuid())
+  name         String
+  description  String?
+  price        Decimal  @db.Decimal(10, 2)
+  estimatedDays String?
+  active       Boolean  @default(true)
+  position     Int      @default(0)
+  createdAt    DateTime @default(now())
+
+  @@map("shipping_options")
+}
+
 // ─── CUPONES ──────────────────────────────────────────────────────────────
 
 model Coupon {

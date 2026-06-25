@@ -5,11 +5,8 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/admin")) {
-    const sessionToken =
-      request.cookies.get("authjs.session-token")?.value ??
-      request.cookies.get("__Secure-authjs.session-token")?.value;
-
-    if (!sessionToken) {
+    const adminToken = request.cookies.get("admin-token")?.value;
+    if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }

@@ -110,25 +110,25 @@ export default function NuevoProductoPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
             <input value={name} onChange={(e) => setName(e.target.value)} required
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Slug (URL)</label>
             <input value={slug} onChange={(e) => setSlug(e.target.value)} required
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Categoría</label>
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)}
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400">
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400">
               <option value="">Sin categoría</option>
               {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
@@ -137,7 +137,7 @@ export default function NuevoProductoPage() {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">URLs de imágenes (una por línea)</label>
             <textarea value={imageUrls} onChange={(e) => setImageUrls(e.target.value)} rows={3} placeholder="https://..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">
@@ -166,22 +166,22 @@ export default function NuevoProductoPage() {
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Nombre variante *</label>
                 <input value={v.name} onChange={(e) => updateVariant(i, "name", e.target.value)} required placeholder="ej: 250g"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">SKU *</label>
                 <input value={v.sku} onChange={(e) => updateVariant(i, "sku", e.target.value)} required placeholder="ej: PROD-001"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Precio (ARS) *</label>
                 <input type="number" value={v.price} onChange={(e) => updateVariant(i, "price", e.target.value)} required min="0" step="0.01"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
               </div>
               <div>
                 <label className="block text-xs font-medium text-gray-600 mb-1">Stock *</label>
                 <input type="number" value={v.stock} onChange={(e) => updateVariant(i, "stock", e.target.value)} required min="0"
-                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+                  className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
               </div>
             </div>
           ))}

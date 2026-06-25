@@ -54,9 +54,13 @@ const createProductSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  
-  if (!(await isAdmin())) {
-    return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
+  const adminOk = await isAdmin();
+  if (!adminOk) {
+    const adminSecret = process.env.ADMIN_SECRET;
+    return NextResponse.json(
+      { error: "Sin autorización", debug: adminSecret ? "secret_set" : "secret_missing" },
+      { status: 403 }
+    );
   }
   try {
     const body = createProductSchema.parse(await req.json());

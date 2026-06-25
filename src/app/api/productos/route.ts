@@ -73,6 +73,6 @@ export async function POST(req: NextRequest) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
-    return NextResponse.json({ error: "Error al crear producto" }, { status: 500 });
+    return NextResponse.json({ error: "Error al crear producto", detail: String(error) }, { status: 500 });
   }
 }

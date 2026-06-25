@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import Link from "next/link";
 import { Plus, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
+import { DeleteButton } from "./DeleteButton";
 
 async function getProducts() {
   try {
@@ -72,10 +73,13 @@ export default async function ProductosAdminPage() {
                     </Badge>
                   </td>
                   <td className="px-4 py-3">
-                    <Link href={`/admin/productos/${product.id}/editar`}
-                      className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 font-medium">
-                      <Pencil size={13} /> Editar
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      <Link href={`/admin/productos/${product.id}/editar`}
+                        className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 font-medium">
+                        <Pencil size={13} /> Editar
+                      </Link>
+                      <DeleteButton id={product.id} />
+                    </div>
                   </td>
                 </tr>
               );

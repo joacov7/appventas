@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { MediaUpload } from "@/components/ui/MediaUpload";
 import Link from "next/link";
 import { slugify } from "@/lib/utils";
 
@@ -30,16 +31,13 @@ export default function NuevoProductoPage() {
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [featured, setFeatured] = useState(false);
-  const [imageUrls, setImageUrls] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [variants, setVariants] = useState<Variant[]>([
     { name: "Unidad", sku: "", price: "", stock: "" },
   ]);
 
   useEffect(() => {
-    fetch("/api/categorias")
-      .then((r) => r.json())
-      .then(setCategories)
-      .catch(() => {});
+    fetch("/api/categorias").then((r) => r.json()).then(setCategories).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -68,15 +66,12 @@ export default function NuevoProductoPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name,
-          slug,
-          description,
+          name, slug, description,
           categoryId: categoryId || undefined,
           featured,
-          imageUrls: imageUrls.split("\n").map((u) => u.trim()).filter(Boolean),
+          imageUrls,
           variants: variants.map((v) => ({
-            name: v.name,
-            sku: v.sku,
+            name: v.name, sku: v.sku,
             price: parseFloat(v.price),
             stock: parseInt(v.stock),
           })),
@@ -135,9 +130,8 @@ export default function NuevoProductoPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">URLs de imágenes (una por línea)</label>
-            <textarea value={imageUrls} onChange={(e) => setImageUrls(e.target.value)} rows={3} placeholder="https://..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
+            <label className="block text-sm font-medium text-gray-700 mb-2">Imágenes y videos</label>
+            <MediaUpload urls={imageUrls} onChange={setImageUrls} />
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">
@@ -146,7 +140,6 @@ export default function NuevoProductoPage() {
           </label>
         </div>
 
-        {/* Variantes */}
         <div className="bg-white rounded-2xl border border-gray-100 p-6 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-gray-900">Variantes *</h2>

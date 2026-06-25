@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Plus, Trash2, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { MediaUpload } from "@/components/ui/MediaUpload";
 import Link from "next/link";
 import { slugify } from "@/lib/utils";
 
@@ -35,7 +36,7 @@ export default function EditarProductoPage() {
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [featured, setFeatured] = useState(false);
-  const [imageUrls, setImageUrls] = useState("");
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
 
   useEffect(() => {
@@ -52,7 +53,7 @@ export default function EditarProductoPage() {
         setDescription(p.description ?? "");
         setCategoryId(p.categoryId ?? "");
         setFeatured(p.featured);
-        setImageUrls((p.imageUrls ?? []).join("\n"));
+        setImageUrls(p.imageUrls ?? []);
         setVariants(p.variants.map((v: Variant) => ({
           id: v.id,
           name: v.name,
@@ -94,7 +95,7 @@ export default function EditarProductoPage() {
           description,
           categoryId: categoryId || null,
           featured,
-          imageUrls: imageUrls.split("\n").map((u) => u.trim()).filter(Boolean),
+          imageUrls,
         }),
       });
 
@@ -180,9 +181,8 @@ export default function EditarProductoPage() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">URLs de imágenes (una por línea)</label>
-            <textarea value={imageUrls} onChange={(e) => setImageUrls(e.target.value)} rows={3} placeholder="https://..."
-              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400 font-mono" />
+            <label className="block text-sm font-medium text-gray-700 mb-2">Imágenes y videos</label>
+            <MediaUpload urls={imageUrls} onChange={setImageUrls} />
           </div>
 
           <label className="flex items-center gap-2 cursor-pointer">

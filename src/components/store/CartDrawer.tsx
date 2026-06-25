@@ -1,6 +1,7 @@
 "use client";
 
-import { X, ShoppingBag, Trash2, Plus, Minus } from "lucide-react";
+import { useState } from "react";
+import { X, ShoppingBag, Trash2, Plus, Minus, Tag, CheckCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
@@ -12,26 +13,65 @@ interface CartDrawerProps {
   onClose: () => void;
 }
 
+interface CouponResult {
+  id: string;
+  code: string;
+  type: string;
+  value: number;
+  discount: number;
+}
+
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
-  const { items, removeItem, updateQuantity, getTotalPrice, getTotalItems } =
-    useCartStore();
+  const { items, removeItem, updateQuantity, getTotalPrice, getTotalItems } = useCartStore();
+
+  const [couponCode, setCouponCode] = useState("");
+  const [coupon, setCoupon] = useState<CouponResult | null>(null);
+  const [couponError, setCouponError] = useState("");
+  const [couponLoading, setCouponLoading] = useState(false);
+
+  const subtotal = getTotalPrice();
+  const discount = coupon?.discount ?? 0;
+  const total = subtotal - discount;
+
+  async function applyCoupon() {
+    if (!couponCode.trim()) return;
+    setCouponLoading(true);
+    setCouponError("");
+    try {
+      const res = await fetch("/api/cupones/validar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code: couponCode, subtotal }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCouponError(data.error);
+        setCoupon(null);
+      } else {
+        setCoupon(data);
+      }
+    } catch {
+      setCouponError("Error al validar");
+    } finally {
+      setCouponLoading(false);
+    }
+  }
+
+  function removeCoupon() {
+    setCoupon(null);
+    setCouponCode("");
+    setCouponError("");
+  }
 
   return (
     <>
-      {/* Overlay */}
       {open && (
-        <div
-          className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 bg-black/40 z-40 backdrop-blur-sm" onClick={onClose} />
       )}
 
-      {/* Panel */}
-      <aside
-        className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300 ${
-          open ? "translate-x-0" : "translate-x-full"
-        }`}
-      >
+      <aside className={`fixed top-0 right-0 h-full w-full max-w-md bg-white z-50 shadow-2xl flex flex-col transition-transform duration-300 ${
+        open ? "translate-x-0" : "translate-x-full"
+      }`}>
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b">
           <div className="flex items-center gap-2">
@@ -54,9 +94,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-3">
               <ShoppingBag size={48} strokeWidth={1} />
               <p className="text-sm">Tu carrito está vacío</p>
-              <Button variant="ghost" size="sm" onClick={onClose}>
-                Seguir comprando
-              </Button>
+              <Button variant="ghost" size="sm" onClick={onClose}>Seguir comprando</Button>
             </div>
           ) : (
             items.map((item) => (
@@ -65,44 +103,29 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                   <Image
                     src={item.imageUrl ?? "/images/placeholder.png"}
                     alt={item.productName}
-                    fill
-                    className="object-cover"
-                    sizes="64px"
+                    fill className="object-cover" sizes="64px"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm text-gray-900 line-clamp-1">
-                    {item.productName}
-                  </p>
+                  <p className="font-medium text-sm text-gray-900 line-clamp-1">{item.productName}</p>
                   <p className="text-xs text-gray-500">{item.variantName}</p>
                   <p className="text-sm font-semibold text-emerald-700 mt-1">
                     {formatPrice(item.price * item.quantity)}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  <button
-                    onClick={() => removeItem(item.variantId)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                  >
+                  <button onClick={() => removeItem(item.variantId)} className="text-gray-400 hover:text-red-500 transition-colors">
                     <Trash2 size={15} />
                   </button>
                   <div className="flex items-center gap-1.5 border rounded-lg">
-                    <button
-                      onClick={() =>
-                        updateQuantity(item.variantId, item.quantity - 1)
-                      }
-                      className="px-2 py-1 hover:bg-gray-50 rounded-l-lg"
-                    >
+                    <button onClick={() => updateQuantity(item.variantId, item.quantity - 1)}
+                      className="px-2 py-1 hover:bg-gray-50 rounded-l-lg">
                       <Minus size={12} />
                     </button>
                     <span className="text-sm w-5 text-center">{item.quantity}</span>
-                    <button
-                      onClick={() =>
-                        updateQuantity(item.variantId, item.quantity + 1)
-                      }
+                    <button onClick={() => updateQuantity(item.variantId, item.quantity + 1)}
                       disabled={item.quantity >= item.stock}
-                      className="px-2 py-1 hover:bg-gray-50 rounded-r-lg disabled:opacity-40"
-                    >
+                      className="px-2 py-1 hover:bg-gray-50 rounded-r-lg disabled:opacity-40">
                       <Plus size={12} />
                     </button>
                   </div>
@@ -115,15 +138,67 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
         {/* Footer */}
         {items.length > 0 && (
           <div className="border-t px-5 py-5 space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-gray-600">Subtotal</span>
-              <span className="text-xl font-bold">{formatPrice(getTotalPrice())}</span>
+            {/* Cupón de descuento */}
+            {coupon ? (
+              <div className="flex items-center justify-between bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2">
+                <div className="flex items-center gap-2 text-emerald-700">
+                  <CheckCircle size={16} />
+                  <span className="text-sm font-medium">{coupon.code}</span>
+                  <span className="text-sm">— {formatPrice(coupon.discount)} off</span>
+                </div>
+                <button onClick={removeCoupon} className="text-emerald-500 hover:text-emerald-700">
+                  <X size={14} />
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                <div className="flex gap-2">
+                  <div className="flex-1 flex items-center border border-gray-200 rounded-xl px-3 gap-2">
+                    <Tag size={14} className="text-gray-400" />
+                    <input
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
+                      placeholder="Código de descuento"
+                      className="flex-1 py-2 text-sm text-gray-900 outline-none bg-transparent"
+                    />
+                  </div>
+                  <Button variant="secondary" size="sm" onClick={applyCoupon} loading={couponLoading}>
+                    Aplicar
+                  </Button>
+                </div>
+                {couponError && <p className="text-xs text-red-500 pl-1">{couponError}</p>}
+              </div>
+            )}
+
+            {/* Totales */}
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span>Subtotal</span>
+                <span>{formatPrice(subtotal)}</span>
+              </div>
+              {discount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-medium">
+                  <span>Descuento</span>
+                  <span>− {formatPrice(discount)}</span>
+                </div>
+              )}
+              <div className="flex justify-between items-center pt-2 border-t">
+                <span className="font-semibold text-gray-900">Total</span>
+                <span className="text-xl font-bold">{formatPrice(total)}</span>
+              </div>
             </div>
-            <p className="text-xs text-gray-400">Envío y descuentos calculados al finalizar</p>
-            <Link href="/checkout" onClick={onClose} className="block">
-              <Button size="lg" className="w-full">
-                Ir al checkout
-              </Button>
+
+            {/* Métodos de pago */}
+            <div className="flex items-center gap-2 justify-center">
+              <span className="text-xs text-gray-400">Pagás con</span>
+              {["Visa", "Master", "Amex", "MP"].map((m) => (
+                <span key={m} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-medium">{m}</span>
+              ))}
+            </div>
+
+            <Link href={`/checkout${coupon ? `?cupon=${coupon.code}` : ""}`} onClick={onClose} className="block">
+              <Button size="lg" className="w-full">Ir al checkout</Button>
             </Link>
           </div>
         )}

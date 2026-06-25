@@ -211,7 +211,29 @@ model Transaction {
   @@map("transactions")
 }
 
+// ─── CUPONES ──────────────────────────────────────────────────────────────
+
+model Coupon {
+  id         String       @id @default(cuid())
+  code       String       @unique
+  type       DiscountType
+  value      Decimal      @db.Decimal(10, 2) // % o monto fijo
+  minAmount  Decimal?     @db.Decimal(10, 2)
+  maxUses    Int?
+  uses       Int          @default(0)
+  active     Boolean      @default(true)
+  expiresAt  DateTime?
+  createdAt  DateTime     @default(now())
+
+  @@map("coupons")
+}
+
 // ─── ENUMS ────────────────────────────────────────────────────────────────
+
+enum DiscountType {
+  PERCENT
+  FIXED
+}
 
 enum Role {
   CUSTOMER

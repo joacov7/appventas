@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Pencil } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 
 async function getProducts() {
@@ -39,7 +39,7 @@ export default async function ProductosAdminPage() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              {["Producto", "Categoría", "Variantes", "Stock total", "Precio desde", "Estado"].map((h) => (
+              {["Producto", "Categoría", "Variantes", "Stock total", "Precio desde", "Estado", ""].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium text-gray-500">{h}</th>
               ))}
             </tr>
@@ -70,6 +70,12 @@ export default async function ProductosAdminPage() {
                     <Badge variant={product.featured ? "info" : "default"}>
                       {product.featured ? "Destacado" : "Normal"}
                     </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link href={`/admin/productos/${product.id}/editar`}
+                      className="inline-flex items-center gap-1 text-xs text-emerald-600 hover:text-emerald-800 font-medium">
+                      <Pencil size={13} /> Editar
+                    </Link>
                   </td>
                 </tr>
               );

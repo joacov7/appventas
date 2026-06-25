@@ -25,8 +25,8 @@ export async function GET(req: NextRequest, { params }: Params) {
 
   if (!order) return NextResponse.json({ error: "Orden no encontrada" }, { status: 404 });
 
-  // Solo el dueño o un admin pueden ver la orden
-  if (order.userId && order.userId !== session?.user?.id && session?.user?.role !== "ADMIN") {
+  // Solo un admin puede ver la orden por ahora
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
   }
 

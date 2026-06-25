@@ -85,7 +85,7 @@ export default function NuevoProductoPage() {
 
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(JSON.stringify(data.error));
+        throw new Error(data.detail ?? JSON.stringify(data.error));
       }
 
       router.push("/admin/productos");

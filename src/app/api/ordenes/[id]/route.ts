@@ -1,12 +1,13 @@
+import { isAdmin } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+
 import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, { params }: Params) {
-  const session = await auth();
+  
   const { id } = await params;
 
   const order = await prisma.order.findUnique({
@@ -37,8 +38,8 @@ const updateSchema = z.object({
 });
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session || session.user?.role !== "ADMIN") {
+  
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
   }
   const { id } = await params;

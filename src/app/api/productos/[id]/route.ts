@@ -1,6 +1,7 @@
+import { isAdmin } from "@/lib/admin-auth";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { auth } from "@/lib/auth";
+
 import { z } from "zod";
 
 type Params = { params: Promise<{ id: string }> };
@@ -32,8 +33,8 @@ const updateSchema = z.object({
 });
 
 export async function PUT(req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session || session.user?.role !== "ADMIN") {
+  
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
   }
   const { id } = await params;
@@ -54,8 +55,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(_req: NextRequest, { params }: Params) {
-  const session = await auth();
-  if (!session || session.user?.role !== "ADMIN") {
+  
+  if (!(await isAdmin())) {
     return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
   }
   const { id } = await params;

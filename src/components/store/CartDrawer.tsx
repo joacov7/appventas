@@ -98,32 +98,34 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
             </div>
           ) : (
             items.map((item) => (
-              <div key={item.variantId} className="flex gap-3 items-start">
+              <div key={item.cartKey} className="flex gap-3 items-start">
                 <div className="relative w-16 h-16 rounded-xl overflow-hidden bg-gray-50 shrink-0">
                   <Image
-                    src={item.imageUrl ?? "/images/placeholder.png"}
+                    src={item.diseno?.preview ?? item.imageUrl ?? "/images/placeholder.png"}
                     alt={item.productName}
                     fill className="object-cover" sizes="64px"
                   />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm text-gray-900 line-clamp-1">{item.productName}</p>
-                  <p className="text-xs text-gray-500">{item.variantName}</p>
+                  <p className="text-xs text-gray-500">
+                    {item.diseno ? `Virola personalizada · ${item.diseno.virolaName}` : item.variantName}
+                  </p>
                   <p className="text-sm font-semibold text-emerald-700 mt-1">
                     {formatPrice(item.price * item.quantity)}
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-2 shrink-0">
-                  <button onClick={() => removeItem(item.variantId)} className="text-gray-400 hover:text-red-500 transition-colors">
+                  <button onClick={() => removeItem(item.cartKey)} className="text-gray-400 hover:text-red-500 transition-colors">
                     <Trash2 size={15} />
                   </button>
                   <div className="flex items-center gap-1.5 border rounded-lg">
-                    <button onClick={() => updateQuantity(item.variantId, item.quantity - 1)}
+                    <button onClick={() => updateQuantity(item.cartKey, item.quantity - 1)}
                       className="px-2 py-1 hover:bg-gray-50 rounded-l-lg">
                       <Minus size={12} />
                     </button>
                     <span className="text-sm w-5 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQuantity(item.variantId, item.quantity + 1)}
+                    <button onClick={() => updateQuantity(item.cartKey, item.quantity + 1)}
                       disabled={item.quantity >= item.stock}
                       className="px-2 py-1 hover:bg-gray-50 rounded-r-lg disabled:opacity-40">
                       <Plus size={12} />

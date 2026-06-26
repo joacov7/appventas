@@ -259,6 +259,25 @@ model Coupon {
   @@map("coupons")
 }
 
+// ─── VIROLAS ──────────────────────────────────────────────────────────────
+
+model Virola {
+  id          Int      @id @default(autoincrement())
+  nombre      String
+  slug        String   @unique
+  descripcion String?  @db.Text
+  material    String   @default("madera")
+  diametroMm  Int      @default(35)
+  precioBase  Decimal  @db.Decimal(10, 2)
+  imageUrl    String?
+  activa      Boolean  @default(true)
+  posicion    Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("virolas")
+}
+
 // ─── ENUMS ────────────────────────────────────────────────────────────────
 
 enum DiscountType {

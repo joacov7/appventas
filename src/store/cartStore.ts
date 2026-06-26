@@ -10,38 +10,40 @@ export const useCartStore = create<CartState>()(
       items: [],
 
       addItem: (newItem) => {
+        const cartKey = newItem.cartKey ?? newItem.variantId;
         set((state) => {
-          const existing = state.items.find(
-            (i) => i.variantId === newItem.variantId
-          );
-          if (existing) {
-            const nextQty = existing.quantity + (newItem.quantity ?? 1);
-            return {
-              items: state.items.map((i) =>
-                i.variantId === newItem.variantId
-                  ? { ...i, quantity: Math.min(nextQty, i.stock) }
-                  : i
-              ),
-            };
+          // Design items always add as new entries; regular items merge by variantId
+          if (!newItem.diseno) {
+            const existing = state.items.find((i) => i.cartKey === cartKey);
+            if (existing) {
+              const nextQty = existing.quantity + (newItem.quantity ?? 1);
+              return {
+                items: state.items.map((i) =>
+                  i.cartKey === cartKey
+                    ? { ...i, quantity: Math.min(nextQty, i.stock) }
+                    : i
+                ),
+              };
+            }
           }
           return {
             items: [
               ...state.items,
-              { ...newItem, quantity: newItem.quantity ?? 1 },
+              { ...newItem, cartKey, quantity: newItem.quantity ?? 1 },
             ],
           };
         });
       },
 
-      removeItem: (variantId) =>
+      removeItem: (cartKey) =>
         set((state) => ({
-          items: state.items.filter((i) => i.variantId !== variantId),
+          items: state.items.filter((i) => i.cartKey !== cartKey),
         })),
 
-      updateQuantity: (variantId, quantity) =>
+      updateQuantity: (cartKey, quantity) =>
         set((state) => ({
           items: state.items.map((i) =>
-            i.variantId === variantId
+            i.cartKey === cartKey
               ? { ...i, quantity: Math.max(1, Math.min(quantity, i.stock)) }
               : i
           ),

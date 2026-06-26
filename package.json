@@ -19,6 +19,7 @@
     "@neondatabase/serverless": "^0.10.4",
     "@prisma/client": "^6.2.1",
     "clsx": "^2.1.1",
+    "fabric": "^6.9.1",
     "lucide-react": "^0.471.1",
     "mercadopago": "^2.0.15",
     "next": "16.2.9",

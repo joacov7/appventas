@@ -26,6 +26,7 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-6 text-sm text-gray-600">
             <Link href="/" className="hover:text-gray-900 transition-colors">Inicio</Link>
             <Link href="/productos" className="hover:text-gray-900 transition-colors">Catálogo</Link>
+            <Link href="/virolas" className="hover:text-gray-900 transition-colors font-medium text-emerald-700">Personalizá tu virola</Link>
           </div>
 
           {/* Actions */}
@@ -58,6 +59,7 @@ export function Navbar() {
           <div className="md:hidden border-t px-4 py-3 space-y-1">
             <Link href="/" onClick={() => setMenuOpen(false)} className="block py-2 text-sm text-gray-700 hover:text-gray-900">Inicio</Link>
             <Link href="/productos" onClick={() => setMenuOpen(false)} className="block py-2 text-sm text-gray-700 hover:text-gray-900">Catálogo</Link>
+            <Link href="/virolas" onClick={() => setMenuOpen(false)} className="block py-2 text-sm font-medium text-emerald-700">Personalizá tu virola</Link>
           </div>
         )}
       </header>

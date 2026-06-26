@@ -10,7 +10,7 @@ on:
 
 jobs:
   scraping:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 30
 
     steps:
@@ -28,7 +28,7 @@ jobs:
         run: pip install -r captacion/requirements.txt
 
       - name: Instalar Playwright + Chromium
-        run: playwright install chromium --with-deps
+        run: python -m playwright install chromium --with-deps
 
       - name: Crear .env con credenciales
         run: |

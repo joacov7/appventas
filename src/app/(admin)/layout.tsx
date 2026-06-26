@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -14,6 +14,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <nav className="flex-1 p-4 space-y-1">
           {[
             { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+            { href: "/admin/hero", label: "Hero Slider", icon: Images },
             { href: "/admin/productos", label: "Productos", icon: Package },
             { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingBag },
             { href: "/admin/cupones", label: "Cupones", icon: Tag },

@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { ProductCard } from "@/components/store/ProductCard";
+import { HeroSlider } from "@/components/store/HeroSlider";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import type { ProductPublic } from "@/types/product";
@@ -8,7 +9,7 @@ import type { ProductPublic } from "@/types/product";
 async function getHomeData() {
   try {
     const { prisma } = await import("@/lib/prisma");
-    const [featuredProducts, categories] = await Promise.all([
+    const [featuredProducts, categories, heroSlides] = await Promise.all([
       prisma.product.findMany({
         where: { active: true, featured: true },
         include: {
@@ -22,35 +23,43 @@ async function getHomeData() {
         where: { active: true },
         orderBy: { name: "asc" },
       }),
+      prisma.heroSlide.findMany({
+        where: { active: true },
+        orderBy: { position: "asc" },
+      }),
     ]);
-    return { featuredProducts, categories };
+    return { featuredProducts, categories, heroSlides };
   } catch {
-    return { featuredProducts: [], categories: [] };
+    return { featuredProducts: [], categories: [], heroSlides: [] };
   }
 }
 
 export default async function HomePage() {
-  const { featuredProducts, categories } = await getHomeData();
+  const { featuredProducts, categories, heroSlides } = await getHomeData();
 
   return (
     <div>
-      {/* Hero */}
-      <section className="bg-gradient-to-br from-emerald-50 to-teal-50 py-16 px-4">
-        <div className="max-w-4xl mx-auto text-center space-y-5">
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
-            Bienvenido a <span className="text-emerald-600">AppVentas</span>
-          </h1>
-          <p className="text-lg text-gray-600 max-w-xl mx-auto">
-            Encontrá los mejores productos con envío a todo el país.
-          </p>
-          <Link
-            href="/productos"
-            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-emerald-700 transition-colors"
-          >
-            Ver catálogo <ArrowRight size={18} />
-          </Link>
-        </div>
-      </section>
+      {/* Hero Slider */}
+      {heroSlides.length > 0 ? (
+        <HeroSlider slides={heroSlides} />
+      ) : (
+        <section className="bg-gradient-to-br from-emerald-50 to-teal-50 py-16 px-4">
+          <div className="max-w-4xl mx-auto text-center space-y-5">
+            <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
+              Bienvenido a <span className="text-emerald-600">AppVentas</span>
+            </h1>
+            <p className="text-lg text-gray-600 max-w-xl mx-auto">
+              Encontrá los mejores productos con envío a todo el país.
+            </p>
+            <Link
+              href="/productos"
+              className="inline-flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-emerald-700 transition-colors"
+            >
+              Ver catálogo <ArrowRight size={18} />
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* Categorías */}
       {categories.length > 0 && (

@@ -89,7 +89,154 @@ def listar_leads(estado: str = None):
             return cur.fetchall()
 
 
+# ── Inteligencia de precios ──────────────────────────────────────────────────
+
+def crear_tablas_inteligencia():
+    sqls = [
+        """
+        CREATE TABLE IF NOT EXISTS busquedas_competidores (
+            id           SERIAL PRIMARY KEY,
+            termino      VARCHAR(500) NOT NULL,
+            plataforma   VARCHAR(50)  DEFAULT 'todas',
+            activa       BOOLEAN      DEFAULT TRUE,
+            umbral_alerta INT         DEFAULT 10,
+            creado_en    TIMESTAMP    DEFAULT NOW()
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS tiendas_competidoras (
+            id            SERIAL PRIMARY KEY,
+            nombre        VARCHAR(500),
+            url           VARCHAR(1000) UNIQUE NOT NULL,
+            plataforma    VARCHAR(50),
+            activa        BOOLEAN      DEFAULT TRUE,
+            ultimo_scrape TIMESTAMP,
+            creado_en     TIMESTAMP    DEFAULT NOW()
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS productos_competidores (
+            id              SERIAL PRIMARY KEY,
+            tienda_id       INT REFERENCES tiendas_competidoras(id) ON DELETE CASCADE,
+            nombre          VARCHAR(1000),
+            precio          NUMERIC(12,2),
+            precio_anterior NUMERIC(12,2),
+            categoria       VARCHAR(500),
+            url             VARCHAR(1000) UNIQUE NOT NULL,
+            imagen          VARCHAR(2000),
+            disponible      BOOLEAN   DEFAULT TRUE,
+            ultima_vez      TIMESTAMP DEFAULT NOW(),
+            creado_en       TIMESTAMP DEFAULT NOW()
+        );
+        """,
+    ]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            for sql in sqls:
+                cur.execute(sql)
+        conn.commit()
+    print("[DB] Tablas inteligencia listas.")
+
+
+def seed_busquedas_default():
+    """Inserta búsquedas por defecto si la tabla está vacía."""
+    defaults = [
+        ("mates mayorista Argentina", "tiendanube", 10),
+        ("bombillas mates mayorista", "tiendanube", 10),
+        ("tablas madera artesanal mayorista", "tiendanube", 10),
+        ("mates madera mayorista", "empretienda", 10),
+    ]
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT COUNT(*) FROM busquedas_competidores")
+            count = cur.fetchone()[0]
+            if count == 0:
+                for termino, plat, umbral in defaults:
+                    cur.execute(
+                        "INSERT INTO busquedas_competidores (termino, plataforma, umbral_alerta) VALUES (%s, %s, %s)",
+                        (termino, plat, umbral),
+                    )
+        conn.commit()
+    print("[DB] Búsquedas default insertadas.")
+
+
+def cargar_busquedas_activas():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, termino, plataforma, umbral_alerta FROM busquedas_competidores WHERE activa = TRUE ORDER BY id"
+            )
+            rows = cur.fetchall()
+    return [{"id": r[0], "termino": r[1], "plataforma": r[2], "umbral_alerta": r[3]} for r in rows]
+
+
+def upsert_tienda(nombre: str, url: str, plataforma: str) -> int:
+    """Inserta o actualiza una tienda, retorna su id."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO tiendas_competidoras (nombre, url, plataforma, ultimo_scrape)
+                VALUES (%s, %s, %s, NOW())
+                ON CONFLICT (url) DO UPDATE SET
+                    nombre        = EXCLUDED.nombre,
+                    ultimo_scrape = NOW()
+                RETURNING id
+                """,
+                (nombre, url, plataforma),
+            )
+            tienda_id = cur.fetchone()[0]
+        conn.commit()
+    return tienda_id
+
+
+def upsert_producto(tienda_id: int, producto: dict) -> dict:
+    """
+    Inserta o actualiza un producto. Retorna dict con cambio de precio si lo hubo.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Precio anterior
+            cur.execute("SELECT precio FROM productos_competidores WHERE url = %s", (producto["url"],))
+            row = cur.fetchone()
+            precio_anterior = float(row[0]) if row and row[0] else None
+            precio_nuevo = producto.get("precio")
+
+            cur.execute(
+                """
+                INSERT INTO productos_competidores
+                    (tienda_id, nombre, precio, precio_anterior, categoria, url, imagen, disponible, ultima_vez)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
+                ON CONFLICT (url) DO UPDATE SET
+                    nombre          = EXCLUDED.nombre,
+                    precio_anterior = productos_competidores.precio,
+                    precio          = EXCLUDED.precio,
+                    categoria       = EXCLUDED.categoria,
+                    imagen          = EXCLUDED.imagen,
+                    disponible      = TRUE,
+                    ultima_vez      = NOW()
+                """,
+                (
+                    tienda_id,
+                    producto.get("nombre"),
+                    precio_nuevo,
+                    precio_anterior,
+                    producto.get("categoria"),
+                    producto["url"],
+                    producto.get("imagen"),
+                ),
+            )
+        conn.commit()
+
+    cambio = None
+    if precio_anterior and precio_nuevo and precio_anterior != precio_nuevo:
+        pct = round((precio_nuevo - precio_anterior) / precio_anterior * 100, 1)
+        cambio = {"anterior": precio_anterior, "nuevo": precio_nuevo, "pct": pct}
+    return cambio
+
+
 if __name__ == "__main__":
     print("[DB] Probando conexión a Neon...")
     crear_tabla()
+    crear_tablas_inteligencia()
     print("[DB] Conexión exitosa.")

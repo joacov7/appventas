@@ -6,7 +6,21 @@ Pipeline completo:
 """
 
 import sys
+import logging
+from datetime import datetime
 from pathlib import Path
+
+# Logging a consola y archivo (útil en GitHub Actions y servidor)
+LOG_PATH = Path(__file__).parent.parent / f"captacion_{datetime.now().strftime('%Y%m%d_%H%M')}.log"
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(LOG_PATH, encoding="utf-8"),
+    ],
+)
+log = logging.getLogger(__name__)
 
 sys.path.insert(0, str(Path(__file__).parent))
 

@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Type, Image as ImageIcon, Trash2, RotateCcw, AlignCenter, Bold, Minus, Plus } from "lucide-react";
+import {
+  Type, Image as ImageIcon, Trash2, RotateCcw, AlignCenter,
+  Minus, Plus, Download, FileText, File, ShoppingCart
+} from "lucide-react";
 
 interface Virola {
   id: number;
@@ -11,6 +14,16 @@ interface Virola {
   diametroMm: number;
   precioBase: string;
   imageUrl: string | null;
+}
+
+interface PerfilLaser {
+  id: number;
+  nombre: string;
+  material: string;
+  potencia: number;
+  velocidad: number;
+  pasadas: number;
+  notas: string | null;
 }
 
 interface VirolaCanvasProps {
@@ -33,8 +46,24 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
   const [textInput, setTextInput] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [perfiles, setPerfiles] = useState<PerfilLaser[]>([]);
+  const [perfilId, setPerfilId] = useState<number | null>(null);
+  const [exporting, setExporting] = useState<string | null>(null);
 
-  // Load fabric dynamically (avoids SSR issues)
+  // Cargar perfiles de láser
+  useEffect(() => {
+    fetch("/api/virolas/perfiles")
+      .then(r => r.ok ? r.json() : [])
+      .then(data => {
+        const filtered = data.filter((p: PerfilLaser) =>
+          p.material === "todos" || p.material.toLowerCase() === virola.material.toLowerCase()
+        );
+        setPerfiles(filtered);
+        if (filtered.length > 0) setPerfilId(filtered[0].id);
+      });
+  }, [virola.material]);
+
+  // Inicializar Fabric.js
   useEffect(() => {
     let cancelled = false;
     import("fabric").then(({ Canvas, Circle, IText, FabricImage }) => {
@@ -46,7 +75,7 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
         backgroundColor: "#ffffff",
       });
 
-      // Circular clip path
+      // Clip circular
       const clipCircle = new Circle({
         radius: RING_OUTER,
         originX: "center",
@@ -57,50 +86,46 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       });
       canvas.clipPath = clipCircle;
 
-      // Draw ring guide (visual only - not a canvas object, drawn via overlay)
+      // Guías dibujadas como overlay
       canvas.on("after:render", ({ ctx }: { ctx: CanvasRenderingContext2D }) => {
         ctx.save();
-        // Outer ring guide
         ctx.beginPath();
         ctx.arc(CANVAS_SIZE / 2, CANVAS_SIZE / 2, RING_OUTER, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(16,185,129,0.4)";
+        ctx.strokeStyle = "rgba(16,185,129,0.45)";
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
         ctx.stroke();
-        // Inner hole guide
         ctx.beginPath();
         ctx.arc(CANVAS_SIZE / 2, CANVAS_SIZE / 2, RING_INNER, 0, Math.PI * 2);
-        ctx.strokeStyle = "rgba(239,68,68,0.4)";
+        ctx.strokeStyle = "rgba(239,68,68,0.45)";
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
       });
 
-      canvas.on("selection:created", (e: any) => {
-        const obj = e.selected?.[0];
-        setSelectedObj(obj);
-        if (obj?.type === "i-text") {
-          setFontSize(obj.fontSize ?? 24);
-          setFontFamily(obj.fontFamily ?? "Arial");
-          setTextColor(obj.fill ?? "#1a1a1a");
-        }
-      });
-      canvas.on("selection:updated", (e: any) => {
-        const obj = e.selected?.[0];
-        setSelectedObj(obj);
-        if (obj?.type === "i-text") {
-          setFontSize(obj.fontSize ?? 24);
-          setFontFamily(obj.fontFamily ?? "Arial");
-          setTextColor(obj.fill ?? "#1a1a1a");
-        }
-      });
+      canvas.on("selection:created", (e: any) => syncSelection(e.selected?.[0]));
+      canvas.on("selection:updated", (e: any) => syncSelection(e.selected?.[0]));
       canvas.on("selection:cleared", () => setSelectedObj(null));
 
-      fabricRef.current = { canvas, IText, FabricImage };
+      function syncSelection(obj: any) {
+        setSelectedObj(obj);
+        if (obj?.type === "i-text") {
+          setFontSize(obj.fontSize ?? 24);
+          setFontFamily(obj.fontFamily ?? "Arial");
+          setTextColor(obj.fill ?? "#1a1a1a");
+        }
+      }
+
+      fabricRef.current = { canvas, IText, FabricImage, Circle };
       setFabricLoaded(true);
     });
-    return () => { cancelled = true; fabricRef.current?.canvas?.dispose(); };
+    return () => {
+      cancelled = true;
+      fabricRef.current?.canvas?.dispose();
+    };
   }, []);
+
+  // ── Acciones del editor ────────────────────────────────────────────────────
 
   const addText = useCallback(() => {
     const { canvas, IText } = fabricRef.current ?? {};
@@ -133,7 +158,10 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       if (!file) return;
       const url = URL.createObjectURL(file);
       const img = await FabricImage.fromURL(url);
-      const scale = Math.min((RING_OUTER * 1.5) / (img.width ?? 1), (RING_OUTER * 1.5) / (img.height ?? 1));
+      const scale = Math.min(
+        (RING_OUTER * 1.5) / (img.width ?? 1),
+        (RING_OUTER * 1.5) / (img.height ?? 1)
+      );
       img.scale(scale);
       img.set({ left: CANVAS_SIZE / 2, top: CANVAS_SIZE / 2, originX: "center", originY: "center" });
       canvas.add(img);
@@ -165,16 +193,43 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
     canvas.renderAll();
   }, []);
 
+  // ── Exportaciones ──────────────────────────────────────────────────────────
+
+  async function withExport(key: string, fn: () => Promise<void>) {
+    setExporting(key);
+    try { await fn(); } finally { setExporting(null); }
+  }
+
+  const handleExportSVG = () => withExport("svg", async () => {
+    const { exportSVG } = await import("@/lib/virola-exports");
+    exportSVG(fabricRef.current?.canvas, virola);
+  });
+
+  const handleExportDXF = () => withExport("dxf", async () => {
+    const { exportDXF } = await import("@/lib/virola-exports");
+    exportDXF(fabricRef.current?.canvas, virola);
+  });
+
+  const handleExportPNG = () => withExport("png", async () => {
+    const { exportPNG } = await import("@/lib/virola-exports");
+    exportPNG(fabricRef.current?.canvas, virola);
+  });
+
+  const handleExportPDF = () => withExport("pdf", async () => {
+    const { exportPDF } = await import("@/lib/virola-exports");
+    const perfil = perfiles.find(p => p.id === perfilId) ?? null;
+    await exportPDF(fabricRef.current?.canvas, virola, quantity, perfil);
+  });
+
+  // ── Agregar al carrito ─────────────────────────────────────────────────────
+
   const handleAddToCart = useCallback(async () => {
-    const { canvas } = fabricRef.current ?? {};
+    const { canvas, Circle } = fabricRef.current ?? {};
     if (!canvas) return;
-    // Generate preview PNG (with guides hidden)
     canvas.clipPath = undefined;
     canvas.renderAll();
     const preview = canvas.toDataURL({ format: "png", multiplier: 0.5 });
     const datos = canvas.toJSON();
-    // Restore clip
-    const { Circle } = await import("fabric");
     canvas.clipPath = new Circle({
       radius: RING_OUTER, originX: "center", originY: "center",
       left: CANVAS_SIZE / 2, top: CANVAS_SIZE / 2, absolutePositioned: true,
@@ -186,15 +241,17 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
   }, [onAddToCart, quantity]);
 
   const FONTS = ["Arial", "Georgia", "Courier New", "Times New Roman", "Verdana", "Impact", "Palatino"];
+  const perfilActual = perfiles.find(p => p.id === perfilId);
 
   return (
     <div className="flex flex-col lg:flex-row gap-6">
-      {/* Toolbar */}
-      <div className="lg:w-64 space-y-5 shrink-0">
-        {/* Add text */}
+      {/* ── Toolbar izquierdo ── */}
+      <div className="lg:w-64 space-y-4 shrink-0">
+
+        {/* Texto */}
         <div className="bg-white rounded-2xl border p-4 space-y-3">
           <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2">
-            <Type size={15} /> Agregar texto
+            <Type size={15} /> Texto
           </h3>
           <input
             value={textInput}
@@ -211,7 +268,7 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
             {FONTS.map(f => <option key={f} value={f}>{f}</option>)}
           </select>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Tamaño</label>
+            <label className="text-xs text-gray-500 w-12">Tamaño</label>
             <input
               type="range" min="8" max="72" value={fontSize}
               onChange={(e) => { setFontSize(Number(e.target.value)); updateSelected("fontSize", Number(e.target.value)); }}
@@ -220,13 +277,13 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
             <span className="text-xs w-6 text-right">{fontSize}</span>
           </div>
           <div className="flex items-center gap-2">
-            <label className="text-xs text-gray-500">Color</label>
+            <label className="text-xs text-gray-500 w-12">Color</label>
             <input
               type="color" value={textColor}
               onChange={(e) => { setTextColor(e.target.value); updateSelected("fill", e.target.value); }}
               className="w-8 h-8 rounded cursor-pointer border-0"
             />
-            <span className="text-xs text-gray-500">{textColor}</span>
+            <span className="text-xs text-gray-400">{textColor}</span>
           </div>
           <button
             onClick={addText}
@@ -236,47 +293,108 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
           </button>
         </div>
 
-        {/* Add image */}
+        {/* Imagen */}
         <div className="bg-white rounded-2xl border p-4">
           <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2 mb-3">
-            <ImageIcon size={15} /> Agregar imagen / logo
+            <ImageIcon size={15} /> Imagen / Logo
           </h3>
           <button
             onClick={addImage}
             className="w-full border-2 border-dashed border-gray-200 hover:border-emerald-400 hover:bg-emerald-50 text-gray-500 hover:text-emerald-700 py-3 rounded-xl text-sm transition-colors"
           >
-            Subir imagen
+            Subir desde dispositivo
           </button>
         </div>
 
-        {/* Object controls */}
+        {/* Objeto seleccionado */}
         {selectedObj && (
-          <div className="bg-white rounded-2xl border p-4 space-y-3">
-            <h3 className="font-semibold text-sm text-gray-900">Objeto seleccionado</h3>
-            <div className="flex gap-2">
+          <div className="bg-white rounded-2xl border p-4 space-y-2">
+            <h3 className="font-semibold text-sm text-gray-900">Elemento seleccionado</h3>
+            <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => { const a = fabricRef.current?.canvas?.getActiveObject(); if (a) { a.centerH(); fabricRef.current?.canvas?.renderAll(); } }}
-                className="flex-1 flex items-center justify-center gap-1 border rounded-lg py-2 text-xs hover:bg-gray-50"
+                className="flex items-center justify-center gap-1 border rounded-lg py-2 text-xs hover:bg-gray-50"
               >
-                <AlignCenter size={12} /> Centrar H
+                <AlignCenter size={11} /> Centro H
               </button>
               <button
                 onClick={() => { const a = fabricRef.current?.canvas?.getActiveObject(); if (a) { a.centerV(); fabricRef.current?.canvas?.renderAll(); } }}
-                className="flex-1 flex items-center justify-center gap-1 border rounded-lg py-2 text-xs hover:bg-gray-50"
+                className="flex items-center justify-center gap-1 border rounded-lg py-2 text-xs hover:bg-gray-50"
               >
-                <AlignCenter size={12} /> Centrar V
+                <AlignCenter size={11} className="rotate-90" /> Centro V
               </button>
             </div>
             <button
               onClick={deleteSelected}
               className="w-full flex items-center justify-center gap-2 border border-red-200 text-red-600 hover:bg-red-50 py-2 rounded-xl text-sm transition-colors"
             >
-              <Trash2 size={14} /> Eliminar elemento
+              <Trash2 size={14} /> Eliminar
             </button>
           </div>
         )}
 
-        {/* Actions */}
+        {/* Perfil de láser */}
+        {perfiles.length > 0 && (
+          <div className="bg-white rounded-2xl border p-4 space-y-3">
+            <h3 className="font-semibold text-sm text-gray-900">Perfil de láser</h3>
+            <select
+              value={perfilId ?? ""}
+              onChange={(e) => setPerfilId(Number(e.target.value))}
+              className="w-full border rounded-xl px-3 py-2 text-sm outline-none"
+            >
+              {perfiles.map(p => (
+                <option key={p.id} value={p.id}>{p.nombre}</option>
+              ))}
+            </select>
+            {perfilActual && (
+              <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600 space-y-1">
+                <p>⚡ Potencia: <strong>{perfilActual.potencia}%</strong></p>
+                <p>💨 Velocidad: <strong>{perfilActual.velocidad} mm/s</strong></p>
+                <p>🔁 Pasadas: <strong>{perfilActual.pasadas}</strong></p>
+                {perfilActual.notas && <p className="text-gray-400 italic">{perfilActual.notas}</p>}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Exportar */}
+        <div className="bg-white rounded-2xl border p-4 space-y-2">
+          <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2 mb-1">
+            <Download size={15} /> Exportar diseño
+          </h3>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={handleExportPNG}
+              disabled={!!exporting}
+              className="flex items-center justify-center gap-1.5 border rounded-xl py-2 text-xs hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              <Download size={12} /> {exporting === "png" ? "..." : "PNG"}
+            </button>
+            <button
+              onClick={handleExportSVG}
+              disabled={!!exporting}
+              className="flex items-center justify-center gap-1.5 border rounded-xl py-2 text-xs hover:bg-gray-50 disabled:opacity-50 transition-colors"
+            >
+              <File size={12} /> {exporting === "svg" ? "..." : "SVG"}
+            </button>
+            <button
+              onClick={handleExportDXF}
+              disabled={!!exporting}
+              className="flex items-center justify-center gap-1.5 border border-orange-200 text-orange-700 rounded-xl py-2 text-xs hover:bg-orange-50 disabled:opacity-50 transition-colors"
+            >
+              <File size={12} /> {exporting === "dxf" ? "..." : "DXF Láser"}
+            </button>
+            <button
+              onClick={handleExportPDF}
+              disabled={!!exporting}
+              className="flex items-center justify-center gap-1.5 border border-blue-200 text-blue-700 rounded-xl py-2 text-xs hover:bg-blue-50 disabled:opacity-50 transition-colors"
+            >
+              <FileText size={12} /> {exporting === "pdf" ? "..." : "PDF Orden"}
+            </button>
+          </div>
+        </div>
+
+        {/* Cantidad y carrito */}
         <div className="bg-white rounded-2xl border p-4 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium text-gray-700">Cantidad</span>
@@ -290,22 +408,21 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
               </button>
             </div>
           </div>
-          <div className="border-t pt-3">
-            <div className="flex justify-between text-sm mb-3">
-              <span className="text-gray-500">Total</span>
-              <span className="font-bold">${(Number(virola.precioBase) * quantity).toLocaleString("es-AR")}</span>
-            </div>
-            <button
-              onClick={handleAddToCart}
-              className={`w-full py-3 rounded-xl text-sm font-medium transition-all ${
-                added
-                  ? "bg-emerald-100 text-emerald-700"
-                  : "bg-emerald-600 hover:bg-emerald-700 text-white"
-              }`}
-            >
-              {added ? "¡Agregado al carrito!" : "Agregar al carrito"}
-            </button>
+          <div className="flex justify-between text-sm border-t pt-3">
+            <span className="text-gray-500">Total</span>
+            <span className="font-bold">${(Number(virola.precioBase) * quantity).toLocaleString("es-AR")}</span>
           </div>
+          <button
+            onClick={handleAddToCart}
+            className={`w-full py-3 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+              added
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-emerald-600 hover:bg-emerald-700 text-white"
+            }`}
+          >
+            <ShoppingCart size={16} />
+            {added ? "¡Agregado!" : "Agregar al carrito"}
+          </button>
           <button
             onClick={clearCanvas}
             className="w-full flex items-center justify-center gap-2 text-gray-400 hover:text-gray-600 text-xs py-1"
@@ -315,7 +432,7 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
         </div>
       </div>
 
-      {/* Canvas */}
+      {/* ── Canvas ── */}
       <div className="flex-1 flex flex-col items-center">
         <div className="bg-gray-50 rounded-2xl p-4 border w-full flex items-center justify-center min-h-[540px]">
           {!fabricLoaded && (
@@ -325,12 +442,14 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
             <canvas ref={canvasRef} />
           </div>
         </div>
-        <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-0.5 border-t-2 border-dashed border-emerald-400" /> Borde exterior ({virola.diametroMm}mm)
+        <div className="flex items-center gap-5 mt-3 text-xs text-gray-400">
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-5 border-t-2 border-dashed border-emerald-400" />
+            Borde exterior ({virola.diametroMm}mm)
           </span>
-          <span className="flex items-center gap-1">
-            <span className="inline-block w-3 h-0.5 border-t-2 border-dashed border-red-400" /> Orificio
+          <span className="flex items-center gap-1.5">
+            <span className="inline-block w-5 border-t-2 border-dashed border-red-400" />
+            Orificio
           </span>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images, Users } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -19,6 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingBag },
             { href: "/admin/cupones", label: "Cupones", icon: Tag },
             { href: "/admin/envios", label: "Envíos", icon: Truck },
+            { href: "/admin/captacion", label: "Captación", icon: Users },
           ].map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

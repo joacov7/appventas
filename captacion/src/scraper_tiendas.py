@@ -246,6 +246,20 @@ def scrape_tienda(page, tienda: dict) -> list[dict]:
 
 # ── Pipeline principal ────────────────────────────────────────────────────────
 
+def cargar_tiendas_db() -> list[dict]:
+    """Carga tiendas ya conocidas de la DB para scrapearlas siempre."""
+    from database import get_connection
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, nombre, url, plataforma FROM tiendas_competidoras WHERE activa = TRUE")
+                rows = cur.fetchall()
+        return [{"id": r[0], "nombre": r[1], "url": r[2], "plataforma": r[3]} for r in rows]
+    except Exception as e:
+        print(f"  [WARN] cargar_tiendas_db: {e}")
+        return []
+
+
 def run_inteligencia(conn_factory, busquedas: list[dict], alertas_callback=None) -> dict:
     """
     Ejecuta el pipeline completo de inteligencia de precios.
@@ -257,40 +271,45 @@ def run_inteligencia(conn_factory, busquedas: list[dict], alertas_callback=None)
     from database import upsert_tienda, upsert_producto
 
     resumen = {"tiendas": 0, "productos": 0, "alertas": 0}
-    tiendas_vistas = {}  # url -> id
+    umbral_default = min((b.get("umbral_alerta", 10) for b in busquedas), default=10)
+
+    # Tiendas ya conocidas en DB (cargadas antes de abrir el browser)
+    tiendas_conocidas = cargar_tiendas_db()
+    tiendas_a_scrapear = {t["url"]: t for t in tiendas_conocidas}
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(user_agent=HEADERS["User-Agent"], locale="es-AR")
         page = context.new_page()
 
+        # Intentar descubrir tiendas nuevas via búsqueda
         for busqueda in busquedas:
             termino = busqueda["termino"]
             plataforma = busqueda["plataforma"]
-            umbral = busqueda.get("umbral_alerta", 10)
-
             print(f"\n[INTELIGENCIA] Búsqueda: '{termino}' ({plataforma})")
-            tiendas = buscar_tiendas(termino, plataforma)
+            nuevas = buscar_tiendas(termino, plataforma)
+            for t in nuevas:
+                if t["url"] not in tiendas_a_scrapear:
+                    tiendas_a_scrapear[t["url"]] = t
             time.sleep(random.uniform(1, 2))
 
-            for tienda in tiendas:
-                if tienda["url"] not in tiendas_vistas:
-                    tienda_id = upsert_tienda(tienda["nombre"], tienda["url"], tienda["plataforma"])
-                    tiendas_vistas[tienda["url"]] = tienda_id
-                    resumen["tiendas"] += 1
-                else:
-                    tienda_id = tiendas_vistas[tienda["url"]]
+        print(f"\n[INTELIGENCIA] Total tiendas a scrapear: {len(tiendas_a_scrapear)}")
 
-                productos = scrape_tienda(page, tienda)
-                time.sleep(random.uniform(1, 2))
+        # Scrapear todas las tiendas (conocidas + recién descubiertas)
+        for url, tienda in tiendas_a_scrapear.items():
+            tienda_id = tienda.get("id") or upsert_tienda(tienda["nombre"], tienda["url"], tienda["plataforma"])
+            if not tienda.get("id"):
+                resumen["tiendas"] += 1
 
-                for prod in productos:
-                    cambio = upsert_producto(tienda_id, prod)
-                    resumen["productos"] += 1
+            productos = scrape_tienda(page, tienda)
+            time.sleep(random.uniform(1, 2))
 
-                    if cambio and cambio["pct"] <= -umbral and alertas_callback:
-                        alertas_callback(cambio, prod, tienda)
-                        resumen["alertas"] += 1
+            for prod in productos:
+                cambio = upsert_producto(tienda_id, prod)
+                resumen["productos"] += 1
+                if cambio and cambio["pct"] <= -umbral_default and alertas_callback:
+                    alertas_callback(cambio, prod, tienda)
+                    resumen["alertas"] += 1
 
         browser.close()
 

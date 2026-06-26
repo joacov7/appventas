@@ -185,17 +185,52 @@ export default function InteligenciaPage() {
       {/* ── Tab: Tiendas ── */}
       {tab === "Tiendas" && (
         <div>
+          {/* Form agregar tienda manual */}
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm mb-4">
+            <p className="text-sm font-medium text-gray-700 mb-3">Agregar tienda competidora</p>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                id="tienda-url"
+                placeholder="URL de la tienda (ej: https://mitienda.mitiendanube.com)"
+                className="flex-1 min-w-64 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <input
+                id="tienda-nombre"
+                placeholder="Nombre (opcional)"
+                className="w-44 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none"
+              />
+              <button
+                onClick={async () => {
+                  const url = (document.getElementById("tienda-url") as HTMLInputElement).value;
+                  const nombre = (document.getElementById("tienda-nombre") as HTMLInputElement).value;
+                  if (!url.trim()) return;
+                  await fetch("/api/inteligencia/tiendas", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url, nombre }),
+                  });
+                  (document.getElementById("tienda-url") as HTMLInputElement).value = "";
+                  (document.getElementById("tienda-nombre") as HTMLInputElement).value = "";
+                  fetchTiendas();
+                }}
+                className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-emerald-700 transition-colors"
+              >
+                <Plus size={15} /> Agregar
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-2">El scraper va a visitar estas tiendas automáticamente en cada corrida y detectar cambios de precio.</p>
+          </div>
+
           <div className="flex justify-between items-center mb-4">
-            <p className="text-sm text-gray-500">{tiendas.length} tiendas encontradas automáticamente</p>
+            <p className="text-sm text-gray-500">{tiendas.length} tiendas configuradas</p>
             <button onClick={fetchTiendas} className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-gray-700">
               <RefreshCw size={14} /> Actualizar
             </button>
           </div>
           {tiendas.length === 0 ? (
-            <div className="text-center py-20 text-gray-400">
+            <div className="text-center py-12 text-gray-400">
               <Store size={40} className="mx-auto mb-3 opacity-30" />
-              <p>Aún no hay tiendas.</p>
-              <p className="text-xs mt-1">Corré el scraper desde GitHub Actions para buscarlas.</p>
+              <p>Agregá tiendas de competidores arriba.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -216,12 +251,24 @@ export default function InteligenciaPage() {
                       <span>Scrapeado {new Date(t.ultimo_scrape).toLocaleDateString("es-AR")}</span>
                     )}
                   </div>
-                  <button
-                    onClick={() => { setFiltroTienda(String(t.id)); setTab("Productos"); }}
-                    className="mt-3 text-xs text-emerald-600 hover:underline"
-                  >
-                    Ver productos →
-                  </button>
+                  <div className="mt-3 flex items-center justify-between">
+                    <button
+                      onClick={() => { setFiltroTienda(String(t.id)); setTab("Productos"); }}
+                      className="text-xs text-emerald-600 hover:underline"
+                    >
+                      Ver productos →
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!confirm(`¿Eliminar ${t.nombre}?`)) return;
+                        await fetch(`/api/inteligencia/tiendas/${t.id}`, { method: "DELETE" });
+                        fetchTiendas();
+                      }}
+                      className="text-gray-300 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

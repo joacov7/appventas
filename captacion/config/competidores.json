@@ -1,10 +1,14 @@
 [
   {
-    "nombre": "Ejemplo Regalería Centro",
-    "url": "https://www.google.com/maps/place/regaleria+ejemplo/@-34.6037,-58.3816,17z"
+    "busqueda": "distribuidora mates mayorista Argentina",
+    "max_negocios": 5
   },
   {
-    "nombre": "Bazar Regional Ejemplo",
-    "url": "https://www.google.com/maps/place/bazar+regional+ejemplo/@-34.6037,-58.3816,17z"
+    "busqueda": "regalería mayorista bombillas mates Argentina",
+    "max_negocios": 5
+  },
+  {
+    "busqueda": "proveedor mates madera tablas mayorista",
+    "max_negocios": 5
   }
 ]

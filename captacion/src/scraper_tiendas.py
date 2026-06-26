@@ -15,72 +15,104 @@ HEADERS = {
     "Accept-Language": "es-AR,es;q=0.9",
 }
 
-PLATAFORMAS = {
-    "tiendanube":  "site:mitiendanube.com OR site:mitienda.com",
-    "empretienda": "site:empretienda.com.ar",
-    "todas":       "site:mitiendanube.com OR site:mitienda.com OR site:empretienda.com.ar",
-}
+
+# ── Búsqueda de tiendas (sin Google) ─────────────────────────────────────────
+
+def buscar_tiendas_tiendanube(termino: str, max_tiendas: int = 8) -> list[dict]:
+    """Busca tiendas en el directorio público de Tiendanube via su API."""
+    tiendas = []
+    try:
+        # API pública de búsqueda de tiendas de Tiendanube Argentina
+        resp = requests.get(
+            "https://www.tiendanube.com/ar/tiendas",
+            params={"q": termino, "per_page": max_tiendas},
+            headers=HEADERS,
+            timeout=15,
+        )
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, "html.parser")
+            for card in soup.select("a[href*='mitiendanube.com'], a[href*='mitienda.com']")[:max_tiendas]:
+                href = card.get("href", "")
+                parsed = urlparse(href)
+                base_url = f"{parsed.scheme}://{parsed.netloc}"
+                nombre = parsed.netloc.split(".")[0].replace("-", " ").title()
+                tiendas.append({"nombre": nombre, "url": base_url, "plataforma": "tiendanube"})
+    except Exception as e:
+        print(f"  [WARN] Tiendanube directory: {e}")
+
+    # Fallback: buscar directamente URLs conocidas via DuckDuckGo HTML (no bloquea tanto)
+    if not tiendas:
+        tiendas = buscar_duckduckgo(termino, "mitiendanube.com OR mitienda.com", "tiendanube", max_tiendas)
+
+    print(f"  [BÚSQUEDA TN] '{termino}' → {len(tiendas)} tiendas")
+    return tiendas
 
 
-# ── Búsqueda de tiendas en Google ────────────────────────────────────────────
+def buscar_tiendas_empretienda(termino: str, max_tiendas: int = 8) -> list[dict]:
+    """Busca tiendas en Empretienda."""
+    tiendas = buscar_duckduckgo(termino, "empretienda.com.ar", "empretienda", max_tiendas)
+    print(f"  [BÚSQUEDA ET] '{termino}' → {len(tiendas)} tiendas")
+    return tiendas
 
-def buscar_tiendas_google(page, termino: str, plataforma: str, max_tiendas: int = 8) -> list[dict]:
-    """Busca tiendas en Google según plataforma y retorna lista de {nombre, url, plataforma}."""
-    site_filter = PLATAFORMAS.get(plataforma, PLATAFORMAS["todas"])
-    query = f"{termino} {site_filter}"
-    url_busqueda = f"https://www.google.com/search?q={query.replace(' ', '+')}&hl=es-419&num=20"
 
+def buscar_duckduckgo(termino: str, site: str, plataforma: str, max_tiendas: int) -> list[dict]:
+    """Busca en DuckDuckGo HTML (menos restrictivo que Google en servidores)."""
     tiendas = []
     vistos = set()
-
+    query = f"{termino} site:{site}"
     try:
-        page.goto(url_busqueda, timeout=30000, wait_until="domcontentloaded")
-        time.sleep(random.uniform(2, 3))
+        resp = requests.get(
+            "https://html.duckduckgo.com/html/",
+            params={"q": query},
+            headers={**HEADERS, "Accept": "text/html"},
+            timeout=15,
+        )
+        if resp.status_code != 200:
+            return tiendas
 
-        # Aceptar cookies de Google si aparece
-        try:
-            page.locator('button:has-text("Aceptar todo"), button:has-text("Accept all")').first.click(timeout=3000)
-            time.sleep(1)
-        except Exception:
-            pass
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for a in soup.select("a.result__url, a[href*='uddg=']")[:max_tiendas * 3]:
+            href = a.get("href", "")
+            # DuckDuckGo redirige via uddg= param
+            if "uddg=" in href:
+                from urllib.parse import unquote, parse_qs
+                qs = parse_qs(urlparse(href).query)
+                href = unquote(qs.get("uddg", [""])[0])
 
-        resultados = page.locator("div#search a[href]").all()
+            parsed = urlparse(href)
+            dominio = parsed.netloc.lower()
+            if not dominio:
+                dominio = a.get_text(strip=True).lower()
 
-        for link in resultados:
-            if len(tiendas) >= max_tiendas:
-                break
-            try:
-                href = link.get_attribute("href") or ""
-                if not href.startswith("http"):
-                    continue
-
-                parsed = urlparse(href)
-                dominio = parsed.netloc.lower()
-
-                plat_detectada = None
-                if "mitiendanube.com" in dominio or "mitienda.com" in dominio:
-                    plat_detectada = "tiendanube"
-                elif "empretienda.com.ar" in dominio:
-                    plat_detectada = "empretienda"
-                else:
-                    continue
-
-                base_url = f"{parsed.scheme}://{parsed.netloc}"
-                if base_url in vistos:
-                    continue
-                vistos.add(base_url)
-
-                nombre = dominio.split(".")[0].replace("-", " ").title()
-                tiendas.append({"nombre": nombre, "url": base_url, "plataforma": plat_detectada})
-            except Exception:
+            if site.split(".")[0] not in dominio and "mitienda" not in dominio:
                 continue
 
-        print(f"  [GOOGLE] '{termino}' → {len(tiendas)} tiendas encontradas")
+            base_url = f"https://{dominio}" if dominio else ""
+            if not base_url or base_url in vistos:
+                continue
+            vistos.add(base_url)
+
+            nombre = dominio.split(".")[0].replace("-", " ").title()
+            tiendas.append({"nombre": nombre, "url": base_url, "plataforma": plataforma})
+
+            if len(tiendas) >= max_tiendas:
+                break
 
     except Exception as e:
-        print(f"  [ERROR] Google search '{termino}': {e}")
+        print(f"  [WARN] DuckDuckGo '{termino}': {e}")
 
     return tiendas
+
+
+def buscar_tiendas(termino: str, plataforma: str, max_tiendas: int = 8) -> list[dict]:
+    if plataforma == "empretienda":
+        return buscar_tiendas_empretienda(termino, max_tiendas)
+    elif plataforma == "tiendanube":
+        return buscar_tiendas_tiendanube(termino, max_tiendas)
+    else:
+        tn = buscar_tiendas_tiendanube(termino, max_tiendas // 2 + 1)
+        et = buscar_tiendas_empretienda(termino, max_tiendas // 2 + 1)
+        return tn + et
 
 
 # ── Scraping de productos ─────────────────────────────────────────────────────
@@ -238,8 +270,8 @@ def run_inteligencia(conn_factory, busquedas: list[dict], alertas_callback=None)
             umbral = busqueda.get("umbral_alerta", 10)
 
             print(f"\n[INTELIGENCIA] Búsqueda: '{termino}' ({plataforma})")
-            tiendas = buscar_tiendas_google(page, termino, plataforma)
-            time.sleep(random.uniform(2, 3))
+            tiendas = buscar_tiendas(termino, plataforma)
+            time.sleep(random.uniform(1, 2))
 
             for tienda in tiendas:
                 if tienda["url"] not in tiendas_vistas:

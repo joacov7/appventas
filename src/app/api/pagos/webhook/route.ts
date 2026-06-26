@@ -3,6 +3,7 @@ import { getMpPayment } from "@/lib/mercadopago";
 import { prisma } from "@/lib/prisma";
 import { createHmac } from "crypto";
 import type { TransactionStatus, OrderStatus } from "@prisma/client";
+import { sendOrderConfirmationToCustomer, sendNewOrderNotificationToAdmin } from "@/lib/emails";
 
 // Mapeo de estados MP → estados internos
 const MP_STATUS_MAP: Record<string, TransactionStatus> = {
@@ -115,14 +116,22 @@ export async function POST(req: NextRequest) {
       }),
     ]);
 
-    // Si el pago fue aprobado, decrementar stock
+    // Si el pago fue aprobado, decrementar stock y enviar emails
     if (transactionStatus === "APPROVED") {
       const order = await prisma.order.findUnique({
         where: { id: externalRef },
-        include: { items: true },
+        include: {
+          items: {
+            include: {
+              product: { select: { name: true } },
+              variant: { select: { name: true } },
+            },
+          },
+        },
       });
 
       if (order) {
+        // Decrementar stock
         await Promise.all(
           order.items.map((item) =>
             prisma.productVariant.update({
@@ -131,6 +140,36 @@ export async function POST(req: NextRequest) {
             })
           )
         );
+
+        // Enviar emails (no bloqueamos si falla)
+        const addr = order.shippingAddress as Record<string, string> | null;
+        const emailData = {
+          orderId: order.id,
+          customerName: addr?.fullName ?? "Cliente",
+          customerEmail: order.guestEmail ?? "",
+          items: order.items.map((i) => ({
+            productName: i.product.name,
+            variantName: i.variant.name,
+            quantity: i.quantity,
+            unitPrice: Number(i.unitPrice),
+            subtotal: Number(i.subtotal),
+          })),
+          subtotal: Number(order.subtotal),
+          shippingCost: Number(order.shippingCost),
+          discount: Number(order.subtotal) + Number(order.shippingCost) - Number(order.total),
+          total: Number(order.total),
+          shippingAddress: {
+            street: addr?.street ?? "",
+            city: addr?.city ?? "",
+            province: addr?.province ?? "",
+            postalCode: addr?.postalCode ?? "",
+          },
+        };
+
+        if (emailData.customerEmail) {
+          sendOrderConfirmationToCustomer(emailData).catch(console.error);
+        }
+        sendNewOrderNotificationToAdmin(emailData).catch(console.error);
       }
     }
 

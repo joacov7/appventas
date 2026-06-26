@@ -36,7 +36,7 @@ export function HeroSlider({ slides }: HeroSliderProps) {
   const slide = slides[current];
 
   return (
-    <section className="relative w-full overflow-hidden bg-gray-900" style={{ height: "clamp(280px, 55vw, 600px)" }}>
+    <section className="relative w-full overflow-hidden bg-gray-900" style={{ height: "clamp(200px, 35vw, 420px)" }}>
       {/* Imagen */}
       <Image
         key={slide.id}

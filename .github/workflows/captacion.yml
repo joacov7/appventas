@@ -1,0 +1,47 @@
+name: Captación de Leads
+
+on:
+  # Corre automáticamente cada día a las 8am hora Argentina (11:00 UTC)
+  schedule:
+    - cron: "0 11 * * *"
+
+  # También se puede disparar manualmente desde GitHub → Actions → Run workflow
+  workflow_dispatch:
+
+jobs:
+  scraping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: captacion/requirements.txt
+
+      - name: Instalar dependencias Python
+        run: pip install -r captacion/requirements.txt
+
+      - name: Instalar Playwright + Chromium
+        run: playwright install chromium --with-deps
+
+      - name: Crear .env con credenciales
+        run: |
+          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" > captacion/.env
+
+      - name: Correr pipeline de captación
+        run: python captacion/src/main.py
+
+      - name: Subir log como artefacto (opcional)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: captacion-log-${{ github.run_number }}
+          path: captacion/*.log
+          if-no-files-found: ignore
+          retention-days: 7

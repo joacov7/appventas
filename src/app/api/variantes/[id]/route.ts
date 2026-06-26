@@ -1,0 +1,33 @@
+import { isAdmin } from "@/lib/admin-auth";
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { z } from "zod";
+
+type Params = { params: Promise<{ id: string }> };
+
+const schema = z.object({
+  name: z.string().min(1).optional(),
+  sku: z.string().min(1).optional(),
+  price: z.number().positive().optional(),
+  stock: z.number().int().min(0).optional(),
+});
+
+export async function PUT(req: NextRequest, { params }: Params) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
+  const { id } = await params;
+  try {
+    const body = schema.parse(await req.json());
+    const variant = await prisma.productVariant.update({ where: { id }, data: body });
+    return NextResponse.json(variant);
+  } catch (error) {
+    if (error instanceof z.ZodError) return NextResponse.json({ error: error.issues }, { status: 400 });
+    return NextResponse.json({ error: "Error al actualizar variante", detail: String(error) }, { status: 500 });
+  }
+}
+
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 403 });
+  const { id } = await params;
+  await prisma.productVariant.update({ where: { id }, data: { active: false } });
+  return NextResponse.json({ success: true });
+}

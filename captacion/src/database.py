@@ -14,25 +14,52 @@ def get_connection():
 
 
 def crear_tabla():
-    """Crea la tabla leads_captacion si no existe."""
-    sql = """
-    CREATE TABLE IF NOT EXISTS leads_captacion (
-        id          SERIAL PRIMARY KEY,
-        autor       VARCHAR(255),
-        calificacion INT,
-        texto_queja TEXT,
-        url_perfil  VARCHAR(512) UNIQUE,
-        competidor  VARCHAR(255),
-        mensaje_abordaje TEXT,
-        estado      VARCHAR(50) DEFAULT 'nuevo',
-        creado_en   TIMESTAMP DEFAULT NOW()
-    );
-    """
+    """Crea las tablas de captación si no existen."""
+    sqls = [
+        """
+        CREATE TABLE IF NOT EXISTS leads_captacion (
+            id          SERIAL PRIMARY KEY,
+            autor       VARCHAR(255),
+            calificacion INT,
+            texto_queja TEXT,
+            url_perfil  VARCHAR(512) UNIQUE,
+            competidor  VARCHAR(255),
+            mensaje_abordaje TEXT,
+            estado      VARCHAR(50) DEFAULT 'nuevo',
+            creado_en   TIMESTAMP DEFAULT NOW()
+        );
+        """,
+        """
+        CREATE TABLE IF NOT EXISTS negocios_competidores (
+            id         SERIAL PRIMARY KEY,
+            nombre     VARCHAR(500) NOT NULL,
+            url        VARCHAR(1000) UNIQUE NOT NULL,
+            activo     BOOLEAN DEFAULT TRUE,
+            creado_en  TIMESTAMP DEFAULT NOW()
+        );
+        """,
+    ]
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            for sql in sqls:
+                cur.execute(sql)
         conn.commit()
-    print("[DB] Tabla leads_captacion lista.")
+    print("[DB] Tablas captación listas.")
+
+
+def cargar_negocios_activos() -> list[dict]:
+    """Carga negocios competidores activos cargados manualmente."""
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, nombre, url FROM negocios_competidores WHERE activo = TRUE ORDER BY creado_en"
+                )
+                rows = cur.fetchall()
+        return [{"id": r[0], "nombre": r[1], "url": r[2]} for r in rows]
+    except Exception as e:
+        print(f"[WARN] cargar_negocios_activos: {e}")
+        return []
 
 
 def upsert_leads(leads: list[dict]):

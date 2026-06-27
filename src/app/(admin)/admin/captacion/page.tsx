@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, RefreshCw, Star, ExternalLink } from "lucide-react";
+import { Users, RefreshCw, Star, ExternalLink, Plus, Trash2, MapPin, X } from "lucide-react";
 
 type Lead = {
   id: number;
@@ -15,6 +15,14 @@ type Lead = {
   creado_en: string;
 };
 
+type Negocio = {
+  id: number;
+  nombre: string;
+  url: string;
+  activo: boolean;
+  creado_en: string;
+};
+
 const ESTADOS = ["nuevo", "contactado", "interesado", "descartado"];
 
 const estadoColor: Record<string, string> = {
@@ -25,21 +33,38 @@ const estadoColor: Record<string, string> = {
 };
 
 export default function CaptacionPage() {
+  const [tab, setTab] = useState<"leads" | "negocios">("leads");
+
+  // ── Leads ──
   const [leads, setLeads] = useState<Lead[]>([]);
   const [filtro, setFiltro] = useState("");
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<number | null>(null);
 
+  // ── Negocios ──
+  const [negocios, setNegocios] = useState<Negocio[]>([]);
+  const [nLoading, setNLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [nForm, setNForm] = useState({ nombre: "", url: "" });
+  const [nSaving, setNSaving] = useState(false);
+  const [nError, setNError] = useState("");
+
   async function fetchLeads(estado?: string) {
     setLoading(true);
     const url = estado ? `/api/captacion?estado=${estado}` : "/api/captacion";
     const res = await fetch(url);
-    const data = await res.json();
-    setLeads(Array.isArray(data) ? data : []);
+    setLeads(Array.isArray(await res.json()) ? await res.clone().json() : []);
     setLoading(false);
   }
 
-  useEffect(() => { fetchLeads(); }, []);
+  async function fetchNegocios() {
+    setNLoading(true);
+    const res = await fetch("/api/captacion/negocios");
+    if (res.ok) setNegocios(await res.json());
+    setNLoading(false);
+  }
+
+  useEffect(() => { fetchLeads(); fetchNegocios(); }, []);
 
   async function cambiarEstado(id: number, estado: string) {
     await fetch("/api/captacion", {
@@ -50,120 +75,265 @@ export default function CaptacionPage() {
     setLeads((prev) => prev.map((l) => l.id === id ? { ...l, estado } : l));
   }
 
+  async function addNegocio() {
+    if (!nForm.url.trim()) { setNError("La URL es requerida"); return; }
+    setNSaving(true); setNError("");
+    try {
+      const res = await fetch("/api/captacion/negocios", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(nForm),
+      });
+      if (!res.ok) { setNError((await res.json()).error ?? "Error"); return; }
+      setNForm({ nombre: "", url: "" });
+      setShowForm(false);
+      fetchNegocios();
+    } finally { setNSaving(false); }
+  }
+
+  async function toggleNegocio(n: Negocio) {
+    await fetch(`/api/captacion/negocios/${n.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ activo: !n.activo }),
+    });
+    fetchNegocios();
+  }
+
+  async function delNegocio(n: Negocio) {
+    if (!confirm(`¿Eliminar "${n.nombre}"?`)) return;
+    await fetch(`/api/captacion/negocios/${n.id}`, { method: "DELETE" });
+    fetchNegocios();
+  }
+
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <Users className="text-emerald-600" size={22} />
-          <h1 className="text-xl font-bold text-gray-900">Captación de Leads</h1>
-          <span className="text-sm text-gray-400 font-normal">({leads.length})</span>
-        </div>
-        <button
-          onClick={() => fetchLeads(filtro || undefined)}
-          className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800 transition-colors"
-        >
-          <RefreshCw size={15} />
-          Actualizar
-        </button>
+    <div className="max-w-5xl mx-auto">
+      <div className="flex items-center gap-3 mb-6">
+        <Users className="text-emerald-600" size={22} />
+        <h1 className="text-xl font-bold text-gray-900">Captación de Leads</h1>
       </div>
 
-      {/* Filtros */}
-      <div className="flex gap-2 mb-6 flex-wrap">
-        <button
-          onClick={() => { setFiltro(""); fetchLeads(); }}
-          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${filtro === "" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-        >
-          Todos
-        </button>
-        {ESTADOS.map((e) => (
-          <button
-            key={e}
-            onClick={() => { setFiltro(e); fetchLeads(e); }}
-            className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${filtro === e ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-          >
-            {e}
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-6 w-fit">
+        {[
+          { key: "leads", label: `Leads (${leads.length})` },
+          { key: "negocios", label: `Negocios competidores (${negocios.length})` },
+        ].map(({ key, label }) => (
+          <button key={key} onClick={() => setTab(key as any)}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+              tab === key ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+            }`}>
+            {label}
           </button>
         ))}
       </div>
 
-      {loading ? (
-        <p className="text-gray-400 text-sm">Cargando leads...</p>
-      ) : leads.length === 0 ? (
-        <div className="text-center py-20 text-gray-400">
-          <Users size={40} className="mx-auto mb-3 opacity-30" />
-          <p>No hay leads todavía.</p>
-          <p className="text-xs mt-1">El scraper corre automáticamente cada día a las 8am.</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {leads.map((lead) => (
-            <div key={lead.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold text-gray-900 text-sm">{lead.autor}</span>
-                    <span className="flex items-center gap-0.5 text-yellow-500 text-xs">
-                      {Array.from({ length: lead.calificacion }).map((_, i) => (
-                        <Star key={i} size={11} fill="currentColor" />
-                      ))}
-                    </span>
-                    <span className="text-xs text-gray-400">— {lead.competidor}</span>
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">{lead.texto_queja}</p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <select
-                    value={lead.estado}
-                    onChange={(e) => cambiarEstado(lead.id, e.target.value)}
-                    className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer ${estadoColor[lead.estado] ?? "bg-gray-100 text-gray-600"}`}
-                  >
-                    {ESTADOS.map((e) => (
-                      <option key={e} value={e}>{e}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {/* Mensaje de abordaje */}
-              <div className="mt-3">
-                <button
-                  onClick={() => setExpanded(expanded === lead.id ? null : lead.id)}
-                  className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-                >
-                  {expanded === lead.id ? "Ocultar mensaje" : "Ver mensaje de abordaje"}
+      {/* ── TAB: Leads ──────────────────────────────────────────────────────── */}
+      {tab === "leads" && (
+        <>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex gap-2 flex-wrap">
+              <button onClick={() => { setFiltro(""); fetchLeads(); }}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${filtro === "" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                Todos
+              </button>
+              {ESTADOS.map((e) => (
+                <button key={e} onClick={() => { setFiltro(e); fetchLeads(e); }}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium capitalize transition-colors ${filtro === e ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  {e}
                 </button>
-                {expanded === lead.id && (
-                  <div className="mt-2 bg-emerald-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed">
-                    {lead.mensaje_abordaje}
-                    <div className="flex items-center gap-2 mt-2">
-                      <button
-                        onClick={() => navigator.clipboard.writeText(lead.mensaje_abordaje)}
-                        className="text-xs text-emerald-600 hover:underline"
-                      >
-                        Copiar
-                      </button>
-                      {lead.url_perfil && !lead.url_perfil.startsWith("sin_url") && (
-                        <a
-                          href={lead.url_perfil}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1"
-                        >
-                          <ExternalLink size={11} />
-                          Ver perfil
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <p className="text-xs text-gray-300 mt-2">
-                {new Date(lead.creado_en).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
-              </p>
+              ))}
             </div>
-          ))}
-        </div>
+            <button onClick={() => fetchLeads(filtro || undefined)}
+              className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800">
+              <RefreshCw size={15} /> Actualizar
+            </button>
+          </div>
+
+          {loading ? (
+            <p className="text-gray-400 text-sm">Cargando leads...</p>
+          ) : leads.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Users size={40} className="mx-auto mb-3 opacity-30" />
+              <p className="mb-2">No hay leads todavía.</p>
+              <p className="text-xs max-w-sm mx-auto">
+                Agregá negocios competidores en la pestaña de al lado y el scraper extraerá reseñas negativas en el próximo ciclo.
+              </p>
+              <button onClick={() => setTab("negocios")} className="mt-4 text-sm text-emerald-600 hover:underline">
+                → Agregar negocios competidores
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {leads.map((lead) => (
+                <div key={lead.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-gray-900 text-sm">{lead.autor}</span>
+                        <span className="flex items-center gap-0.5 text-yellow-500 text-xs">
+                          {Array.from({ length: lead.calificacion }).map((_, i) => (
+                            <Star key={i} size={11} fill="currentColor" />
+                          ))}
+                        </span>
+                        <span className="text-xs text-gray-400">— {lead.competidor}</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-2">{lead.texto_queja}</p>
+                    </div>
+                    <select
+                      value={lead.estado}
+                      onChange={(e) => cambiarEstado(lead.id, e.target.value)}
+                      className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer shrink-0 ${estadoColor[lead.estado] ?? "bg-gray-100 text-gray-600"}`}
+                    >
+                      {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
+                    </select>
+                  </div>
+                  <div className="mt-3">
+                    <button
+                      onClick={() => setExpanded(expanded === lead.id ? null : lead.id)}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
+                    >
+                      {expanded === lead.id ? "Ocultar mensaje" : "Ver mensaje de abordaje"}
+                    </button>
+                    {expanded === lead.id && (
+                      <div className="mt-2 bg-emerald-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed">
+                        {lead.mensaje_abordaje}
+                        <div className="flex items-center gap-2 mt-2">
+                          <button onClick={() => navigator.clipboard.writeText(lead.mensaje_abordaje)}
+                            className="text-xs text-emerald-600 hover:underline">Copiar</button>
+                          {lead.url_perfil && !lead.url_perfil.startsWith("sin_url") && (
+                            <a href={lead.url_perfil} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
+                              <ExternalLink size={11} /> Ver perfil
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-300 mt-2">
+                    {new Date(lead.creado_en).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── TAB: Negocios competidores ───────────────────────────────────────── */}
+      {tab === "negocios" && (
+        <>
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5 text-sm text-amber-800">
+            <p className="font-medium mb-1">¿Por qué agregar negocios manualmente?</p>
+            <p className="text-amber-700">Google Maps bloquea las búsquedas automáticas desde servidores cloud. Pegá la URL de Google Maps de cada competidor y el scraper extraerá sus reseñas negativas directamente.</p>
+          </div>
+
+          <div className="flex justify-end mb-4">
+            <button onClick={() => { setShowForm(true); setNError(""); }}
+              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-sm font-medium">
+              <Plus size={16} /> Agregar negocio
+            </button>
+          </div>
+
+          {/* Form */}
+          {showForm && (
+            <div className="bg-white rounded-2xl border p-5 mb-5 shadow-sm">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <MapPin size={16} className="text-emerald-600" /> Agregar negocio competidor
+                </h3>
+                <button onClick={() => setShowForm(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium text-gray-700">URL de Google Maps *</label>
+                  <input
+                    value={nForm.url}
+                    onChange={(e) => setNForm(f => ({ ...f, url: e.target.value }))}
+                    className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="https://www.google.com/maps/place/Nombre+Local/..."
+                  />
+                  <p className="text-xs text-gray-400 mt-1">Buscalo en Google Maps, hacé clic en Compartir y copiá el link.</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700">Nombre (opcional)</label>
+                  <input
+                    value={nForm.nombre}
+                    onChange={(e) => setNForm(f => ({ ...f, nombre: e.target.value }))}
+                    className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="Ej: Regalería El Gaucho"
+                  />
+                </div>
+                {nError && <p className="text-sm text-red-600">{nError}</p>}
+                <div className="flex gap-3">
+                  <button onClick={addNegocio} disabled={nSaving}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium">
+                    {nSaving ? "Guardando..." : "Agregar"}
+                  </button>
+                  <button onClick={() => setShowForm(false)} className="px-4 border rounded-xl text-sm text-gray-600 hover:bg-gray-50">
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {nLoading ? (
+            <div className="text-center py-12 text-gray-400">Cargando...</div>
+          ) : negocios.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <MapPin size={40} strokeWidth={1} className="mx-auto mb-3" />
+              <p className="mb-2">No hay negocios cargados.</p>
+              <p className="text-xs">Agregá los Google Maps de tus competidores para que el scraper extraiga sus reseñas.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl border overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Negocio</th>
+                    <th className="px-4 py-3 text-center">Estado</th>
+                    <th className="px-4 py-3 text-left">Agregado</th>
+                    <th className="px-4 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {negocios.map((n) => (
+                    <tr key={n.id} className={n.activo ? "" : "opacity-50"}>
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">{n.nombre}</p>
+                        <a href={n.url} target="_blank" rel="noopener noreferrer"
+                          className="text-xs text-gray-400 hover:text-emerald-600 flex items-center gap-1 mt-0.5">
+                          <ExternalLink size={10} /> Ver en Maps
+                        </a>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => toggleNegocio(n)}
+                          className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                            n.activo ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200" : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                          }`}>
+                          {n.activo ? "Activo" : "Inactivo"}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-gray-400">
+                        {new Date(n.creado_en).toLocaleDateString("es-AR")}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button onClick={() => delNegocio(n)}
+                          className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-600">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

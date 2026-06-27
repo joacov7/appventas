@@ -153,7 +153,13 @@ def scrapear_negocio(page, negocio: dict) -> list[dict]:
 
 
 def scrape_all() -> list[dict]:
-    busquedas = cargar_busquedas()
+    """
+    Pipeline principal:
+    1. Carga negocios guardados en DB (agregados manualmente desde el admin).
+    2. Si no hay ninguno, intenta búsqueda por keyword (puede ser bloqueado desde CI).
+    """
+    from database import cargar_negocios_activos
+
     todas_reviews = []
 
     with sync_playwright() as p:
@@ -166,21 +172,34 @@ def scrape_all() -> list[dict]:
 
         negocios_vistos = set()
 
-        for item in busquedas:
-            termino = item["busqueda"]
-            max_neg = item.get("max_negocios", MAX_NEGOCIOS_DEFAULT)
+        # ── Fuente 1: negocios cargados manualmente en DB ──────────────────
+        negocios_db = cargar_negocios_activos()
+        print(f"\n[SCRAPER] {len(negocios_db)} negocios en DB")
 
-            negocios = buscar_negocios(page, termino, max_neg)
-            time.sleep(random.uniform(2, 3))
+        for neg in negocios_db:
+            if neg["url"] in negocios_vistos:
+                continue
+            negocios_vistos.add(neg["url"])
+            reviews = scrapear_negocio(page, neg)
+            todas_reviews.extend(reviews)
+            time.sleep(random.uniform(2, 4))
 
-            for negocio in negocios:
-                if negocio["url"] in negocios_vistos:
-                    continue
-                negocios_vistos.add(negocio["url"])
-
-                reviews = scrapear_negocio(page, negocio)
-                todas_reviews.extend(reviews)
-                time.sleep(random.uniform(2, 4))
+        # ── Fuente 2: búsqueda por keyword (fallback, puede fallar en CI) ──
+        if not negocios_db:
+            busquedas = cargar_busquedas()
+            print(f"[SCRAPER] Sin negocios en DB, intentando búsqueda keyword ({len(busquedas)} términos)")
+            for item in busquedas:
+                termino = item["busqueda"]
+                max_neg = item.get("max_negocios", MAX_NEGOCIOS_DEFAULT)
+                negocios = buscar_negocios(page, termino, max_neg)
+                time.sleep(random.uniform(2, 3))
+                for negocio in negocios:
+                    if negocio["url"] in negocios_vistos:
+                        continue
+                    negocios_vistos.add(negocio["url"])
+                    reviews = scrapear_negocio(page, negocio)
+                    todas_reviews.extend(reviews)
+                    time.sleep(random.uniform(2, 4))
 
         browser.close()
 

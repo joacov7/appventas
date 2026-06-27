@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { X, ShoppingBag, Trash2, Plus, Minus, Tag, CheckCircle, MessageCircle } from "lucide-react";
+import { useState, useRef } from "react";
+import { X, ShoppingBag, Trash2, Plus, Minus, Tag, CheckCircle, MessageCircle, Mail } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
@@ -29,6 +29,10 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
 
+  const [cartEmail, setCartEmail] = useState("");
+  const [cartEmailSaved, setCartEmailSaved] = useState(false);
+  const cartEmailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const subtotal = getTotalPrice();
   const discount = coupon?.discount ?? 0;
   const total = subtotal - discount;
@@ -55,6 +59,34 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     } finally {
       setCouponLoading(false);
     }
+  }
+
+  function handleCartEmailChange(email: string) {
+    setCartEmail(email);
+    setCartEmailSaved(false);
+    if (cartEmailTimerRef.current) clearTimeout(cartEmailTimerRef.current);
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return;
+    cartEmailTimerRef.current = setTimeout(async () => {
+      try {
+        await fetch("/api/carritos-abandonados", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: trimmed,
+            items: items.map((i) => ({
+              productName: i.productName,
+              variantName: i.diseno ? `Virola personalizada · ${i.diseno.virolaName}` : i.variantName,
+              quantity: i.quantity,
+              price: i.price,
+              imageUrl: i.diseno?.preview ?? i.imageUrl ?? null,
+            })),
+            total: getTotalPrice(),
+          }),
+        });
+        setCartEmailSaved(true);
+      } catch {}
+    }, 800);
   }
 
   function removeCoupon() {
@@ -188,6 +220,21 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="font-semibold text-gray-900">Total</span>
                 <span className="text-xl font-bold">{formatPrice(total)}</span>
+              </div>
+            </div>
+
+            {/* Captura de email para carrito abandonado */}
+            <div className="space-y-1">
+              <div className="flex items-center border border-gray-200 rounded-xl px-3 gap-2">
+                <Mail size={14} className="text-gray-400 shrink-0" />
+                <input
+                  type="email"
+                  value={cartEmail}
+                  onChange={(e) => handleCartEmailChange(e.target.value)}
+                  placeholder="Tu email para guardar el carrito"
+                  className="flex-1 py-2 text-sm text-gray-900 outline-none bg-transparent"
+                />
+                {cartEmailSaved && <CheckCircle size={14} className="text-emerald-500 shrink-0" />}
               </div>
             </div>
 

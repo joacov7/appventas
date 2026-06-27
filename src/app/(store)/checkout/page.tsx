@@ -129,6 +129,13 @@ function CheckoutContent() {
       if (!prefRes.ok) throw new Error("Error al crear preferencia de pago");
       const { initPoint, sandboxInitPoint } = await prefRes.json();
 
+      // mark abandoned cart as converted
+      fetch("/api/carritos-abandonados", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      }).catch(() => {});
+
       clearCart();
       window.location.href = process.env.NODE_ENV === "production" ? initPoint : (sandboxInitPoint ?? initPoint);
     } catch (err) {

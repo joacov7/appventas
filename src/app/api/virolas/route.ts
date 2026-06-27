@@ -52,12 +52,20 @@ function row(r: any) {
 }
 
 export async function GET(req: NextRequest) {
-  await ensureTable();
-  const admin = await isAdmin();
-  const rows: any[] = admin
-    ? await (prisma as any).$queryRawUnsafe(`SELECT * FROM virolas ORDER BY posicion ASC, id ASC`)
-    : await (prisma as any).$queryRawUnsafe(`SELECT * FROM virolas WHERE activa = true ORDER BY posicion ASC, id ASC`);
-  return NextResponse.json(rows.map(row));
+  try {
+    await ensureTable();
+  } catch {
+    // If table creation fails, return empty list rather than 500
+  }
+  try {
+    const admin = await isAdmin();
+    const rows: any[] = admin
+      ? await (prisma as any).$queryRawUnsafe(`SELECT * FROM virolas ORDER BY posicion ASC, id ASC`)
+      : await (prisma as any).$queryRawUnsafe(`SELECT * FROM virolas WHERE activa = true ORDER BY posicion ASC, id ASC`);
+    return NextResponse.json(rows.map(row));
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "Error al cargar" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

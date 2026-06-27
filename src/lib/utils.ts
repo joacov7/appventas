@@ -14,6 +14,13 @@ export function formatPrice(amount: number | string, currency = "ARS"): string {
   }).format(Number(amount));
 }
 
+// Cuotas sin interés — configurable vía env var NEXT_PUBLIC_CUOTAS (default 6)
+export function formatCuotas(price: number): { cuotas: number; valorCuota: string } | null {
+  const cuotas = Number(process.env.NEXT_PUBLIC_CUOTAS ?? 6);
+  if (!cuotas || cuotas < 2) return null;
+  return { cuotas, valorCuota: formatPrice(price / cuotas) };
+}
+
 export function slugify(text: string): string {
   return text
     .toLowerCase()

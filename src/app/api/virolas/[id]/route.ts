@@ -11,10 +11,10 @@ function row(r: any) {
     slug: r.slug,
     descripcion: r.descripcion,
     material: r.material,
-    diametroMm: Number(r.diametro_mm),
-    precioBase: r.precio_base,
-    imageUrl: r.image_url,
-    disenoBase: r.diseno_base ?? null,
+    diametroMm: Number(r.diametroMm),
+    precioBase: r.precioBase,
+    imageUrl: r.imageUrl,
+    disenoBase: r.disenoBase ?? null,
     activa: r.activa,
     posicion: Number(r.posicion),
   };
@@ -36,20 +36,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const vals: any[] = [];
   let i = 1;
 
-  if (body.nombre !== undefined)     { sets.push(`nombre=$${i++}`);      vals.push(body.nombre.trim()); }
-  if (body.slug !== undefined)       { sets.push(`slug=$${i++}`);        vals.push(body.slug.trim().toLowerCase()); }
-  if (body.descripcion !== undefined){ sets.push(`descripcion=$${i++}`); vals.push(body.descripcion); }
-  if (body.material !== undefined)   { sets.push(`material=$${i++}`);    vals.push(body.material); }
-  if (body.diametroMm !== undefined) { sets.push(`diametro_mm=$${i++}`); vals.push(Number(body.diametroMm)); }
-  if (body.precioBase !== undefined) { sets.push(`precio_base=$${i++}`); vals.push(Number(body.precioBase)); }
-  if (body.imageUrl !== undefined)   { sets.push(`image_url=$${i++}`);   vals.push(body.imageUrl); }
-  if (body.disenoBase !== undefined) { sets.push(`diseno_base=$${i++}`); vals.push(body.disenoBase); }
-  if (body.activa !== undefined)     { sets.push(`activa=$${i++}`);      vals.push(Boolean(body.activa)); }
-  if (body.posicion !== undefined)   { sets.push(`posicion=$${i++}`);    vals.push(Number(body.posicion)); }
+  if (body.nombre !== undefined)     { sets.push(`nombre=$${i++}`);           vals.push(body.nombre.trim()); }
+  if (body.slug !== undefined)       { sets.push(`slug=$${i++}`);             vals.push(body.slug.trim().toLowerCase()); }
+  if (body.descripcion !== undefined){ sets.push(`descripcion=$${i++}`);      vals.push(body.descripcion); }
+  if (body.material !== undefined)   { sets.push(`material=$${i++}`);         vals.push(body.material); }
+  if (body.diametroMm !== undefined) { sets.push(`"diametroMm"=$${i++}`);    vals.push(Number(body.diametroMm)); }
+  if (body.precioBase !== undefined) { sets.push(`"precioBase"=$${i++}`);    vals.push(Number(body.precioBase)); }
+  if (body.imageUrl !== undefined)   { sets.push(`"imageUrl"=$${i++}`);      vals.push(body.imageUrl); }
+  if (body.disenoBase !== undefined) { sets.push(`"disenoBase"=$${i++}`);    vals.push(body.disenoBase); }
+  if (body.activa !== undefined)     { sets.push(`activa=$${i++}`);           vals.push(Boolean(body.activa)); }
+  if (body.posicion !== undefined)   { sets.push(`posicion=$${i++}`);         vals.push(Number(body.posicion)); }
 
   if (!sets.length) return NextResponse.json({ error: "Nada que actualizar" }, { status: 400 });
 
-  sets.push(`updated_at=NOW()`);
+  sets.push(`"updatedAt"=NOW()`);
   vals.push(Number(id));
 
   const rows: any[] = await (prisma as any).$queryRawUnsafe(

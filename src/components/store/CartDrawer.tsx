@@ -7,6 +7,7 @@ import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import Image from "next/image";
 import Link from "next/link";
+import { CartUpsell } from "./CartUpsell";
 
 interface CartDrawerProps {
   open: boolean;
@@ -167,6 +168,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               </div>
             ))
           )}
+          {items.length > 0 && <CartUpsell cartItems={items} />}
         </div>
 
         {/* Footer */}

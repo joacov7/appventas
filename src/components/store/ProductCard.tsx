@@ -81,6 +81,11 @@ export function ProductCard({ product }: ProductCardProps) {
             <Eye size={10} /> {viewers} viendo
           </div>
         )}
+        {product.imageUrls.length > 1 && (
+          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-md">
+            1 / {product.imageUrls.length}
+          </div>
+        )}
       </div>
 
       {/* Info */}

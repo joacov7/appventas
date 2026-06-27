@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images, Users, TrendingDown, CircleDot } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images, Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown, CircleDot } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -22,6 +22,12 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             { href: "/admin/captacion", label: "Captación", icon: Users },
             { href: "/admin/inteligencia", label: "Inteligencia", icon: TrendingDown },
             { href: "/admin/virolas", label: "Virolas", icon: CircleDot },
+            { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
+            { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
+            { href: "/admin/mayorista", label: "Mayorista", icon: Layers },
+            { href: "/admin/referidos", label: "Referidos", icon: Gift },
+            { href: "/admin/suscripciones", label: "Reposiciones", icon: RefreshCw },
+            { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
           ].map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

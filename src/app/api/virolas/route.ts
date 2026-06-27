@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { isAdmin } from "@/lib/admin-auth";
+import { isAdmin, adminAuthError } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 async function ensureTable() {
@@ -51,7 +51,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  const authErr = await adminAuthError();
+  if (authErr) return NextResponse.json({ error: authErr }, { status: 401 });
   await ensureTable();
   const body = await req.json();
   const { nombre, slug, descripcion, material, diametroMm, precioBase, imageUrl, disenoBase, posicion } = body;

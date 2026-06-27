@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { isAdmin } from "@/lib/admin-auth";
+import { adminAuthError } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
 function row(r: any) {
@@ -28,7 +28,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  const authErr = await adminAuthError();
+  if (authErr) return NextResponse.json({ error: authErr }, { status: 401 });
   const { id } = await params;
   const body = await req.json();
 
@@ -61,7 +62,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  const authErr = await adminAuthError();
+  if (authErr) return NextResponse.json({ error: authErr }, { status: 401 });
   const { id } = await params;
   await (prisma as any).$executeRawUnsafe(`DELETE FROM virolas WHERE id=$1`, Number(id));
   return NextResponse.json({ ok: true });

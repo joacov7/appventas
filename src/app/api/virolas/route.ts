@@ -1,34 +1,78 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
-export async function GET() {
-  const virolas = await prisma.virola.findMany({
-    where: { activa: true },
-    orderBy: [{ posicion: "asc" }, { createdAt: "asc" }],
-  });
-  return NextResponse.json(virolas);
+async function ensureTable() {
+  await (prisma as any).$executeRawUnsafe(`
+    CREATE TABLE IF NOT EXISTS virolas (
+      id           SERIAL PRIMARY KEY,
+      nombre       TEXT NOT NULL,
+      slug         TEXT NOT NULL UNIQUE,
+      descripcion  TEXT,
+      material     TEXT NOT NULL DEFAULT 'madera',
+      diametro_mm  INT  NOT NULL DEFAULT 35,
+      precio_base  NUMERIC(10,2) NOT NULL DEFAULT 0,
+      image_url    TEXT,
+      diseno_base  TEXT,
+      activa       BOOLEAN NOT NULL DEFAULT true,
+      posicion     INT NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+}
+
+function row(r: any) {
+  return {
+    id: Number(r.id),
+    nombre: r.nombre,
+    slug: r.slug,
+    descripcion: r.descripcion,
+    material: r.material,
+    diametroMm: Number(r.diametro_mm),
+    precioBase: r.precio_base,
+    imageUrl: r.image_url,
+    disenoBase: r.diseno_base ?? null,
+    activa: r.activa,
+    posicion: Number(r.posicion),
+    createdAt: r.created_at,
+  };
+}
+
+export async function GET(req: NextRequest) {
+  await ensureTable();
+  const admin = await isAdmin();
+  const rows: any[] = admin
+    ? await (prisma as any).$queryRawUnsafe(`SELECT * FROM virolas ORDER BY posicion ASC, id ASC`)
+    : await (prisma as any).$queryRawUnsafe(`SELECT * FROM virolas WHERE activa = true ORDER BY posicion ASC, id ASC`);
+  return NextResponse.json(rows.map(row));
 }
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  await ensureTable();
   const body = await req.json();
-  const { nombre, slug, descripcion, material, diametroMm, precioBase, imageUrl, posicion } = body;
+  const { nombre, slug, descripcion, material, diametroMm, precioBase, imageUrl, disenoBase, posicion } = body;
 
   if (!nombre?.trim() || !slug?.trim() || !precioBase)
     return NextResponse.json({ error: "nombre, slug y precioBase son requeridos" }, { status: 400 });
 
-  const virola = await prisma.virola.create({
-    data: {
-      nombre: nombre.trim(),
-      slug: slug.trim().toLowerCase(),
-      descripcion: descripcion?.trim() || null,
-      material: material?.trim() || "madera",
-      diametroMm: Number(diametroMm) || 35,
-      precioBase: Number(precioBase),
-      imageUrl: imageUrl?.trim() || null,
-      posicion: Number(posicion) || 0,
-    },
-  });
-  return NextResponse.json(virola, { status: 201 });
+  const rows: any[] = await (prisma as any).$queryRawUnsafe(`
+    INSERT INTO virolas (nombre, slug, descripcion, material, diametro_mm, precio_base, image_url, diseno_base, posicion)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+    RETURNING *
+  `,
+    nombre.trim(),
+    slug.trim().toLowerCase(),
+    descripcion?.trim() || null,
+    material || "madera",
+    Number(diametroMm) || 35,
+    Number(precioBase),
+    imageUrl || null,
+    disenoBase || null,
+    Number(posicion) || 0,
+  );
+  return NextResponse.json(row(rows[0]), { status: 201 });
 }

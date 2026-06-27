@@ -15,6 +15,7 @@ interface Virola {
   diametroMm: number;
   precioBase: string;
   imageUrl: string | null;
+  disenoBase?: string | null;
 }
 
 interface PerfilLaser {
@@ -237,10 +238,24 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       canvas.on("object:removed", () => pushHistory());
 
       fabricRef.current = { canvas, IText, FabricImage, Circle, Rect };
-      setFabricLoaded(true);
 
-      // Estado inicial en historial
-      setTimeout(() => pushHistory(), 100);
+      // Cargar diseño base del admin si existe
+      if (virola.disenoBase) {
+        try {
+          const json = JSON.parse(virola.disenoBase);
+          canvas.loadFromJSON(json).then(() => {
+            canvas.renderAll();
+            setFabricLoaded(true);
+            setTimeout(() => pushHistory(), 100);
+          });
+        } catch {
+          setFabricLoaded(true);
+          setTimeout(() => pushHistory(), 100);
+        }
+      } else {
+        setFabricLoaded(true);
+        setTimeout(() => pushHistory(), 100);
+      }
     });
     return () => {
       cancelled = true;

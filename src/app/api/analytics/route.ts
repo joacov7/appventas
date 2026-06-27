@@ -25,7 +25,7 @@ export async function GET() {
 
     // Order counts
     prisma.order.count(),
-    prisma.order.count({ where: { status: "PAID" } }),
+    prisma.order.count({ where: { status: "PROCESSING" } }),
     prisma.order.count({ where: { status: "PENDING" } }),
 
     // Top 10 products by revenue

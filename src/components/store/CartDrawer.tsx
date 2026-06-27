@@ -8,6 +8,7 @@ import { useCartStore } from "@/store/cartStore";
 import Image from "next/image";
 import Link from "next/link";
 import { CartUpsell } from "./CartUpsell";
+import { useTiers, getTierForQty, applyTier } from "@/hooks/useTiers";
 
 interface CartDrawerProps {
   open: boolean;
@@ -34,9 +35,20 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const [cartEmailSaved, setCartEmailSaved] = useState(false);
   const cartEmailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const tiers = useTiers();
+
   const subtotal = getTotalPrice();
   const discount = coupon?.discount ?? 0;
-  const total = subtotal - discount;
+
+  // Volume discount: sum per-item tier savings
+  const tierDiscount = items.reduce((acc, item) => {
+    const tier = getTierForQty(tiers, item.quantity);
+    if (!tier) return acc;
+    const discountedPrice = applyTier(item.price, tier);
+    return acc + (item.price - discountedPrice) * item.quantity;
+  }, 0);
+
+  const total = subtotal - discount - tierDiscount;
 
   async function applyCoupon() {
     if (!couponCode.trim()) return;
@@ -213,9 +225,15 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotal)}</span>
               </div>
+              {tierDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-medium">
+                  <span>Dto. por volumen</span>
+                  <span>− {formatPrice(tierDiscount)}</span>
+                </div>
+              )}
               {discount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
-                  <span>Descuento</span>
+                  <span>Cupón</span>
                   <span>− {formatPrice(discount)}</span>
                 </div>
               )}

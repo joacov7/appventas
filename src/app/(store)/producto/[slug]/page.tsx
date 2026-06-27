@@ -12,6 +12,7 @@ import { useCartStore } from "@/store/cartStore";
 import { useViewers } from "@/hooks/useViewers";
 import { WhatsAppButton, buildWaLink } from "@/components/store/WhatsAppButton";
 import type { ProductPublic, ProductVariantPublic } from "@/types/product";
+import { VolumePricing } from "@/components/store/VolumePricing";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -141,6 +142,11 @@ export default function ProductPage() {
                 ))}
               </div>
             </div>
+          )}
+
+          {/* Precios por volumen */}
+          {selectedVariant && (
+            <VolumePricing basePrice={selectedVariant.price} />
           )}
 
           {/* Stock urgencia */}

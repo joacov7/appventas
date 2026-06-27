@@ -316,6 +316,45 @@ export async function sendReactivationEmail({
   });
 }
 
+// ── Referidos: notificación al referidor ─────────────────────────────────────
+
+export async function sendReferralNotification({
+  referrerEmail,
+  codigo,
+}: {
+  referrerEmail: string;
+  codigo: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+
+  await getResend().emails.send({
+    from: "AppVentas <onboarding@resend.dev>",
+    to: referrerEmail,
+    subject: "🎉 ¡Alguien usó tu link de referido!",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+        <div style="background:#059669;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">🎉 ¡Tu link funcionó!</h1>
+          <p style="color:#d1fae5;margin:8px 0 0;">Alguien compró usando tu código de referido</p>
+        </div>
+        <div style="padding:32px;">
+          <p style="color:#374151;font-size:15px;">
+            ¡Excelente! Alguien usó tu código <strong style="color:#059669;letter-spacing:2px;">${codigo}</strong> y realizó una compra.
+          </p>
+          <p style="color:#374151;font-size:15px;margin-top:16px;">
+            Seguí compartiendo tu link para acumular más referidos y desbloquear beneficios exclusivos.
+          </p>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${appUrl}" style="display:inline-block;background:#059669;color:#fff;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+              Ver mi tienda →
+            </a>
+          </div>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendNewOrderNotificationToAdmin(data: OrderEmailData) {
   const adminEmail = process.env.ADMIN_EMAIL_TO;
   if (!adminEmail) return;

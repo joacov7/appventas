@@ -45,16 +45,19 @@ function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const couponCode = searchParams.get("cupon");
+  const refCode = searchParams.get("ref");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
+  const [refDiscount, setRefDiscount] = useState(0);
+  const [validatedRefCode, setValidatedRefCode] = useState<string | null>(null);
 
   const subtotal = getTotalPrice();
   const shippingCost = selectedShipping ? Number(selectedShipping.price) : 0;
-  const total = subtotal - couponDiscount + shippingCost;
+  const total = subtotal - couponDiscount - refDiscount + shippingCost;
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -75,6 +78,18 @@ function CheckoutContent() {
       body: JSON.stringify({ code: couponCode, subtotal }),
     }).then((r) => r.json()).then((d) => { if (d.discount) setCouponDiscount(d.discount); });
   }, [couponCode, subtotal]);
+
+  useEffect(() => {
+    if (!refCode) return;
+    fetch(`/api/referidos?codigo=${refCode}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.valid) {
+          setValidatedRefCode(d.codigo);
+          setRefDiscount(subtotal * (d.descuentoPct / 100));
+        }
+      });
+  }, [refCode, subtotal]);
 
   async function onSubmit(data: FormData) {
     if (items.length === 0) return;
@@ -135,6 +150,18 @@ function CheckoutContent() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: data.email }),
       }).catch(() => {});
+
+      // register referral use
+      if (validatedRefCode) {
+        fetch("/api/referidos", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo: validatedRefCode, emailComprador: data.email, orderId: order.id }),
+        }).catch(() => {});
+      }
+
+      // persist email for referral share on success page
+      sessionStorage.setItem("checkout_email", data.email);
 
       clearCart();
       window.location.href = process.env.NODE_ENV === "production" ? initPoint : (sandboxInitPoint ?? initPoint);
@@ -267,8 +294,14 @@ function CheckoutContent() {
               </div>
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600">
-                  <span>Descuento ({couponCode})</span>
+                  <span>Cupón ({couponCode})</span>
                   <span>− {formatPrice(couponDiscount)}</span>
+                </div>
+              )}
+              {refDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Referido ({validatedRefCode})</span>
+                  <span>− {formatPrice(refDiscount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-600">

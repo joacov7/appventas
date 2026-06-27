@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatPrice, formatCuotas } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import { useViewers } from "@/hooks/useViewers";
+import { WhatsAppButton, buildWaLink } from "@/components/store/WhatsAppButton";
 import type { ProductPublic, ProductVariantPublic } from "@/types/product";
 
 const LOW_STOCK_THRESHOLD = 5;
@@ -161,11 +162,18 @@ export default function ProductPage() {
             )}
           </div>
 
-          {/* CTA */}
-          <Button size="lg" onClick={handleAddToCart} disabled={!hasStock} className="w-full sm:w-auto">
-            <ShoppingCart size={18} />
-            {added ? "¡Agregado al carrito!" : "Agregar al carrito"}
-          </Button>
+          {/* CTAs */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button size="lg" onClick={handleAddToCart} disabled={!hasStock} className="flex-1">
+              <ShoppingCart size={18} />
+              {added ? "¡Agregado al carrito!" : "Agregar al carrito"}
+            </Button>
+            <WhatsAppButton
+              variant="inline"
+              label="Consultar"
+              message={`Hola! Me interesa el producto *${product?.name}*${selectedVariant && product?.variants.length > 1 ? ` (${selectedVariant.name})` : ""}. ¿Tienen disponibilidad? ${typeof window !== "undefined" ? window.location.href : ""}`}
+            />
+          </div>
 
           {/* Garantías */}
           <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">

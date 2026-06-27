@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, ShoppingBag, Trash2, Plus, Minus, Tag, CheckCircle } from "lucide-react";
+import { X, ShoppingBag, Trash2, Plus, Minus, Tag, CheckCircle, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
@@ -202,9 +202,52 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
             <Link href={`/checkout${coupon ? `?cupon=${coupon.code}` : ""}`} onClick={onClose} className="block">
               <Button size="lg" className="w-full">Ir al checkout</Button>
             </Link>
+
+            {/* Compartir carrito por WhatsApp */}
+            {process.env.NEXT_PUBLIC_WHATSAPP_NUMBER && (
+              <CartWhatsAppButton items={items} total={total} onClose={onClose} />
+            )}
           </div>
         )}
       </aside>
     </>
+  );
+}
+
+// ── Botón de carrito por WhatsApp ────────────────────────────────────────────
+import type { CartItem } from "@/types/cart";
+
+function CartWhatsAppButton({ items, total, onClose }: { items: CartItem[]; total: number; onClose: () => void }) {
+  const num = (process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "").replace(/\D/g, "");
+  if (!num) return null;
+
+  function buildMessage() {
+    const lines = items.map((i) =>
+      i.diseno
+        ? `• ${i.productName} (personalizada) x${i.quantity} — ${formatPrice(i.price * i.quantity)}`
+        : `• ${i.productName} — ${i.variantName} x${i.quantity} — ${formatPrice(i.price * i.quantity)}`
+    );
+    return [
+      "Hola! Quiero hacer el siguiente pedido:",
+      "",
+      ...lines,
+      "",
+      `*Total: ${formatPrice(total)}*`,
+      "",
+      "¿Pueden confirmar disponibilidad?",
+    ].join("\n");
+  }
+
+  return (
+    <a
+      href={`https://wa.me/${num}?text=${encodeURIComponent(buildMessage())}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={onClose}
+      className="flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white font-medium text-sm py-3 rounded-xl transition-colors w-full"
+    >
+      <MessageCircle size={17} fill="white" strokeWidth={0} />
+      Pedir por WhatsApp
+    </a>
   );
 }

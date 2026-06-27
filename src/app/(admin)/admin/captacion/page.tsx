@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, RefreshCw, Star, ExternalLink, Plus, Trash2, MapPin, X } from "lucide-react";
+import { Users, RefreshCw, Star, ExternalLink, Plus, Trash2, MapPin, X, MessageCircle } from "lucide-react";
 
 type Lead = {
   id: number;
@@ -198,13 +198,23 @@ export default function CaptacionPage() {
                     {expanded === lead.id && (
                       <div className="mt-2 bg-emerald-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed">
                         {lead.mensaje_abordaje}
-                        <div className="flex items-center gap-2 mt-2">
+                        <div className="flex items-center gap-3 mt-3 flex-wrap">
                           <button onClick={() => navigator.clipboard.writeText(lead.mensaje_abordaje)}
-                            className="text-xs text-emerald-600 hover:underline">Copiar</button>
+                            className="text-xs text-emerald-600 hover:underline">Copiar texto</button>
                           {lead.url_perfil && !lead.url_perfil.startsWith("sin_url") && (
                             <a href={lead.url_perfil} target="_blank" rel="noopener noreferrer"
                               className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-1">
                               <ExternalLink size={11} /> Ver perfil
+                            </a>
+                          )}
+                          {process.env.NEXT_PUBLIC_WHATSAPP_NUMBER && (
+                            <a
+                              href={`https://wa.me/?text=${encodeURIComponent(lead.mensaje_abordaje)}`}
+                              target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
+                            >
+                              <MessageCircle size={12} fill="white" strokeWidth={0} />
+                              Enviar por WhatsApp
                             </a>
                           )}
                         </div>

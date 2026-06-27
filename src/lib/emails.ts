@@ -316,6 +316,60 @@ export async function sendReactivationEmail({
   });
 }
 
+// ── Suscripciones: recordatorio de reposición ────────────────────────────────
+
+export async function sendReposicionEmail({
+  email,
+  productName,
+  variantName,
+  quantity,
+  frecuenciaDias,
+  buyLink,
+}: {
+  email: string;
+  productName: string;
+  variantName: string;
+  quantity: number;
+  frecuenciaDias: number;
+  buyLink: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+
+  await getResend().emails.send({
+    from: "AppVentas <onboarding@resend.dev>",
+    to: email,
+    subject: `🔄 Es hora de reponer: ${productName}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+        <div style="background:#059669;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">🔄 ¡Hora de reponer!</h1>
+          <p style="color:#d1fae5;margin:8px 0 0;font-size:14px;">Han pasado ${frecuenciaDias} días desde tu última compra</p>
+        </div>
+        <div style="padding:32px;">
+          <p style="color:#374151;font-size:15px;">
+            Hola! Te recordamos que es momento de reponer <strong>${productName}</strong>${variantName ? ` (${variantName})` : ""}.
+          </p>
+          <div style="margin:24px 0;background:#f9fafb;border-radius:12px;padding:20px;">
+            <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">Producto</p>
+            <p style="margin:0;font-size:16px;font-weight:700;color:#111827;">${productName}</p>
+            ${variantName ? `<p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${variantName}</p>` : ""}
+            <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">Cantidad habitual: <strong>${quantity} unid.</strong></p>
+          </div>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${buyLink}" style="display:inline-block;background:#059669;color:#fff;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+              Comprar ahora →
+            </a>
+          </div>
+          <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
+            Recibís este email porque suscribiste la reposición automática de este producto.<br/>
+            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
 // ── Referidos: notificación al referidor ─────────────────────────────────────
 
 export async function sendReferralNotification({

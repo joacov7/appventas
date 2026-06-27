@@ -13,6 +13,7 @@ import { useViewers } from "@/hooks/useViewers";
 import { WhatsAppButton, buildWaLink } from "@/components/store/WhatsAppButton";
 import type { ProductPublic, ProductVariantPublic } from "@/types/product";
 import { VolumePricing } from "@/components/store/VolumePricing";
+import { SubscribeReposicion } from "@/components/store/SubscribeReposicion";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -180,6 +181,15 @@ export default function ProductPage() {
               message={`Hola! Me interesa el producto *${product?.name}*${selectedVariant && product?.variants.length > 1 ? ` (${selectedVariant.name})` : ""}. ¿Tienen disponibilidad? ${typeof window !== "undefined" ? window.location.href : ""}`}
             />
           </div>
+
+          {selectedVariant && hasStock && (
+            <SubscribeReposicion
+              variantId={selectedVariant.id}
+              productName={product.name}
+              variantName={selectedVariant.name}
+              productSlug={product.slug}
+            />
+          )}
 
           {/* Garantías */}
           <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">

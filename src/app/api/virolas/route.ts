@@ -22,6 +22,16 @@ async function ensureTable() {
       updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
+  // Add columns that may be missing if table was created with an older schema
+  for (const col of [
+    `ALTER TABLE virolas ADD COLUMN IF NOT EXISTS diseno_base TEXT`,
+    `ALTER TABLE virolas ADD COLUMN IF NOT EXISTS image_url TEXT`,
+    `ALTER TABLE virolas ADD COLUMN IF NOT EXISTS activa BOOLEAN NOT NULL DEFAULT true`,
+    `ALTER TABLE virolas ADD COLUMN IF NOT EXISTS posicion INT NOT NULL DEFAULT 0`,
+    `ALTER TABLE virolas ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
+  ]) {
+    await (prisma as any).$executeRawUnsafe(col);
+  }
 }
 
 function row(r: any) {
@@ -60,20 +70,24 @@ export async function POST(req: NextRequest) {
   if (!nombre?.trim() || !slug?.trim() || !precioBase)
     return NextResponse.json({ error: "nombre, slug y precioBase son requeridos" }, { status: 400 });
 
-  const rows: any[] = await (prisma as any).$queryRawUnsafe(`
-    INSERT INTO virolas (nombre, slug, descripcion, material, diametro_mm, precio_base, image_url, diseno_base, posicion)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
-    RETURNING *
-  `,
-    nombre.trim(),
-    slug.trim().toLowerCase(),
-    descripcion?.trim() || null,
-    material || "madera",
-    Number(diametroMm) || 35,
-    Number(precioBase),
-    imageUrl || null,
-    disenoBase || null,
-    Number(posicion) || 0,
-  );
-  return NextResponse.json(row(rows[0]), { status: 201 });
+  try {
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(`
+      INSERT INTO virolas (nombre, slug, descripcion, material, diametro_mm, precio_base, image_url, diseno_base, posicion)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING *
+    `,
+      nombre.trim(),
+      slug.trim().toLowerCase(),
+      descripcion?.trim() || null,
+      material || "madera",
+      Number(diametroMm) || 35,
+      Number(precioBase),
+      imageUrl || null,
+      disenoBase || null,
+      Number(posicion) || 0,
+    );
+    return NextResponse.json(row(rows[0]), { status: 201 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "Error al guardar" }, { status: 500 });
+  }
 }

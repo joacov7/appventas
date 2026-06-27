@@ -53,12 +53,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   sets.push(`updated_at=NOW()`);
   vals.push(Number(id));
 
-  const rows: any[] = await (prisma as any).$queryRawUnsafe(
-    `UPDATE virolas SET ${sets.join(",")} WHERE id=$${i} RETURNING *`,
-    ...vals
-  );
-  if (!rows[0]) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
-  return NextResponse.json(row(rows[0]));
+  try {
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `UPDATE virolas SET ${sets.join(",")} WHERE id=$${i} RETURNING *`,
+      ...vals
+    );
+    if (!rows[0]) return NextResponse.json({ error: "No encontrada" }, { status: 404 });
+    return NextResponse.json(row(rows[0]));
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message ?? "Error al actualizar" }, { status: 500 });
+  }
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

@@ -4,10 +4,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
-async function ensureDisenoCols() {
-  // Agrega la columna disenoBase si no existe (la tabla ya la creó Prisma)
+async function ensureTable() {
   await (prisma as any).$executeRawUnsafe(`
-    ALTER TABLE virolas ADD COLUMN IF NOT EXISTS "disenoBase" TEXT
+    CREATE TABLE IF NOT EXISTS virolas (
+      id           SERIAL PRIMARY KEY,
+      nombre       TEXT NOT NULL,
+      slug         TEXT NOT NULL UNIQUE,
+      descripcion  TEXT,
+      material     TEXT NOT NULL DEFAULT 'madera',
+      diametro_mm  INT  NOT NULL DEFAULT 35,
+      precio_base  NUMERIC(10,2) NOT NULL DEFAULT 0,
+      image_url    TEXT,
+      diseno_base  TEXT,
+      activa       BOOLEAN NOT NULL DEFAULT true,
+      posicion     INT NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
   `);
 }
 
@@ -16,20 +29,20 @@ function row(r: any) {
     id: Number(r.id),
     nombre: r.nombre,
     slug: r.slug,
-    descripcion: r.descripcion,
+    descripcion: r.descripcion ?? null,
     material: r.material,
-    diametroMm: Number(r.diametroMm),
-    precioBase: r.precioBase,
-    imageUrl: r.imageUrl,
-    disenoBase: r.disenoBase ?? null,
+    diametroMm: Number(r.diametro_mm),
+    precioBase: r.precio_base,
+    imageUrl: r.image_url ?? null,
+    disenoBase: r.diseno_base ?? null,
     activa: r.activa,
     posicion: Number(r.posicion),
-    createdAt: r.createdAt,
+    createdAt: r.created_at,
   };
 }
 
 export async function GET(req: NextRequest) {
-  await ensureDisenoCols();
+  await ensureTable();
   const admin = await isAdmin();
   const rows: any[] = admin
     ? await (prisma as any).$queryRawUnsafe(`SELECT * FROM virolas ORDER BY posicion ASC, id ASC`)
@@ -39,7 +52,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  await ensureDisenoCols();
+  await ensureTable();
   const body = await req.json();
   const { nombre, slug, descripcion, material, diametroMm, precioBase, imageUrl, disenoBase, posicion } = body;
 
@@ -47,8 +60,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "nombre, slug y precioBase son requeridos" }, { status: 400 });
 
   const rows: any[] = await (prisma as any).$queryRawUnsafe(`
-    INSERT INTO virolas (nombre, slug, descripcion, material, "diametroMm", "precioBase", "imageUrl", "disenoBase", posicion, activa, "createdAt", "updatedAt")
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,true,NOW(),NOW())
+    INSERT INTO virolas (nombre, slug, descripcion, material, diametro_mm, precio_base, image_url, diseno_base, posicion)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
     RETURNING *
   `,
     nombre.trim(),

@@ -60,6 +60,28 @@ export default function ProductPage() {
     setTimeout(() => setAdded(false), 2000);
   }
 
+  // Build image list: variant image first (if any), then product images
+  const allImages = [
+    ...(selectedVariant?.imageUrl ? [selectedVariant.imageUrl] : []),
+    ...(product?.imageUrls ?? []).filter((u) => u !== selectedVariant?.imageUrl),
+  ];
+  if (allImages.length === 0) allImages.push("/images/placeholder.png");
+
+  const closeLightbox = useCallback(() => setLightbox(null), []);
+  const prevLightbox = useCallback(() => setLightbox((i) => (i !== null ? (i - 1 + allImages.length) % allImages.length : null)), [allImages.length]);
+  const nextLightbox = useCallback(() => setLightbox((i) => (i !== null ? (i + 1) % allImages.length : null)), [allImages.length]);
+
+  useEffect(() => {
+    if (lightbox === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowLeft") prevLightbox();
+      if (e.key === "ArrowRight") nextLightbox();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox, closeLightbox, prevLightbox, nextLightbox]);
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 py-16 flex items-center justify-center">
@@ -80,28 +102,6 @@ export default function ProductPage() {
   const hasStock = (selectedVariant?.stock ?? 0) > 0;
   const isLowStock = hasStock && (selectedVariant?.stock ?? 0) <= LOW_STOCK_THRESHOLD;
   const cuotas = selectedVariant ? formatCuotas(selectedVariant.price) : null;
-
-  // Build image list: variant image first (if any), then product images
-  const allImages = [
-    ...(selectedVariant?.imageUrl ? [selectedVariant.imageUrl] : []),
-    ...product.imageUrls.filter((u) => u !== selectedVariant?.imageUrl),
-  ];
-  if (allImages.length === 0) allImages.push("/images/placeholder.png");
-
-  const closeLightbox = useCallback(() => setLightbox(null), []);
-  const prevLightbox = useCallback(() => setLightbox((i) => (i !== null ? (i - 1 + allImages.length) % allImages.length : null)), [allImages.length]);
-  const nextLightbox = useCallback(() => setLightbox((i) => (i !== null ? (i + 1) % allImages.length : null)), [allImages.length]);
-
-  useEffect(() => {
-    if (lightbox === null) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") closeLightbox();
-      if (e.key === "ArrowLeft") prevLightbox();
-      if (e.key === "ArrowRight") nextLightbox();
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [lightbox, closeLightbox, prevLightbox, nextLightbox]);
 
   return (
     <>

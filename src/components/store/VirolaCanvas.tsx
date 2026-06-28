@@ -182,6 +182,9 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
         width: CANVAS_SIZE,
         height: CANVAS_SIZE,
         backgroundColor: bgColor,
+        selectionColor: "rgba(0,255,65,0.08)",
+        selectionBorderColor: "#00ff41",
+        selectionLineWidth: 1,
       });
 
       // Clip circular (borde exterior)
@@ -241,15 +244,23 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       // Guardar historial en cada modificación
       canvas.on("object:modified", (e: any) => {
         pushHistory();
-        // Sync sliders when resized/rotated with handles
         const obj = e.target;
         if (obj) {
           setSelectedScale(obj.scaleX ?? 1);
           setSelectedAngle(Math.round(obj.angle ?? 0));
         }
       });
-      canvas.on("object:added", () => pushHistory());
       canvas.on("object:removed", () => pushHistory());
+
+      // Apply neon green selection style to every object added to the canvas
+      canvas.on("object:added", (e: any) => {
+        const obj = e.target;
+        if (obj && !obj.__selectionStyled) {
+          obj.set({ borderColor: "#00ff41", cornerColor: "#00ff41", cornerStrokeColor: "#00ff41", cornerSize: 10 });
+          obj.__selectionStyled = true;
+        }
+        pushHistory();
+      });
 
       fabricRef.current = { canvas, IText, FabricImage, Circle, Rect };
 

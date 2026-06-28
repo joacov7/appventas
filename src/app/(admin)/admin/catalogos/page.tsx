@@ -17,6 +17,8 @@ interface Product {
 interface CatalogConfig {
   // Empresa
   logo: string | null;
+  logoAncho: number;
+  logoAlineacion: "left" | "center" | "right";
   empresa: string;
   slogan: string;
   whatsapp: string;
@@ -44,7 +46,7 @@ interface CatalogConfig {
 }
 
 const DEFAULT_CONFIG: CatalogConfig = {
-  logo: null, empresa: "", slogan: "", whatsapp: "", instagram: "",
+  logo: null, logoAncho: 120, logoAlineacion: "center", empresa: "", slogan: "", whatsapp: "", instagram: "",
   facebook: "", sitioWeb: "", email: "", direccion: "", quienesSomos: "",
   mostrarPrecios: true, mostrarCodigo: true, mostrarStock: false,
   mostrarQrWhatsapp: true, mostrarQrWeb: false,
@@ -72,21 +74,28 @@ function fmt(n: number | null, moneda: string) {
 function CoverPage({ cfg, tipo }: { cfg: CatalogConfig; tipo: "ar" | "usa" }) {
   return (
     <div
-      className="relative w-full flex flex-col items-center justify-center text-white overflow-hidden"
+      className="relative w-full flex flex-col justify-center text-white overflow-hidden"
       style={{ height: 480, background: `linear-gradient(135deg, ${cfg.colorPrincipal} 0%, ${cfg.colorSecundario} 100%)` }}
     >
-      {cfg.logo && (
-        <img src={cfg.logo} alt="logo" className="h-20 object-contain mb-6 drop-shadow-lg" />
-      )}
-      <h1 className="text-4xl font-bold text-center px-8 drop-shadow">{cfg.empresa || (tipo === "usa" ? "Premium Mate Collection" : "Catálogo de Productos")}</h1>
-      {cfg.slogan && <p className="mt-3 text-lg text-white/80 text-center px-8">{cfg.slogan}</p>}
-      {tipo === "usa" && (
-        <div className="mt-6 flex flex-wrap gap-2 justify-center px-8">
-          {["Made in Argentina", "Wholesale", "Private Label", "Laser Engraving", "Worldwide Shipping"].map(t => (
-            <span key={t} className="text-xs border border-white/40 text-white px-3 py-1 rounded-full">{t}</span>
-          ))}
-        </div>
-      )}
+      <div className={`flex flex-col px-10 ${cfg.logoAlineacion === "center" ? "items-center text-center" : cfg.logoAlineacion === "right" ? "items-end text-right" : "items-start text-left"}`}>
+        {cfg.logo && (
+          <img
+            src={cfg.logo} alt="logo"
+            crossOrigin="anonymous"
+            className="object-contain mb-6 drop-shadow-lg"
+            style={{ width: cfg.logoAncho, height: "auto" }}
+          />
+        )}
+        <h1 className="text-4xl font-bold drop-shadow">{cfg.empresa || (tipo === "usa" ? "Premium Mate Collection" : "Catálogo de Productos")}</h1>
+        {cfg.slogan && <p className="mt-3 text-lg text-white/80">{cfg.slogan}</p>}
+        {tipo === "usa" && (
+          <div className="mt-6 flex flex-wrap gap-2">
+            {["Made in Argentina", "Wholesale", "Private Label", "Laser Engraving", "Worldwide Shipping"].map(t => (
+              <span key={t} className="text-xs border border-white/40 text-white px-3 py-1 rounded-full">{t}</span>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="absolute bottom-4 right-6 text-white/50 text-xs">{new Date().toLocaleDateString(tipo === "usa" ? "en-US" : "es-AR")}</div>
     </div>
   );
@@ -98,7 +107,7 @@ function ProductCard({ p, cfg, tipo, index }: { p: Product; cfg: CatalogConfig; 
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col">
       <div className="aspect-square bg-gray-50 overflow-hidden">
         {p.imagen ? (
-          <img src={p.imagen} alt={p.nombre} className="w-full h-full object-cover" />
+          <img src={p.imagen} alt={p.nombre} crossOrigin="anonymous" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300">
             <Package size={40} strokeWidth={1} />
@@ -208,6 +217,22 @@ function ConfigPanel({ cfg, onChange }: { cfg: CatalogConfig; onChange: (c: Cata
           <div>
             <label className="text-xs font-medium text-gray-600 block mb-1">Logo</label>
             <MediaUpload urls={cfg.logo ? [cfg.logo] : []} onChange={urls => set("logo", urls[0] ?? null)} />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Ancho del logo: {cfg.logoAncho}px</label>
+            <input type="range" min={40} max={400} value={cfg.logoAncho} onChange={e => set("logoAncho", Number(e.target.value))}
+              className="w-full accent-emerald-600" />
+          </div>
+          <div>
+            <label className="text-xs font-medium text-gray-600 block mb-2">Alineación del logo</label>
+            <div className="flex gap-2">
+              {(["left", "center", "right"] as const).map(a => (
+                <button key={a} onClick={() => set("logoAlineacion", a)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition-colors ${cfg.logoAlineacion === a ? "bg-emerald-600 text-white border-emerald-600" : "text-gray-600 border-gray-200 hover:border-gray-400"}`}>
+                  {a === "left" ? "← Izq" : a === "center" ? "Centro" : "Der →"}
+                </button>
+              ))}
+            </div>
           </div>
           {input("Nombre de empresa", "empresa", "Mi Empresa")}
           {input("Slogan", "slogan", "Tu slogan aquí")}
@@ -423,7 +448,7 @@ export default function CatalogosPage() {
         precio: p.variants?.[0]?.price != null ? Number(p.variants[0].price)
           : p.precio != null ? Number(p.precio) : null,
         sku: p.sku ?? null,
-        imagen: p.imageUrl ?? p.imagen ?? null,
+        imagen: p.imageUrls?.[0] ?? p.imageUrl ?? p.imagen ?? null,
         categoria: p.category?.name ?? p.categoria ?? null,
         stock: p.stock != null ? Number(p.stock) : null,
       })));

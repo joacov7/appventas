@@ -304,11 +304,13 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
     const canvas = fabricRef.current?.canvas;
     if (!canvas || !text.trim()) return;
 
-    // Render on full canvas to get correct positions
+    // Render at 3× resolution to avoid pixelation
+    const DPR = 3;
     const offscreen = document.createElement("canvas");
-    offscreen.width = CANVAS_SIZE;
-    offscreen.height = CANVAS_SIZE;
+    offscreen.width = CANVAS_SIZE * DPR;
+    offscreen.height = CANVAS_SIZE * DPR;
     const ctx = offscreen.getContext("2d")!;
+    ctx.scale(DPR, DPR);
     ctx.font = `${size}px ${family}`;
     ctx.fillStyle = color;
     ctx.textAlign = "center";
@@ -327,13 +329,15 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       ctx.restore();
     });
 
-    // Tight crop: scan actual non-transparent pixels
+    // Tight crop: scan actual non-transparent pixels (in DPR space)
     const pad = 4;
-    const imgData = ctx.getImageData(0, 0, CANVAS_SIZE, CANVAS_SIZE).data;
-    let minX = CANVAS_SIZE, minY = CANVAS_SIZE, maxX = 0, maxY = 0;
-    for (let y = 0; y < CANVAS_SIZE; y++) {
-      for (let x = 0; x < CANVAS_SIZE; x++) {
-        if (imgData[(y * CANVAS_SIZE + x) * 4 + 3] > 10) {
+    const W = CANVAS_SIZE * DPR;
+    const H = CANVAS_SIZE * DPR;
+    const imgData = ctx.getImageData(0, 0, W, H).data;
+    let minX = W, minY = H, maxX = 0, maxY = 0;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (imgData[(y * W + x) * 4 + 3] > 10) {
           if (x < minX) minX = x;
           if (x > maxX) maxX = x;
           if (y < minY) minY = y;
@@ -343,17 +347,17 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
     }
     const cropX = Math.max(0, minX - pad);
     const cropY = Math.max(0, minY - pad);
-    const cropW = Math.min(CANVAS_SIZE - cropX, maxX - minX + pad * 2);
-    const cropH = Math.min(CANVAS_SIZE - cropY, maxY - minY + pad * 2);
+    const cropW = Math.min(W - cropX, maxX - minX + pad * 2);
+    const cropH = Math.min(H - cropY, maxY - minY + pad * 2);
 
     const cropped = document.createElement("canvas");
     cropped.width = cropW;
     cropped.height = cropH;
     cropped.getContext("2d")!.drawImage(offscreen, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
 
-    // The center of the crop in original canvas coordinates
-    const imgCenterX = cropX + cropW / 2;
-    const imgCenterY = cropY + cropH / 2;
+    // Center in original (1×) canvas coordinates
+    const imgCenterX = (cropX + cropW / 2) / DPR;
+    const imgCenterY = (cropY + cropH / 2) / DPR;
 
     import("fabric").then(({ FabricImage }) => {
       FabricImage.fromURL(cropped.toDataURL()).then((img: any) => {
@@ -362,6 +366,8 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
           top: imgCenterY,
           originX: "center",
           originY: "center",
+          scaleX: 1 / DPR,
+          scaleY: 1 / DPR,
           selectable: true,
           evented: true,
           borderColor: "#00ff41",
@@ -372,7 +378,7 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
         canvas.add(img);
         canvas.setActiveObject(img);
         canvas.renderAll();
-        setSelectedScale(1);
+        setSelectedScale(1 / DPR);
         setSelectedAngle(0);
       });
     });

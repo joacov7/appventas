@@ -182,9 +182,6 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
         width: CANVAS_SIZE,
         height: CANVAS_SIZE,
         backgroundColor: bgColor,
-        selectionColor: "rgba(0,255,65,0.08)",
-        selectionBorderColor: "#00ff41",
-        selectionLineWidth: 1,
       });
 
       // Clip circular (borde exterior)
@@ -390,7 +387,6 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       left: CANVAS_SIZE / 2, top: CANVAS_SIZE / 2,
       originX: "center", originY: "center",
       fontSize, fontFamily, fill: textColor, editable: true,
-      borderColor: "#00ff41", cornerColor: "#00ff41", cornerStrokeColor: "#00ff41", cornerSize: 10,
     });
     canvas.add(obj);
     canvas.setActiveObject(obj);
@@ -413,7 +409,6 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       img.scale(scale);
       img.set({
         left: CANVAS_SIZE / 2, top: CANVAS_SIZE / 2, originX: "center", originY: "center",
-        borderColor: "#00ff41", cornerColor: "#00ff41", cornerStrokeColor: "#00ff41", cornerSize: 10,
       });
       canvas.add(img);
       canvas.setActiveObject(img);

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images, Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown, CircleDot } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images, Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown, CircleDot, BookOpen } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -28,6 +28,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             { href: "/admin/referidos", label: "Referidos", icon: Gift },
             { href: "/admin/suscripciones", label: "Reposiciones", icon: RefreshCw },
             { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
+            { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
           ].map(({ href, label, icon: Icon }) => (
             <Link
               key={href}

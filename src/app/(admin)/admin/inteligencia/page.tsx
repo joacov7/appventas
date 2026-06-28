@@ -32,6 +32,8 @@ export default function InteligenciaPage() {
   const [tiendas, setTiendas] = useState<Tienda[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(false);
+  const [scraping, setScraping] = useState<number | null>(null);
+  const [scrapeMsg, setScrapeMsg] = useState<string | null>(null);
 
   // Form nueva búsqueda
   const [termino, setTermino] = useState("");
@@ -84,6 +86,25 @@ export default function InteligenciaPage() {
       body: JSON.stringify({ activa: !b.activa }),
     });
     fetchBusquedas();
+  }
+
+  async function scrapearTienda(id: number) {
+    setScraping(id);
+    setScrapeMsg(null);
+    try {
+      const r = await fetch("/api/inteligencia/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tiendaId: id }),
+      });
+      const data = await r.json();
+      setScrapeMsg(r.ok ? `✓ ${data.total} productos actualizados` : `✗ ${data.error}`);
+      fetchTiendas();
+    } catch {
+      setScrapeMsg("✗ Error de red");
+    } finally {
+      setScraping(null);
+    }
   }
 
   async function eliminarBusqueda(id: number) {
@@ -219,6 +240,9 @@ export default function InteligenciaPage() {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2">El scraper va a visitar estas tiendas automáticamente en cada corrida y detectar cambios de precio.</p>
+          {scrapeMsg && (
+            <p className={`text-xs mt-2 font-medium ${scrapeMsg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{scrapeMsg}</p>
+          )}
           </div>
 
           <div className="flex justify-between items-center mb-4">
@@ -251,23 +275,33 @@ export default function InteligenciaPage() {
                       <span>Scrapeado {new Date(t.ultimo_scrape).toLocaleDateString("es-AR")}</span>
                     )}
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
+                  <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
                     <button
                       onClick={() => { setFiltroTienda(String(t.id)); setTab("Productos"); }}
                       className="text-xs text-emerald-600 hover:underline"
                     >
                       Ver productos →
                     </button>
-                    <button
-                      onClick={async () => {
-                        if (!confirm(`¿Eliminar ${t.nombre}?`)) return;
-                        await fetch(`/api/inteligencia/tiendas/${t.id}`, { method: "DELETE" });
-                        fetchTiendas();
-                      }}
-                      className="text-gray-300 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => scrapearTienda(t.id)}
+                        disabled={scraping === t.id}
+                        className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-2.5 py-1 rounded-lg"
+                      >
+                        <RefreshCw size={11} className={scraping === t.id ? "animate-spin" : ""} />
+                        {scraping === t.id ? "Scrapeando..." : "Scrapear"}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`¿Eliminar ${t.nombre}?`)) return;
+                          await fetch(`/api/inteligencia/tiendas/${t.id}`, { method: "DELETE" });
+                          fetchTiendas();
+                        }}
+                        className="text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}

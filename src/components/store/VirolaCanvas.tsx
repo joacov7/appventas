@@ -108,6 +108,7 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
   const [arcAngle, setArcAngle] = useState(0);
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [perfiles, setPerfiles] = useState<PerfilLaser[]>([]);
   const [perfilId, setPerfilId] = useState<number | null>(null);
   const [exporting, setExporting] = useState<string | null>(null);
@@ -118,6 +119,11 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
   const [activeTab, setActiveTab] = useState<"text" | "arc" | "image" | "templates" | "bg">("templates");
   const [selectedScale, setSelectedScale] = useState(1);
   const [selectedAngle, setSelectedAngle] = useState(0);
+
+  // Verificar si es admin
+  useEffect(() => {
+    fetch("/api/auth/check").then(r => r.json()).then(d => setIsAdmin(!!d.admin)).catch(() => {});
+  }, []);
 
   // Cargar perfiles de láser
   useEffect(() => {
@@ -884,30 +890,32 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
           </div>
         )}
 
-        {/* Exportar */}
-        <div className="bg-white rounded-2xl border p-4 space-y-2">
-          <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2 mb-1">
-            <Download size={14} /> Exportar
-          </h3>
-          <div className="grid grid-cols-2 gap-2">
-            <button onClick={handleExportPNG} disabled={!!exporting}
-              className="flex items-center justify-center gap-1.5 border rounded-xl py-2 text-xs hover:bg-gray-50 disabled:opacity-50">
-              <Download size={12} /> {exporting === "png" ? "..." : "PNG"}
-            </button>
-            <button onClick={handleExportSVG} disabled={!!exporting}
-              className="flex items-center justify-center gap-1.5 border rounded-xl py-2 text-xs hover:bg-gray-50 disabled:opacity-50">
-              <File size={12} /> {exporting === "svg" ? "..." : "SVG"}
-            </button>
-            <button onClick={handleExportDXF} disabled={!!exporting}
-              className="flex items-center justify-center gap-1.5 border border-orange-200 text-orange-700 rounded-xl py-2 text-xs hover:bg-orange-50 disabled:opacity-50">
-              <File size={12} /> {exporting === "dxf" ? "..." : "DXF Láser"}
-            </button>
-            <button onClick={handleExportPDF} disabled={!!exporting}
-              className="flex items-center justify-center gap-1.5 border border-blue-200 text-blue-700 rounded-xl py-2 text-xs hover:bg-blue-50 disabled:opacity-50">
-              <FileText size={12} /> {exporting === "pdf" ? "..." : "PDF Orden"}
-            </button>
+        {/* Exportar — solo admin */}
+        {isAdmin && (
+          <div className="bg-white rounded-2xl border p-4 space-y-2">
+            <h3 className="font-semibold text-sm text-gray-900 flex items-center gap-2 mb-1">
+              <Download size={14} /> Exportar
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={handleExportPNG} disabled={!!exporting}
+                className="flex items-center justify-center gap-1.5 border rounded-xl py-2 text-xs hover:bg-gray-50 disabled:opacity-50">
+                <Download size={12} /> {exporting === "png" ? "..." : "PNG"}
+              </button>
+              <button onClick={handleExportSVG} disabled={!!exporting}
+                className="flex items-center justify-center gap-1.5 border rounded-xl py-2 text-xs hover:bg-gray-50 disabled:opacity-50">
+                <File size={12} /> {exporting === "svg" ? "..." : "SVG"}
+              </button>
+              <button onClick={handleExportDXF} disabled={!!exporting}
+                className="flex items-center justify-center gap-1.5 border border-orange-200 text-orange-700 rounded-xl py-2 text-xs hover:bg-orange-50 disabled:opacity-50">
+                <File size={12} /> {exporting === "dxf" ? "..." : "DXF Láser"}
+              </button>
+              <button onClick={handleExportPDF} disabled={!!exporting}
+                className="flex items-center justify-center gap-1.5 border border-blue-200 text-blue-700 rounded-xl py-2 text-xs hover:bg-blue-50 disabled:opacity-50">
+                <FileText size={12} /> {exporting === "pdf" ? "..." : "PDF Orden"}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Cantidad y carrito */}
         <div className="bg-white rounded-2xl border p-4 space-y-3">

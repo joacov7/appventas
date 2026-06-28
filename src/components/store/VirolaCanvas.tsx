@@ -116,6 +116,8 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
   const [canRedo, setCanRedo] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [activeTab, setActiveTab] = useState<"text" | "arc" | "image" | "templates" | "bg">("templates");
+  const [selectedScale, setSelectedScale] = useState(1);
+  const [selectedAngle, setSelectedAngle] = useState(0);
 
   // Cargar perfiles de láser
   useEffect(() => {
@@ -225,6 +227,10 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
 
       function syncSelection(obj: any) {
         setSelectedObj(obj ?? null);
+        if (obj) {
+          setSelectedScale(obj.scaleX ?? 1);
+          setSelectedAngle(obj.angle ?? 0);
+        }
         if (obj?.type === "i-text") {
           setFontSize(obj.fontSize ?? 28);
           setFontFamily(obj.fontFamily ?? "Georgia");
@@ -233,7 +239,15 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
       }
 
       // Guardar historial en cada modificación
-      canvas.on("object:modified", () => pushHistory());
+      canvas.on("object:modified", (e: any) => {
+        pushHistory();
+        // Sync sliders when resized/rotated with handles
+        const obj = e.target;
+        if (obj) {
+          setSelectedScale(obj.scaleX ?? 1);
+          setSelectedAngle(Math.round(obj.angle ?? 0));
+        }
+      });
       canvas.on("object:added", () => pushHistory());
       canvas.on("object:removed", () => pushHistory());
 
@@ -715,8 +729,43 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
 
         {/* Elemento seleccionado */}
         {selectedObj && (
-          <div className="bg-white rounded-2xl border p-4 space-y-2">
+          <div className="bg-white rounded-2xl border p-4 space-y-3">
             <h3 className="font-semibold text-sm text-gray-900">Elemento seleccionado</h3>
+
+            {/* Tamaño */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-500 w-14">Tamaño</label>
+              <input
+                type="range" min="0.05" max="5" step="0.05" value={selectedScale}
+                onChange={(e) => {
+                  const s = Number(e.target.value);
+                  setSelectedScale(s);
+                  const c = fabricRef.current?.canvas;
+                  const obj = c?.getActiveObject();
+                  if (obj) { obj.scale(s); c.renderAll(); }
+                }}
+                className="flex-1"
+              />
+              <span className="text-xs w-10 text-right font-mono">{Math.round(selectedScale * 100)}%</span>
+            </div>
+
+            {/* Rotación */}
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-gray-500 w-14">Rotación</label>
+              <input
+                type="range" min="-180" max="180" step="1" value={selectedAngle}
+                onChange={(e) => {
+                  const a = Number(e.target.value);
+                  setSelectedAngle(a);
+                  const c = fabricRef.current?.canvas;
+                  const obj = c?.getActiveObject();
+                  if (obj) { obj.set("angle", a); c.renderAll(); }
+                }}
+                className="flex-1"
+              />
+              <span className="text-xs w-10 text-right font-mono">{selectedAngle}°</span>
+            </div>
+
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => { const a = fabricRef.current?.canvas?.getActiveObject(); if (a) { a.centerH(); fabricRef.current?.canvas?.renderAll(); } }}

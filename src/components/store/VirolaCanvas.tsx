@@ -304,10 +304,10 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
     const canvas = fabricRef.current?.canvas;
     if (!canvas || !text.trim()) return;
 
+    // Render on full canvas to get correct positions
     const offscreen = document.createElement("canvas");
-    const dim = CANVAS_SIZE;
-    offscreen.width = dim;
-    offscreen.height = dim;
+    offscreen.width = CANVAS_SIZE;
+    offscreen.height = CANVAS_SIZE;
     const ctx = offscreen.getContext("2d")!;
     ctx.font = `${size}px ${family}`;
     ctx.fillStyle = color;
@@ -321,18 +321,43 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
     chars.forEach((char, i) => {
       const angle = startAngle + i * (size / radius) * 0.7;
       ctx.save();
-      ctx.translate(dim / 2 + radius * Math.cos(angle), dim / 2 + radius * Math.sin(angle));
+      ctx.translate(CANVAS_SIZE / 2 + radius * Math.cos(angle), CANVAS_SIZE / 2 + radius * Math.sin(angle));
       ctx.rotate(angle + Math.PI / 2);
       ctx.fillText(char, 0, 0);
       ctx.restore();
     });
 
+    // Crop tightly: the text sits at ~radius from center, so pad by fontSize
+    const pad = size + 4;
+    const cropR = radius + pad;
+    const cx = CANVAS_SIZE / 2;
+    const cy = CANVAS_SIZE / 2;
+    const cropX = Math.max(0, Math.floor(cx - cropR));
+    const cropY = Math.max(0, Math.floor(cy - cropR));
+    const cropW = Math.min(CANVAS_SIZE - cropX, Math.ceil(cropR * 2));
+    const cropH = Math.min(CANVAS_SIZE - cropY, Math.ceil(cropR * 2));
+
+    const cropped = document.createElement("canvas");
+    cropped.width = cropW;
+    cropped.height = cropH;
+    cropped.getContext("2d")!.drawImage(offscreen, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
     import("fabric").then(({ FabricImage }) => {
-      FabricImage.fromURL(offscreen.toDataURL()).then((img: any) => {
-        img.set({ left: 0, top: 0, selectable: true, evented: true });
+      FabricImage.fromURL(cropped.toDataURL()).then((img: any) => {
+        // Position so the center of the crop aligns with the center of the virola canvas
+        img.set({
+          left: cx,
+          top: cy,
+          originX: "center",
+          originY: "center",
+          selectable: true,
+          evented: true,
+        });
         canvas.add(img);
         canvas.setActiveObject(img);
         canvas.renderAll();
+        setSelectedScale(1);
+        setSelectedAngle(0);
       });
     });
     setArcText("");

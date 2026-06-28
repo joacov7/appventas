@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { CircleDot, Pencil, Layers } from "lucide-react";
+import { prisma } from "@/lib/prisma";
 
 const MATERIAL_COLORS: Record<string, string> = {
   "madera": "#c8a97a",
@@ -23,10 +24,20 @@ interface Virola {
 
 async function getVirolas(): Promise<Virola[]> {
   try {
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
-    const res = await fetch(`${baseUrl}/api/virolas`, { cache: "no-store" });
-    if (!res.ok) return [];
-    return res.json();
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT * FROM virolas WHERE activa = true ORDER BY posicion ASC, id ASC`
+    );
+    return rows.map(r => ({
+      id: Number(r.id),
+      nombre: r.nombre,
+      slug: r.slug,
+      descripcion: r.descripcion ?? null,
+      material: r.material,
+      diametroMm: Number(r.diametro_mm),
+      precioBase: r.precio_base,
+      imageUrl: r.image_url ?? null,
+      disenoBase: r.diseno_base ?? null,
+    }));
   } catch {
     return [];
   }

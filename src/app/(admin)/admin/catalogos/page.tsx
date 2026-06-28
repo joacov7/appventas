@@ -410,8 +410,9 @@ export default function CatalogosPage() {
       fetch("/api/catalogos").then(r => r.ok ? r.json() : {}),
       fetch("/api/productos").then(r => r.ok ? r.json() : []),
     ]).then(([configs, prods]) => {
-      if (configs.ar) setCfgAR({ ...DEFAULT_CONFIG, ...configs.ar });
-      if (configs.usa) setCfgUSA({ ...DEFAULT_CONFIG_USA, ...configs.usa });
+      const c = configs as Record<string, any>;
+      if (c.ar) setCfgAR({ ...DEFAULT_CONFIG, ...c.ar });
+      if (c.usa) setCfgUSA({ ...DEFAULT_CONFIG_USA, ...c.usa });
       // Extract products from response format
       const list = Array.isArray(prods) ? prods : (prods.products ?? prods.data ?? []);
       setProducts(list.map((p: any) => ({

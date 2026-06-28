@@ -462,7 +462,8 @@ export function VirolaCanvas({ virola, onAddToCart }: VirolaCanvasProps) {
     const obj = canvas?.getActiveObject();
     if (!obj) return;
     obj.set(prop, value);
-    canvas.renderAll();
+    obj.dirty = true;
+    canvas.requestRenderAll();
   }, []);
 
   // ── Preview 3D (mockup mate) ───────────────────────────────────────────────

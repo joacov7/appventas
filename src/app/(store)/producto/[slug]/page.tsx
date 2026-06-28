@@ -14,6 +14,8 @@ import { WhatsAppButton, buildWaLink } from "@/components/store/WhatsAppButton";
 import type { ProductPublic, ProductVariantPublic } from "@/types/product";
 import { VolumePricing } from "@/components/store/VolumePricing";
 import { SubscribeReposicion } from "@/components/store/SubscribeReposicion";
+import { CuotasModal } from "@/components/store/CuotasModal";
+import { useTiers, getTierForQty, applyTier } from "@/hooks/useTiers";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -27,6 +29,9 @@ export default function ProductPage() {
   const [lightbox, setLightbox] = useState<number | null>(null);
   const addItem = useCartStore((s) => s.addItem);
   const viewers = useViewers(slug);
+  const tiers = useTiers();
+  const [quantity, setQuantity] = useState(1);
+  const [showCuotas, setShowCuotas] = useState(false);
 
   useEffect(() => {
     fetch(`/api/productos/${slug}`)
@@ -46,15 +51,18 @@ export default function ProductPage() {
 
   function handleAddToCart() {
     if (!product || !selectedVariant) return;
+    const tier = getTierForQty(tiers, quantity);
+    const finalPrice = applyTier(selectedVariant.price, tier);
     addItem({
       variantId: selectedVariant.id,
       productId: product.id,
       productName: product.name,
       variantName: selectedVariant.name,
-      price: selectedVariant.price,
+      price: finalPrice,
       imageUrl: selectedVariant.imageUrl ?? product.imageUrls[0] ?? null,
       stock: selectedVariant.stock,
       slug: product.slug,
+      quantity,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
@@ -101,10 +109,15 @@ export default function ProductPage() {
 
   const hasStock = (selectedVariant?.stock ?? 0) > 0;
   const isLowStock = hasStock && (selectedVariant?.stock ?? 0) <= LOW_STOCK_THRESHOLD;
-  const cuotas = selectedVariant ? formatCuotas(selectedVariant.price) : null;
+  const activeTier = selectedVariant ? getTierForQty(tiers, quantity) : null;
+  const displayPrice = selectedVariant ? applyTier(selectedVariant.price, activeTier) : 0;
+  const cuotas = displayPrice ? formatCuotas(displayPrice) : null;
 
   return (
     <>
+    {showCuotas && selectedVariant && (
+      <CuotasModal price={displayPrice} onClose={() => setShowCuotas(false)} />
+    )}
     {/* Lightbox */}
     {lightbox !== null && (
       <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={closeLightbox}>
@@ -189,14 +202,32 @@ export default function ProductPage() {
           {/* Precio y cuotas */}
           {selectedVariant && (
             <div className="space-y-1">
-              <p className="text-3xl font-bold text-emerald-700">{formatPrice(selectedVariant.price)}</p>
-              {cuotas && hasStock && (
-                <p className="text-sm text-gray-600">
-                  {cuotas.cuotas} cuotas de{" "}
-                  <span className="font-semibold text-emerald-600">{cuotas.valorCuota}</span>{" "}
-                  <span className="text-emerald-600 font-medium">sin interés</span>
-                </p>
-              )}
+              <div className="flex items-baseline gap-3">
+                <p className="text-3xl font-bold text-emerald-700">{formatPrice(displayPrice)}</p>
+                {activeTier && (
+                  <>
+                    <span className="text-lg text-gray-400 line-through">{formatPrice(selectedVariant.price)}</span>
+                    <span className="text-sm font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                      {activeTier.descuento_pct}% OFF
+                    </span>
+                  </>
+                )}
+              </div>
+              <div className="flex items-center gap-3">
+                {cuotas && hasStock && (
+                  <p className="text-sm text-gray-600">
+                    {cuotas.cuotas} cuotas de{" "}
+                    <span className="font-semibold text-emerald-600">{cuotas.valorCuota}</span>{" "}
+                    <span className="text-emerald-600 font-medium">sin interés</span>
+                  </p>
+                )}
+                <button
+                  onClick={() => setShowCuotas(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium"
+                >
+                  Ver cuotas
+                </button>
+              </div>
             </div>
           )}
 
@@ -236,9 +267,48 @@ export default function ProductPage() {
             </div>
           )}
 
-          {/* Precios por volumen */}
-          {selectedVariant && (
-            <VolumePricing basePrice={selectedVariant.price} />
+          {/* Cantidad y precios por volumen */}
+          {selectedVariant && hasStock && (
+            <div className="space-y-3">
+              {/* Quantity selector */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Cantidad</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      className="px-3 py-2 text-gray-600 hover:bg-gray-50 text-lg font-medium"
+                    >−</button>
+                    <span className="px-4 py-2 text-sm font-semibold text-gray-900 min-w-[40px] text-center">{quantity}</span>
+                    <button
+                      onClick={() => setQuantity((q) => Math.min(selectedVariant.stock, q + 1))}
+                      className="px-3 py-2 text-gray-600 hover:bg-gray-50 text-lg font-medium"
+                    >+</button>
+                  </div>
+                  {/* Tier quick-select buttons */}
+                  {tiers.length > 0 && (
+                    <div className="flex gap-2 flex-wrap">
+                      <button
+                        onClick={() => setQuantity(1)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${quantity === 1 && !activeTier ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
+                      >
+                        Unidad
+                      </button>
+                      {tiers.map((tier) => (
+                        <button
+                          key={tier.id}
+                          onClick={() => setQuantity(tier.min_qty)}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${quantity >= tier.min_qty && (!tiers[tiers.indexOf(tier) + 1] || quantity < tiers[tiers.indexOf(tier) + 1].min_qty) ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600 hover:border-emerald-400"}`}
+                        >
+                          x{tier.min_qty} <span className="opacity-75">· {tier.descuento_pct}% OFF</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <VolumePricing basePrice={selectedVariant.price} currentQty={quantity} />
+            </div>
           )}
 
           {/* Stock urgencia */}

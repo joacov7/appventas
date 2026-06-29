@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCartStore } from "@/store/cartStore";
+import { useTiers, getCartTier, applyTier } from "@/hooks/useTiers";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import Image from "next/image";
@@ -55,9 +56,13 @@ function CheckoutContent() {
   const [refDiscount, setRefDiscount] = useState(0);
   const [validatedRefCode, setValidatedRefCode] = useState<string | null>(null);
 
+  const tiers = useTiers();
   const subtotal = getTotalPrice();
+  const cartQty = items.reduce((acc, i) => acc + i.quantity, 0);
+  const cartTier = getCartTier(tiers, cartQty, subtotal);
+  const tierDiscount = cartTier ? subtotal * (cartTier.descuento_pct / 100) : 0;
   const shippingCost = selectedShipping ? Number(selectedShipping.price) : 0;
-  const total = subtotal - couponDiscount - refDiscount + shippingCost;
+  const total = subtotal - couponDiscount - refDiscount - tierDiscount + shippingCost;
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -117,7 +122,7 @@ function CheckoutContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: i.price })),
+          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: applyTier(i.price, cartTier) })),
           shippingAddress: {
             fullName: data.fullName, phone: data.phone,
             street: data.street, city: data.city,
@@ -292,6 +297,12 @@ function CheckoutContent() {
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotal)}</span>
               </div>
+              {tierDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-medium">
+                  <span>Dto. mayorista {cartTier?.descuento_pct}%</span>
+                  <span>− {formatPrice(tierDiscount)}</span>
+                </div>
+              )}
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600">
                   <span>Cupón ({couponCode})</span>

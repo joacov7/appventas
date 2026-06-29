@@ -15,7 +15,7 @@ import type { ProductPublic, ProductVariantPublic } from "@/types/product";
 import { VolumePricing } from "@/components/store/VolumePricing";
 import { SubscribeReposicion } from "@/components/store/SubscribeReposicion";
 import { CuotasModal } from "@/components/store/CuotasModal";
-import { useTiers, getBestTier, applyTier } from "@/hooks/useTiers";
+import { useTiers } from "@/hooks/useTiers";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -51,14 +51,12 @@ export default function ProductPage() {
 
   function handleAddToCart() {
     if (!product || !selectedVariant) return;
-    const tier = getBestTier(tiers, quantity, selectedVariant.price);
-    const finalPrice = applyTier(selectedVariant.price, tier);
     addItem({
       variantId: selectedVariant.id,
       productId: product.id,
       productName: product.name,
       variantName: selectedVariant.name,
-      price: finalPrice,
+      price: selectedVariant.price,
       imageUrl: selectedVariant.imageUrl ?? product.imageUrls[0] ?? null,
       stock: selectedVariant.stock,
       slug: product.slug,
@@ -109,8 +107,7 @@ export default function ProductPage() {
 
   const hasStock = (selectedVariant?.stock ?? 0) > 0;
   const isLowStock = hasStock && (selectedVariant?.stock ?? 0) <= LOW_STOCK_THRESHOLD;
-  const activeTier = selectedVariant ? getBestTier(tiers, quantity, selectedVariant.price) : null;
-  const displayPrice = selectedVariant ? applyTier(selectedVariant.price, activeTier) : 0;
+  const displayPrice = selectedVariant?.price ?? 0;
   const cuotas = displayPrice ? formatCuotas(displayPrice) : null;
 
   return (
@@ -204,14 +201,6 @@ export default function ProductPage() {
             <div className="space-y-1">
               <div className="flex items-baseline gap-3">
                 <p className="text-3xl font-bold text-emerald-700">{formatPrice(displayPrice)}</p>
-                {activeTier && (
-                  <>
-                    <span className="text-lg text-gray-400 line-through">{formatPrice(selectedVariant.price)}</span>
-                    <span className="text-sm font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
-                      {activeTier.descuento_pct}% OFF
-                    </span>
-                  </>
-                )}
               </div>
               <div className="flex items-center gap-3">
                 {cuotas && hasStock && (
@@ -285,47 +274,9 @@ export default function ProductPage() {
                       className="px-3 py-2 text-gray-600 hover:bg-gray-50 text-lg font-medium"
                     >+</button>
                   </div>
-                  {/* Tier quick-select buttons */}
-                  {tiers.length > 0 && selectedVariant && (
-                    <div className="flex gap-2 flex-wrap">
-                      <button
-                        onClick={() => setQuantity(1)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${!activeTier ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
-                      >
-                        Unidad
-                      </button>
-                      {tiers.map((tier) => {
-                        const isActive = activeTier?.id === tier.id;
-                        if (tier.tipo === "cantidad" && tier.min_qty != null) {
-                          return (
-                            <button
-                              key={tier.id}
-                              onClick={() => setQuantity(tier.min_qty!)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isActive ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600 hover:border-emerald-400"}`}
-                            >
-                              x{tier.min_qty} <span className="opacity-75">· {tier.descuento_pct}% OFF</span>
-                            </button>
-                          );
-                        }
-                        if (tier.tipo === "monto" && tier.min_monto != null) {
-                          const approxUnits = Math.ceil(tier.min_monto / selectedVariant.price);
-                          return (
-                            <button
-                              key={tier.id}
-                              onClick={() => setQuantity(approxUnits)}
-                              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isActive ? "bg-blue-600 text-white border-blue-600" : "border-gray-200 text-gray-600 hover:border-blue-400"}`}
-                            >
-                              ≈{approxUnits}u <span className="opacity-75">· {tier.descuento_pct}% OFF</span>
-                            </button>
-                          );
-                        }
-                        return null;
-                      })}
-                    </div>
-                  )}
                 </div>
               </div>
-              <VolumePricing basePrice={selectedVariant.price} currentQty={quantity} />
+              <VolumePricing basePrice={selectedVariant.price} />
             </div>
           )}
 

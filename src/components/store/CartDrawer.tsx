@@ -8,7 +8,7 @@ import { useCartStore } from "@/store/cartStore";
 import Image from "next/image";
 import Link from "next/link";
 import { CartUpsell } from "./CartUpsell";
-import { useTiers, getTierForQty, applyTier } from "@/hooks/useTiers";
+import { useTiers, getCartTier, getNextCartTier, applyTier } from "@/hooks/useTiers";
 
 interface CartDrawerProps {
   open: boolean;
@@ -40,13 +40,12 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const subtotal = getTotalPrice();
   const discount = coupon?.discount ?? 0;
 
-  // Volume discount: sum per-item tier savings
-  const tierDiscount = items.reduce((acc, item) => {
-    const tier = getTierForQty(tiers, item.quantity);
-    if (!tier) return acc;
-    const discountedPrice = applyTier(item.price, tier);
-    return acc + (item.price - discountedPrice) * item.quantity;
-  }, 0);
+  // Cart-level wholesale discount
+  const cartQty = items.reduce((acc, i) => acc + i.quantity, 0);
+  const cartMonto = subtotal;
+  const cartTier = getCartTier(tiers, cartQty, cartMonto);
+  const nextInfo = getNextCartTier(tiers, cartQty, cartMonto);
+  const tierDiscount = cartTier ? subtotal * (cartTier.descuento_pct / 100) : 0;
 
   const total = subtotal - discount - tierDiscount;
 
@@ -219,6 +218,22 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               </div>
             )}
 
+            {/* Nudge mayorista */}
+            {!cartTier && nextInfo && (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 text-xs text-emerald-700">
+                <span>
+                  {nextInfo.missingQty != null
+                    ? <><span className="font-bold">{nextInfo.missingQty} unidades más</span> para {nextInfo.tier.descuento_pct}% OFF en todo el carrito</>
+                    : <><span className="font-bold">{formatPrice(nextInfo.missingMonto ?? 0)} más</span> para {nextInfo.tier.descuento_pct}% OFF en todo el carrito</>}
+                </span>
+              </div>
+            )}
+            {cartTier && (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 text-xs text-emerald-700 font-medium">
+                🎉 Descuento mayorista {cartTier.descuento_pct}% aplicado a todo el carrito
+              </div>
+            )}
+
             {/* Totales */}
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
@@ -227,7 +242,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               </div>
               {tierDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
-                  <span>Dto. por volumen</span>
+                  <span>Dto. mayorista {cartTier?.descuento_pct}%</span>
                   <span>− {formatPrice(tierDiscount)}</span>
                 </div>
               )}

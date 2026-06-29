@@ -39,6 +39,7 @@ interface CatalogConfig {
   descuentoMayorista: number;
   etiquetaMayorista: string;
   mostrarPrecioTachado: boolean;
+  mostrarBadgeDescuento: boolean;
   preciosCustom: Record<number, number>;
   // Diseño
   colorPrincipal: string;
@@ -56,7 +57,7 @@ const DEFAULT_CONFIG: CatalogConfig = {
   facebook: "", sitioWeb: "", email: "", direccion: "", quienesSomos: "",
   mostrarPrecios: true, mostrarCodigo: true, mostrarStock: false,
   mostrarQrWhatsapp: true, mostrarQrWeb: false,
-  tipoPrecio: "minorista", descuentoMayorista: 20, etiquetaMayorista: "Precio Mayorista", mostrarPrecioTachado: true,
+  tipoPrecio: "minorista", descuentoMayorista: 20, etiquetaMayorista: "Precio Mayorista", mostrarPrecioTachado: true, mostrarBadgeDescuento: true,
   preciosCustom: {},
   colorPrincipal: "#1a1a1a", colorSecundario: "#10b981",
   moneda: "ARS", formato: "A4", orientacion: "vertical",
@@ -98,7 +99,7 @@ function CoverPage({ cfg, tipo }: { cfg: CatalogConfig; tipo: "ar" | "usa" }) {
         {cfg.slogan && <p className="mt-3 text-lg text-white/80">{cfg.slogan}</p>}
         {cfg.tipoPrecio === "mayorista" && (
           <div className="mt-4 inline-flex items-center gap-2 bg-white/20 border border-white/30 text-white px-4 py-1.5 rounded-full text-sm font-semibold">
-            📦 Catálogo Mayorista · {cfg.descuentoMayorista}% OFF
+            📦 Catálogo Mayorista{cfg.mostrarBadgeDescuento ? ` · ${cfg.descuentoMayorista}% OFF` : ""}
           </div>
         )}
         {tipo === "usa" && (
@@ -133,7 +134,7 @@ function ProductCard({ p, cfg, tipo }: { p: Product; cfg: CatalogConfig; tipo: "
             <Package size={40} strokeWidth={1} />
           </div>
         )}
-        {esMayorista && p.precio && precioMayorista && (
+        {esMayorista && p.precio && precioMayorista && cfg.mostrarBadgeDescuento && (
           <div className="absolute top-2 left-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: cfg.colorSecundario }}>
               {tieneCustom
@@ -327,6 +328,10 @@ function ConfigPanel({ cfg, onChange, products }: { cfg: CatalogConfig; onChange
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={cfg.mostrarPrecioTachado} onChange={e => set("mostrarPrecioTachado", e.target.checked)} className="rounded" />
                 <span className="text-sm text-gray-700">Mostrar precio minorista tachado</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={cfg.mostrarBadgeDescuento ?? true} onChange={e => set("mostrarBadgeDescuento", e.target.checked)} className="rounded" />
+                <span className="text-sm text-gray-700">Mostrar badge de descuento (% OFF)</span>
               </label>
 
               {/* Precios manuales por producto */}

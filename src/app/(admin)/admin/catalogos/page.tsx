@@ -34,6 +34,11 @@ interface CatalogConfig {
   mostrarStock: boolean;
   mostrarQrWhatsapp: boolean;
   mostrarQrWeb: boolean;
+  // Precios
+  tipoPrecio: "minorista" | "mayorista";
+  descuentoMayorista: number;
+  etiquetaMayorista: string;
+  mostrarPrecioTachado: boolean;
   // Diseño
   colorPrincipal: string;
   colorSecundario: string;
@@ -50,6 +55,7 @@ const DEFAULT_CONFIG: CatalogConfig = {
   facebook: "", sitioWeb: "", email: "", direccion: "", quienesSomos: "",
   mostrarPrecios: true, mostrarCodigo: true, mostrarStock: false,
   mostrarQrWhatsapp: true, mostrarQrWeb: false,
+  tipoPrecio: "minorista", descuentoMayorista: 20, etiquetaMayorista: "Precio Mayorista", mostrarPrecioTachado: true,
   colorPrincipal: "#1a1a1a", colorSecundario: "#10b981",
   moneda: "ARS", formato: "A4", orientacion: "vertical",
   productosSeleccionados: [], ordenProductos: [],
@@ -88,6 +94,11 @@ function CoverPage({ cfg, tipo }: { cfg: CatalogConfig; tipo: "ar" | "usa" }) {
         )}
         <h1 className="text-4xl font-bold drop-shadow">{cfg.empresa || (tipo === "usa" ? "Premium Mate Collection" : "Catálogo de Productos")}</h1>
         {cfg.slogan && <p className="mt-3 text-lg text-white/80">{cfg.slogan}</p>}
+        {cfg.tipoPrecio === "mayorista" && (
+          <div className="mt-4 inline-flex items-center gap-2 bg-white/20 border border-white/30 text-white px-4 py-1.5 rounded-full text-sm font-semibold">
+            📦 Catálogo Mayorista · {cfg.descuentoMayorista}% OFF
+          </div>
+        )}
         {tipo === "usa" && (
           <div className="mt-6 flex flex-wrap gap-2">
             {["Made in Argentina", "Wholesale", "Private Label", "Laser Engraving", "Worldwide Shipping"].map(t => (
@@ -102,15 +113,26 @@ function CoverPage({ cfg, tipo }: { cfg: CatalogConfig; tipo: "ar" | "usa" }) {
 }
 
 // ─── Product Card ─────────────────────────────────────────────────────────────
-function ProductCard({ p, cfg, tipo, index }: { p: Product; cfg: CatalogConfig; tipo: "ar" | "usa"; index: number }) {
+function ProductCard({ p, cfg, tipo }: { p: Product; cfg: CatalogConfig; tipo: "ar" | "usa" }) {
+  const esMayorista = cfg.tipoPrecio === "mayorista";
+  const precioMayorista = p.precio ? p.precio * (1 - cfg.descuentoMayorista / 100) : null;
+  const precioMostrar = esMayorista ? precioMayorista : p.precio;
+
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col">
-      <div className="aspect-square bg-gray-50 overflow-hidden">
+      <div className="aspect-square bg-gray-50 overflow-hidden relative">
         {p.imagen ? (
           <img src={p.imagen} alt={p.nombre} crossOrigin="anonymous" className="w-full h-full object-cover" />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300">
             <Package size={40} strokeWidth={1} />
+          </div>
+        )}
+        {esMayorista && (
+          <div className="absolute top-2 left-2">
+            <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: cfg.colorSecundario }}>
+              {cfg.descuentoMayorista}% OFF
+            </span>
           </div>
         )}
       </div>
@@ -121,14 +143,28 @@ function ProductCard({ p, cfg, tipo, index }: { p: Product; cfg: CatalogConfig; 
         <h3 className="font-bold text-gray-900 text-sm mb-1">{p.nombre}</h3>
         {p.categoria && <p className="text-xs text-gray-400 mb-2">{p.categoria}</p>}
         {p.descripcion && <p className="text-xs text-gray-500 line-clamp-3 flex-1 mb-2">{p.descripcion}</p>}
-        <div className="flex items-center justify-between mt-auto pt-2 border-t border-gray-100">
-          {cfg.mostrarPrecios && p.precio ? (
-            <span className="font-bold text-base" style={{ color: cfg.colorSecundario }}>
-              {fmt(p.precio, cfg.moneda)}
-            </span>
-          ) : <span />}
-          {cfg.mostrarStock && (
-            <span className="text-xs text-gray-400">Stock: {p.stock ?? "—"}</span>
+        <div className="mt-auto pt-2 border-t border-gray-100">
+          {cfg.mostrarPrecios && precioMostrar ? (
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                {esMayorista && cfg.mostrarPrecioTachado && p.precio && (
+                  <p className="text-xs text-gray-400 line-through">{fmt(p.precio, cfg.moneda)}</p>
+                )}
+                <span className="font-bold text-base" style={{ color: cfg.colorSecundario }}>
+                  {fmt(precioMostrar, cfg.moneda)}
+                </span>
+                {esMayorista && (
+                  <p className="text-xs font-medium mt-0.5" style={{ color: cfg.colorSecundario }}>
+                    {cfg.etiquetaMayorista}
+                  </p>
+                )}
+              </div>
+              {cfg.mostrarStock && (
+                <span className="text-xs text-gray-400">Stock: {p.stock ?? "—"}</span>
+              )}
+            </div>
+          ) : (
+            cfg.mostrarStock ? <span className="text-xs text-gray-400">Stock: {p.stock ?? "—"}</span> : <span />
           )}
         </div>
         {tipo === "usa" && (
@@ -170,7 +206,7 @@ function CatalogPreview({ cfg, products, tipo }: { cfg: CatalogConfig; products:
           <p className="text-gray-400 text-sm py-8 text-center">Seleccioná productos para incluir en el catálogo</p>
         ) : (
           <div className="grid grid-cols-3 gap-4">
-            {selected.map((p, i) => <ProductCard key={p.id} p={p} cfg={cfg} tipo={tipo} index={i} />)}
+            {selected.map((p) => <ProductCard key={p.id} p={p} cfg={cfg} tipo={tipo} />)}
           </div>
         )}
       </div>
@@ -248,6 +284,44 @@ function ConfigPanel({ cfg, onChange }: { cfg: CatalogConfig; onChange: (c: Cata
               rows={4} placeholder="Descripción de la empresa..."
               className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 resize-none" />
           </div>
+        </div>
+      </div>
+
+      {/* Precios */}
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Tipo de precios</h3>
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {(["minorista", "mayorista"] as const).map(t => (
+              <button key={t} onClick={() => set("tipoPrecio", t)}
+                className={`py-2.5 rounded-xl text-sm font-medium border transition-colors ${cfg.tipoPrecio === t ? "bg-emerald-600 text-white border-emerald-600" : "text-gray-600 border-gray-200 hover:border-emerald-400"}`}>
+                {t === "minorista" ? "🛒 Minorista" : "📦 Mayorista"}
+              </button>
+            ))}
+          </div>
+          {cfg.tipoPrecio === "mayorista" && (
+            <>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Descuento mayorista: <span className="text-emerald-600 font-bold">{cfg.descuentoMayorista}%</span></label>
+                <input type="range" min={1} max={70} value={cfg.descuentoMayorista}
+                  onChange={e => set("descuentoMayorista", Number(e.target.value))}
+                  className="w-full accent-emerald-600" />
+                <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+                  <span>1%</span><span>70%</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Etiqueta de precio</label>
+                <input value={cfg.etiquetaMayorista} onChange={e => set("etiquetaMayorista", e.target.value)}
+                  placeholder="Precio Mayorista"
+                  className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={cfg.mostrarPrecioTachado} onChange={e => set("mostrarPrecioTachado", e.target.checked)} className="rounded" />
+                <span className="text-sm text-gray-700">Mostrar precio minorista tachado</span>
+              </label>
+            </>
+          )}
         </div>
       </div>
 

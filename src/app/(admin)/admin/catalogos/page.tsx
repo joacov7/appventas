@@ -616,28 +616,58 @@ export default function CatalogosPage() {
       const el = document.getElementById("catalog-preview");
       if (!el) return;
 
+      // Replace cross-origin img src with proxied data URLs so html2canvas can capture them
+      const imgs = Array.from(el.querySelectorAll("img")) as HTMLImageElement[];
+      const origSrcs: string[] = [];
+      await Promise.all(imgs.map(async (img, i) => {
+        origSrcs[i] = img.src;
+        try {
+          const proxyUrl = `/api/imagen-proxy?url=${encodeURIComponent(img.src)}`;
+          const res = await fetch(proxyUrl);
+          if (!res.ok) return;
+          const blob = await res.blob();
+          await new Promise<void>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => { img.src = reader.result as string; resolve(); };
+            reader.readAsDataURL(blob);
+          });
+        } catch { /* keep original */ }
+      }));
+
+      // Remove decorative styles that distort PDF layout
+      const savedStyle = el.getAttribute("style") || "";
+      const savedClass = el.className;
+      el.style.maxWidth = "none";
+      el.style.borderRadius = "0";
+      el.style.boxShadow = "none";
+      el.style.border = "none";
+
       const isHoriz = cfg.orientacion === "horizontal";
-      const fmt = cfg.formato === "carta" ? [215.9, 279.4] : [210, 297];
+      const fmtDims = cfg.formato === "carta" ? [215.9, 279.4] : [210, 297];
       const pdf = new jsPDF({
         orientation: isHoriz ? "landscape" : "portrait",
         unit: "mm",
-        format: fmt as any,
+        format: fmtDims as any,
       });
 
-      const pdfW = isHoriz ? fmt[1] : fmt[0];
-      const pdfH = isHoriz ? fmt[0] : fmt[1];
+      const pdfW = isHoriz ? fmtDims[1] : fmtDims[0];
+      const pdfH = isHoriz ? fmtDims[0] : fmtDims[1];
 
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, allowTaint: true });
+      const canvas = await html2canvas(el, { scale: 2, useCORS: false, allowTaint: true, logging: false });
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
       const ratio = canvas.width / canvas.height;
       const imgH = pdfW / ratio;
+
+      // Restore original values
+      el.setAttribute("style", savedStyle);
+      el.className = savedClass;
+      imgs.forEach((img, i) => { img.src = origSrcs[i]; });
 
       let y = 0;
       let page = 0;
       while (y < imgH) {
         if (page > 0) pdf.addPage();
         pdf.addImage(imgData, "JPEG", 0, -y, pdfW, imgH);
-        // Page number
         pdf.setFontSize(8);
         pdf.setTextColor(150);
         pdf.text(`${page + 1}`, pdfW - 10, pdfH - 5);
@@ -653,13 +683,49 @@ export default function CatalogosPage() {
   }
 
   function printCatalog() {
+    // Use @media print on the current page — avoids missing CSS issues
+    const styleId = "catalog-print-style";
+    let style = document.getElementById(styleId) as HTMLStyleElement | null;
+    if (!style) {
+      style = document.createElement("style");
+      style.id = styleId;
+      document.head.appendChild(style);
+    }
+    style.textContent = `
+      @media print {
+        body > * { display: none !important; }
+        #catalog-print-root { display: block !important; }
+        #catalog-print-root * { display: revert !important; }
+      }
+    `;
+
     const el = document.getElementById("catalog-preview");
     if (!el) return;
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`<html><head><title>Catálogo</title><style>body{margin:0}@media print{.no-print{display:none}}</style></head><body>${el.outerHTML}</body></html>`);
-    win.document.close();
-    win.print();
+
+    // Wrap in a top-level print container
+    let root = document.getElementById("catalog-print-root");
+    if (!root) {
+      root = document.createElement("div");
+      root.id = "catalog-print-root";
+      root.style.display = "none";
+      document.body.appendChild(root);
+    }
+    root.innerHTML = "";
+    const clone = el.cloneNode(true) as HTMLElement;
+    clone.style.maxWidth = "none";
+    clone.style.margin = "0";
+    clone.style.borderRadius = "0";
+    clone.style.boxShadow = "none";
+    clone.style.border = "none";
+    root.appendChild(clone);
+
+    window.print();
+
+    // Cleanup after print dialog closes
+    setTimeout(() => {
+      root!.innerHTML = "";
+      style!.textContent = "";
+    }, 1000);
   }
 
   function exportHTML() {

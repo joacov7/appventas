@@ -106,7 +106,7 @@ export default function WhatsAppBotPage() {
       {tab === "historial" && (
         <>
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4">
               <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600"><Users size={20} /></div>
               <div>

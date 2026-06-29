@@ -155,7 +155,7 @@ export default function InteligenciaPage() {
                 onChange={(e) => setTermino(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && agregarBusqueda()}
                 placeholder="ej: mates madera mayorista"
-                className="flex-1 min-w-48 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="flex-1 min-w-0 w-full sm:min-w-48 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <select
                 value={plataforma}
@@ -348,7 +348,7 @@ export default function InteligenciaPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr>
                     <th className="px-4 py-3 text-left">Producto</th>
@@ -399,7 +399,7 @@ export default function InteligenciaPage() {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </div>

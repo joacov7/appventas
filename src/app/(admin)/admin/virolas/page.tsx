@@ -200,7 +200,7 @@ export default function VirolasAdminPage() {
                       <input value={vForm.nombre} onChange={e=>setVForm(f=>({...f,nombre:e.target.value,slug:autoSlug(e.target.value)}))}
                         className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Ej: Virola Clásica 35mm"/>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div>
                         <label className="text-sm font-medium text-gray-700">Slug</label>
                         <input value={vForm.slug} onChange={e=>setVForm(f=>({...f,slug:e.target.value}))}
@@ -272,7 +272,7 @@ export default function VirolasAdminPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3 text-left">Virola</th>
@@ -318,7 +318,7 @@ export default function VirolasAdminPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </>
@@ -383,7 +383,7 @@ export default function VirolasAdminPage() {
             <div className="text-center py-16 text-gray-400"><Zap size={40} strokeWidth={1} className="mx-auto mb-3 text-orange-300"/><p>No hay perfiles.</p></div>
           ):(
             <div className="bg-white rounded-2xl border overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
                   <tr><th className="px-4 py-3 text-left">Perfil</th><th className="px-4 py-3 text-left">Material</th><th className="px-4 py-3 text-center">Potencia</th><th className="px-4 py-3 text-center">Velocidad</th><th className="px-4 py-3 text-center">Pasadas</th><th className="px-4 py-3"/></tr>
                 </thead>
@@ -405,7 +405,7 @@ export default function VirolasAdminPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </>

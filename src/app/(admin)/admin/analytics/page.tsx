@@ -81,7 +81,7 @@ export default function AnalyticsPage() {
       <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {summaryCards.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4">
             <div className={`p-3 rounded-xl ${color}`}><Icon size={20} /></div>

@@ -26,7 +26,7 @@ export default async function ProductosAdminPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Productos</h1>
         <Link
           href="/admin/productos/nuevo"
@@ -37,7 +37,8 @@ export default async function ProductosAdminPage() {
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
               {["Producto", "Categoría", "Variantes", "Stock total", "Precio desde", "Estado", ""].map((h) => (
@@ -86,6 +87,7 @@ export default async function ProductosAdminPage() {
             })}
           </tbody>
         </table>
+        </div>
         {products.length === 0 && (
           <div className="text-center py-12 text-gray-400">
             No hay productos. <Link href="/admin/productos/nuevo" className="text-emerald-600 hover:underline">Creá el primero</Link>.

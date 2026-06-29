@@ -47,7 +47,7 @@ export default function ReferidosPage() {
         Configurá el porcentaje con la env var <code className="font-mono bg-blue-100 px-1 rounded">REFERIDOS_DESCUENTO_PCT</code> (default: 10).
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4">
           <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600"><Users size={20} /></div>
           <div>
@@ -77,7 +77,7 @@ export default function ReferidosPage() {
             Aún no hay referidores. Aparecen cuando un cliente genera su link de referido.
           </p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[420px]">
             <thead>
               <tr className="bg-gray-50 text-xs text-gray-500">
                 <th className="px-5 py-3 text-left font-medium">Email</th>
@@ -104,7 +104,7 @@ export default function ReferidosPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

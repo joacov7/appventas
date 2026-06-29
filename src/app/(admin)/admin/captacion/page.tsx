@@ -301,7 +301,7 @@ export default function CaptacionPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3 text-left">Negocio</th>
@@ -340,7 +340,7 @@ export default function CaptacionPage() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </>

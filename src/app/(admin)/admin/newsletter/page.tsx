@@ -118,7 +118,7 @@ export default function NewsletterPage() {
         ) : suscriptores.length === 0 ? (
           <p className="text-center text-sm text-gray-400 py-16">Sin suscriptores aún</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[480px]">
             <thead>
               <tr className="bg-gray-50 text-xs text-gray-500">
                 <th className="px-5 py-3 text-left font-medium">Email</th>
@@ -152,7 +152,7 @@ export default function NewsletterPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

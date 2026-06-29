@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images, Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown, CircleDot, BookOpen } from "lucide-react";
+import { LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images, Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown, CircleDot, BookOpen, Megaphone } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -20,6 +20,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             { href: "/admin/cupones", label: "Cupones", icon: Tag },
             { href: "/admin/envios", label: "Envíos", icon: Truck },
             { href: "/admin/captacion", label: "Captación", icon: Users },
+            { href: "/admin/captacion/meta", label: "Meta Ads", icon: Megaphone },
             { href: "/admin/inteligencia", label: "Inteligencia", icon: TrendingDown },
             { href: "/admin/virolas", label: "Virolas", icon: CircleDot },
             { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },

@@ -39,6 +39,7 @@ interface CatalogConfig {
   descuentoMayorista: number;
   etiquetaMayorista: string;
   mostrarPrecioTachado: boolean;
+  preciosCustom: Record<number, number>;
   // Diseño
   colorPrincipal: string;
   colorSecundario: string;
@@ -56,6 +57,7 @@ const DEFAULT_CONFIG: CatalogConfig = {
   mostrarPrecios: true, mostrarCodigo: true, mostrarStock: false,
   mostrarQrWhatsapp: true, mostrarQrWeb: false,
   tipoPrecio: "minorista", descuentoMayorista: 20, etiquetaMayorista: "Precio Mayorista", mostrarPrecioTachado: true,
+  preciosCustom: {},
   colorPrincipal: "#1a1a1a", colorSecundario: "#10b981",
   moneda: "ARS", formato: "A4", orientacion: "vertical",
   productosSeleccionados: [], ordenProductos: [],
@@ -115,8 +117,11 @@ function CoverPage({ cfg, tipo }: { cfg: CatalogConfig; tipo: "ar" | "usa" }) {
 // ─── Product Card ─────────────────────────────────────────────────────────────
 function ProductCard({ p, cfg, tipo }: { p: Product; cfg: CatalogConfig; tipo: "ar" | "usa" }) {
   const esMayorista = cfg.tipoPrecio === "mayorista";
-  const precioMayorista = p.precio ? p.precio * (1 - cfg.descuentoMayorista / 100) : null;
+  const precioCustom = cfg.preciosCustom?.[p.id] ?? null;
+  const precioMayoristaCalc = p.precio ? p.precio * (1 - cfg.descuentoMayorista / 100) : null;
+  const precioMayorista = precioCustom ?? precioMayoristaCalc;
   const precioMostrar = esMayorista ? precioMayorista : p.precio;
+  const tieneCustom = precioCustom != null;
 
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col">
@@ -128,10 +133,12 @@ function ProductCard({ p, cfg, tipo }: { p: Product; cfg: CatalogConfig; tipo: "
             <Package size={40} strokeWidth={1} />
           </div>
         )}
-        {esMayorista && (
+        {esMayorista && p.precio && precioMayorista && (
           <div className="absolute top-2 left-2">
             <span className="text-xs font-bold px-2 py-0.5 rounded-full text-white" style={{ background: cfg.colorSecundario }}>
-              {cfg.descuentoMayorista}% OFF
+              {tieneCustom
+                ? `-${Math.round((1 - precioMayorista / p.precio) * 100)}%`
+                : `${cfg.descuentoMayorista}% OFF`}
             </span>
           </div>
         )}
@@ -225,7 +232,7 @@ function CatalogPreview({ cfg, products, tipo }: { cfg: CatalogConfig; products:
 }
 
 // ─── Config Panel ─────────────────────────────────────────────────────────────
-function ConfigPanel({ cfg, onChange }: { cfg: CatalogConfig; onChange: (c: CatalogConfig) => void }) {
+function ConfigPanel({ cfg, onChange, products }: { cfg: CatalogConfig; onChange: (c: CatalogConfig) => void; products: Product[] }) {
   function set(key: keyof CatalogConfig, val: any) {
     onChange({ ...cfg, [key]: val });
   }
@@ -302,13 +309,14 @@ function ConfigPanel({ cfg, onChange }: { cfg: CatalogConfig; onChange: (c: Cata
           {cfg.tipoPrecio === "mayorista" && (
             <>
               <div>
-                <label className="text-xs font-medium text-gray-600 block mb-1">Descuento mayorista: <span className="text-emerald-600 font-bold">{cfg.descuentoMayorista}%</span></label>
+                <label className="text-xs font-medium text-gray-600 block mb-1">Descuento global: <span className="text-emerald-600 font-bold">{cfg.descuentoMayorista}%</span></label>
                 <input type="range" min={1} max={70} value={cfg.descuentoMayorista}
                   onChange={e => set("descuentoMayorista", Number(e.target.value))}
                   className="w-full accent-emerald-600" />
                 <div className="flex justify-between text-xs text-gray-400 mt-0.5">
                   <span>1%</span><span>70%</span>
                 </div>
+                <p className="text-xs text-gray-400 mt-1">Se aplica a los productos sin precio manual.</p>
               </div>
               <div>
                 <label className="text-xs font-medium text-gray-600 block mb-1">Etiqueta de precio</label>
@@ -320,6 +328,60 @@ function ConfigPanel({ cfg, onChange }: { cfg: CatalogConfig; onChange: (c: Cata
                 <input type="checkbox" checked={cfg.mostrarPrecioTachado} onChange={e => set("mostrarPrecioTachado", e.target.checked)} className="rounded" />
                 <span className="text-sm text-gray-700">Mostrar precio minorista tachado</span>
               </label>
+
+              {/* Precios manuales por producto */}
+              {cfg.productosSeleccionados.length > 0 && (
+                <div className="border-t pt-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-xs font-medium text-gray-700">Precios por producto</label>
+                    {Object.keys(cfg.preciosCustom ?? {}).length > 0 && (
+                      <button
+                        onClick={() => set("preciosCustom", {})}
+                        className="text-xs text-red-400 hover:text-red-600"
+                      >
+                        Limpiar todo
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mb-3">Dejá vacío para usar el descuento global.</p>
+                  <div className="space-y-2">
+                    {cfg.productosSeleccionados.map(id => {
+                      const p = products.find(x => x.id === id);
+                      if (!p) return null;
+                      const customVal = cfg.preciosCustom?.[id];
+                      const globalCalc = p.precio ? p.precio * (1 - cfg.descuentoMayorista / 100) : null;
+                      return (
+                        <div key={id} className="flex items-center gap-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-700 truncate">{p.nombre}</p>
+                            {globalCalc && !customVal && (
+                              <p className="text-xs text-gray-400">Global: {fmt(globalCalc, cfg.moneda)}</p>
+                            )}
+                          </div>
+                          <div className="relative shrink-0">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              value={customVal ?? ""}
+                              onChange={e => {
+                                const v = e.target.value === "" ? undefined : Number(e.target.value);
+                                const next = { ...(cfg.preciosCustom ?? {}) };
+                                if (v == null) delete next[id];
+                                else next[id] = v;
+                                set("preciosCustom", next);
+                              }}
+                              placeholder={globalCalc ? String(Math.round(globalCalc)) : "—"}
+                              className={`w-28 border rounded-lg pl-5 pr-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-emerald-500 ${customVal != null ? "border-emerald-300 bg-emerald-50" : ""}`}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -510,8 +572,8 @@ export default function CatalogosPage() {
       fetch("/api/productos").then(r => r.ok ? r.json() : []),
     ]).then(([configs, prods]) => {
       const c = configs as Record<string, any>;
-      if (c.ar) setCfgAR({ ...DEFAULT_CONFIG, ...c.ar });
-      if (c.usa) setCfgUSA({ ...DEFAULT_CONFIG_USA, ...c.usa });
+      if (c.ar) setCfgAR({ ...DEFAULT_CONFIG, ...c.ar, preciosCustom: c.ar.preciosCustom ?? {} });
+      if (c.usa) setCfgUSA({ ...DEFAULT_CONFIG_USA, ...c.usa, preciosCustom: c.usa.preciosCustom ?? {} });
       // Extract products from response format
       const list = Array.isArray(prods) ? prods : (prods.products ?? prods.data ?? []);
       setProducts(list.map((p: any) => ({
@@ -651,7 +713,7 @@ export default function CatalogosPage() {
           </div>
 
           <div className="bg-white rounded-2xl border p-4 max-h-[calc(100vh-280px)] overflow-y-auto">
-            {activePanel === "config" && <ConfigPanel cfg={cfg} onChange={setCfg} />}
+            {activePanel === "config" && <ConfigPanel cfg={cfg} onChange={setCfg} products={products} />}
             {activePanel === "products" && (
               loading ? <p className="text-sm text-gray-400 py-4 text-center">Cargando productos...</p>
                 : <ProductSelector products={products} cfg={cfg} onChange={setCfg} />

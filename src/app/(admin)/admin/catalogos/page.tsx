@@ -621,6 +621,8 @@ export default function CatalogosPage() {
       const origSrcs: string[] = [];
       await Promise.all(imgs.map(async (img, i) => {
         origSrcs[i] = img.src;
+        // Only proxy absolute http(s) URLs — skip relative paths and data URLs
+        if (!img.src.startsWith("http")) return;
         try {
           const proxyUrl = `/api/imagen-proxy?url=${encodeURIComponent(img.src)}`;
           const res = await fetch(proxyUrl);
@@ -629,6 +631,7 @@ export default function CatalogosPage() {
           await new Promise<void>((resolve) => {
             const reader = new FileReader();
             reader.onload = () => { img.src = reader.result as string; resolve(); };
+            reader.onerror = () => resolve();
             reader.readAsDataURL(blob);
           });
         } catch { /* keep original */ }
@@ -636,8 +639,8 @@ export default function CatalogosPage() {
 
       // Remove decorative styles that distort PDF layout
       const savedStyle = el.getAttribute("style") || "";
-      const savedClass = el.className;
-      el.style.maxWidth = "none";
+      el.style.maxWidth = "";
+      el.style.margin = "0";
       el.style.borderRadius = "0";
       el.style.boxShadow = "none";
       el.style.border = "none";
@@ -653,14 +656,13 @@ export default function CatalogosPage() {
       const pdfW = isHoriz ? fmtDims[1] : fmtDims[0];
       const pdfH = isHoriz ? fmtDims[0] : fmtDims[1];
 
-      const canvas = await html2canvas(el, { scale: 2, useCORS: false, allowTaint: true, logging: false });
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, allowTaint: false, logging: false });
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
       const ratio = canvas.width / canvas.height;
       const imgH = pdfW / ratio;
 
       // Restore original values
       el.setAttribute("style", savedStyle);
-      el.className = savedClass;
       imgs.forEach((img, i) => { img.src = origSrcs[i]; });
 
       let y = 0;
@@ -677,6 +679,9 @@ export default function CatalogosPage() {
 
       const filename = tipo === "usa" ? "wholesale-catalog.pdf" : "catalogo-argentina.pdf";
       pdf.save(filename);
+    } catch (err) {
+      console.error("Error generando PDF:", err);
+      alert("No se pudo generar el PDF. Revisá la consola para más detalles.");
     } finally {
       setGenerating(false);
     }

@@ -15,7 +15,7 @@ import type { ProductPublic, ProductVariantPublic } from "@/types/product";
 import { VolumePricing } from "@/components/store/VolumePricing";
 import { SubscribeReposicion } from "@/components/store/SubscribeReposicion";
 import { CuotasModal } from "@/components/store/CuotasModal";
-import { useTiers, getTierForQty, applyTier } from "@/hooks/useTiers";
+import { useTiers, getBestTier, applyTier } from "@/hooks/useTiers";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -51,7 +51,7 @@ export default function ProductPage() {
 
   function handleAddToCart() {
     if (!product || !selectedVariant) return;
-    const tier = getTierForQty(tiers, quantity);
+    const tier = getBestTier(tiers, quantity, selectedVariant.price);
     const finalPrice = applyTier(selectedVariant.price, tier);
     addItem({
       variantId: selectedVariant.id,
@@ -109,7 +109,7 @@ export default function ProductPage() {
 
   const hasStock = (selectedVariant?.stock ?? 0) > 0;
   const isLowStock = hasStock && (selectedVariant?.stock ?? 0) <= LOW_STOCK_THRESHOLD;
-  const activeTier = selectedVariant ? getTierForQty(tiers, quantity) : null;
+  const activeTier = selectedVariant ? getBestTier(tiers, quantity, selectedVariant.price) : null;
   const displayPrice = selectedVariant ? applyTier(selectedVariant.price, activeTier) : 0;
   const cuotas = displayPrice ? formatCuotas(displayPrice) : null;
 
@@ -286,23 +286,41 @@ export default function ProductPage() {
                     >+</button>
                   </div>
                   {/* Tier quick-select buttons */}
-                  {tiers.length > 0 && (
+                  {tiers.length > 0 && selectedVariant && (
                     <div className="flex gap-2 flex-wrap">
                       <button
                         onClick={() => setQuantity(1)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${quantity === 1 && !activeTier ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${!activeTier ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}
                       >
                         Unidad
                       </button>
-                      {tiers.map((tier) => (
-                        <button
-                          key={tier.id}
-                          onClick={() => setQuantity(tier.min_qty)}
-                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${quantity >= tier.min_qty && (!tiers[tiers.indexOf(tier) + 1] || quantity < tiers[tiers.indexOf(tier) + 1].min_qty) ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600 hover:border-emerald-400"}`}
-                        >
-                          x{tier.min_qty} <span className="opacity-75">· {tier.descuento_pct}% OFF</span>
-                        </button>
-                      ))}
+                      {tiers.map((tier) => {
+                        const isActive = activeTier?.id === tier.id;
+                        if (tier.tipo === "cantidad" && tier.min_qty != null) {
+                          return (
+                            <button
+                              key={tier.id}
+                              onClick={() => setQuantity(tier.min_qty!)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isActive ? "bg-emerald-600 text-white border-emerald-600" : "border-gray-200 text-gray-600 hover:border-emerald-400"}`}
+                            >
+                              x{tier.min_qty} <span className="opacity-75">· {tier.descuento_pct}% OFF</span>
+                            </button>
+                          );
+                        }
+                        if (tier.tipo === "monto" && tier.min_monto != null) {
+                          const approxUnits = Math.ceil(tier.min_monto / selectedVariant.price);
+                          return (
+                            <button
+                              key={tier.id}
+                              onClick={() => setQuantity(approxUnits)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${isActive ? "bg-blue-600 text-white border-blue-600" : "border-gray-200 text-gray-600 hover:border-blue-400"}`}
+                            >
+                              ≈{approxUnits}u <span className="opacity-75">· {tier.descuento_pct}% OFF</span>
+                            </button>
+                          );
+                        }
+                        return null;
+                      })}
                     </div>
                   )}
                 </div>

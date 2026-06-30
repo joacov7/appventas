@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, createElement } from "react";
+import { createRoot } from "react-dom/client";
 import {
   BookOpen, Settings, Package, Eye, Download, Printer,
   Plus, Trash2, GripVertical, Check, X, Search, ChevronUp, ChevronDown,
@@ -50,6 +51,7 @@ interface CatalogConfig {
   // Productos
   productosSeleccionados: number[];
   ordenProductos: number[];
+  productosPorPagina: number;
 }
 
 const DEFAULT_CONFIG: CatalogConfig = {
@@ -61,7 +63,7 @@ const DEFAULT_CONFIG: CatalogConfig = {
   preciosCustom: {},
   colorPrincipal: "#1a1a1a", colorSecundario: "#10b981",
   moneda: "ARS", formato: "A4", orientacion: "vertical",
-  productosSeleccionados: [], ordenProductos: [],
+  productosSeleccionados: [], ordenProductos: [], productosPorPagina: 9,
 };
 
 const DEFAULT_CONFIG_USA: CatalogConfig = {
@@ -126,9 +128,9 @@ function ProductCard({ p, cfg, tipo }: { p: Product; cfg: CatalogConfig; tipo: "
 
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col">
-      <div className="aspect-square bg-gray-50 overflow-hidden relative">
+      <div style={{ aspectRatio: "1/1", background: "#f9fafb", overflow: "hidden", position: "relative" }}>
         {p.imagen ? (
-          <img src={p.imagen} alt={p.nombre} crossOrigin="anonymous" className="w-full h-full object-cover" />
+          <div style={{ width: "100%", height: "100%", backgroundImage: `url(${p.imagen})`, backgroundSize: "cover", backgroundPosition: "center" }} />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300">
             <Package size={40} strokeWidth={1} />
@@ -181,6 +183,46 @@ function ProductCard({ p, cfg, tipo }: { p: Product; cfg: CatalogConfig; tipo: "
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── PDF Page (renderizado off-screen para exportar) ──────────────────────────
+function CatalogPreviewPage({
+  cfg, products, tipo, showCover, showFooter,
+}: {
+  cfg: CatalogConfig; products: Product[]; tipo: "ar" | "usa";
+  showCover: boolean; showFooter: boolean;
+}) {
+  return (
+    <div style={{ background: "white", width: "100%" }}>
+      {showCover && <CoverPage cfg={cfg} tipo={tipo} />}
+      {showCover && cfg.quienesSomos && (
+        <div style={{ padding: "32px 40px", borderBottom: "1px solid #e5e7eb" }}>
+          <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 12, color: cfg.colorPrincipal }}>
+            {tipo === "usa" ? "About Us" : "Quiénes Somos"}
+          </h2>
+          <p style={{ fontSize: 14, color: "#4b5563", lineHeight: 1.6 }}>{cfg.quienesSomos}</p>
+        </div>
+      )}
+      <div style={{ padding: "32px" }}>
+        <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 24, color: cfg.colorPrincipal }}>
+          {tipo === "usa" ? "Our Products" : "Nuestros Productos"}
+        </h2>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+          {products.map(p => <ProductCard key={p.id} p={p} cfg={cfg} tipo={tipo} />)}
+        </div>
+      </div>
+      {showFooter && (
+        <div style={{ padding: "16px 32px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "space-between", fontSize: 12, color: "#9ca3af", background: cfg.colorPrincipal + "08" }}>
+          <span>{cfg.empresa}</span>
+          <div style={{ display: "flex", gap: 16 }}>
+            {cfg.whatsapp && <span>📱 {cfg.whatsapp}</span>}
+            {cfg.email && <span>✉ {cfg.email}</span>}
+            {cfg.sitioWeb && <span>🌐 {cfg.sitioWeb}</span>}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -437,6 +479,16 @@ function ConfigPanel({ cfg, onChange, products }: { cfg: CatalogConfig; onChange
                 <option value="horizontal">Horizontal</option>
               </select>
             </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600 block mb-1">Productos por página</label>
+              <select value={cfg.productosPorPagina} onChange={e => set("productosPorPagina", Number(e.target.value))}
+                className="w-full border rounded-xl px-3 py-2 text-sm outline-none">
+                <option value={3}>3 productos</option>
+                <option value={6}>6 productos</option>
+                <option value={9}>9 productos</option>
+                <option value={12}>12 productos</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -613,65 +665,109 @@ export default function CatalogosPage() {
     try {
       const { default: jsPDF } = await import("jspdf");
       const { toJpeg } = await import("html-to-image");
-      const el = document.getElementById("catalog-preview");
-      if (!el) return;
-
-      // Proxy cross-origin images to data URLs so html-to-image can embed them
-      const imgs = Array.from(el.querySelectorAll("img")) as HTMLImageElement[];
-      const origSrcs: string[] = [];
-      await Promise.all(imgs.map(async (img, i) => {
-        origSrcs[i] = img.src;
-        if (!img.src.startsWith("http")) return;
-        try {
-          const res = await fetch(`/api/imagen-proxy?url=${encodeURIComponent(img.src)}`);
-          if (!res.ok) return;
-          const blob = await res.blob();
-          await new Promise<void>((resolve) => {
-            const reader = new FileReader();
-            reader.onload = () => { img.src = reader.result as string; resolve(); };
-            reader.onerror = () => resolve();
-            reader.readAsDataURL(blob);
-          });
-        } catch { /* keep original */ }
-      }));
-
-      // Temporarily remove decorative styles that distort layout
-      const savedStyle = el.getAttribute("style") || "";
-      el.style.maxWidth = "";
-      el.style.margin = "0";
-      el.style.borderRadius = "0";
-      el.style.boxShadow = "none";
-      el.style.border = "none";
-
-      // html-to-image uses SVG foreignObject — the browser renders CSS natively,
-      // so oklch/oklab/color-mix work without any patching.
-      const imgData = await toJpeg(el, { quality: 0.92, pixelRatio: 2, skipFonts: false });
-
-      // Restore
-      el.setAttribute("style", savedStyle);
-      imgs.forEach((img, i) => { img.src = origSrcs[i]; });
 
       const isHoriz = cfg.orientacion === "horizontal";
       const fmtDims = cfg.formato === "carta" ? [215.9, 279.4] : [210, 297];
-      const pdfW = isHoriz ? fmtDims[1] : fmtDims[0];
+      const [pdfW, pdfH] = isHoriz ? [fmtDims[1], fmtDims[0]] : [fmtDims[0], fmtDims[1]];
 
-      // Determine image dimensions from data URL
-      const imgEl = await new Promise<HTMLImageElement>((resolve) => {
-        const i = new Image();
-        i.onload = () => resolve(i);
-        i.src = imgData;
-      });
-      const imgH = pdfW * (imgEl.naturalHeight / imgEl.naturalWidth);
+      // Pre-fetch all product images as data URLs to avoid CORS issues in SVG foreignObject
+      const PAGE_WIDTH_PX = 860;
+      const selected = cfg.ordenProductos.length
+        ? cfg.ordenProductos.map(id => products.find(p => p.id === id)).filter(Boolean) as typeof products
+        : products.filter(p => cfg.productosSeleccionados.includes(p.id));
 
-      const pdf = new jsPDF({
-        orientation: isHoriz ? "landscape" : "portrait",
-        unit: "mm",
-        format: [pdfW, imgH],
-      });
-      pdf.addImage(imgData, "JPEG", 0, 0, pdfW, imgH);
+      const imageCache: Record<string, string> = {};
+      await Promise.all(selected.map(async (p) => {
+        if (!p.imagen || !p.imagen.startsWith("http")) return;
+        try {
+          const res = await fetch(`/api/imagen-proxy?url=${encodeURIComponent(p.imagen)}`);
+          if (!res.ok) return;
+          const blob = await res.blob();
+          imageCache[p.imagen] = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = () => resolve(p.imagen!);
+            reader.readAsDataURL(blob);
+          });
+        } catch { /* use original url */ }
+      }));
+
+      // Render a single catalog "sheet" to a hidden off-screen div and capture it as JPEG
+      async function capturePage(component: React.ReactElement): Promise<string> {
+        const wrapper = document.createElement("div");
+        wrapper.style.cssText = `position:fixed;left:-9999px;top:0;width:${PAGE_WIDTH_PX}px;background:white;`;
+        document.body.appendChild(wrapper);
+        const root = createRoot(wrapper);
+        await new Promise<void>(resolve => {
+          root.render(component);
+          // Give React + images time to paint
+          setTimeout(resolve, 300);
+        });
+        const node = wrapper.firstElementChild as HTMLElement;
+        const dataUrl = await toJpeg(node, { quality: 0.92, pixelRatio: 2 });
+        root.unmount();
+        document.body.removeChild(wrapper);
+        return dataUrl;
+      }
+
+      // Inject cached data URLs into a product list copy
+      function withCachedImages(prods: typeof selected) {
+        return prods.map(p => ({
+          ...p,
+          imagen: (p.imagen && imageCache[p.imagen]) ? imageCache[p.imagen] : p.imagen,
+        }));
+      }
+
+      const pageSize = cfg.productosPorPagina ?? 9;
+      const chunks: (typeof selected)[] = [];
+      for (let i = 0; i < selected.length; i += pageSize) {
+        chunks.push(selected.slice(i, i + pageSize));
+      }
+
+      // Build pages: first page has cover + quiénes somos + first chunk, rest are product-only
+      const pageImages: string[] = [];
+
+      // Page 1: full cover + first chunk
+      pageImages.push(await capturePage(
+        createElement(CatalogPreviewPage, {
+          cfg, tipo,
+          products: withCachedImages(chunks[0] ?? []),
+          showCover: true,
+          showFooter: chunks.length === 1,
+        })
+      ));
+
+      // Middle + last pages: products only (no cover)
+      for (let i = 1; i < chunks.length; i++) {
+        pageImages.push(await capturePage(
+          createElement(CatalogPreviewPage, {
+            cfg, tipo,
+            products: withCachedImages(chunks[i]),
+            showCover: false,
+            showFooter: i === chunks.length - 1,
+          })
+        ));
+      }
+
+      // Assemble PDF — each captured image becomes one page sized to fit pdfW
+      let pdf: InstanceType<typeof jsPDF> | null = null;
+      for (const imgData of pageImages) {
+        const img = await new Promise<HTMLImageElement>(resolve => {
+          const el = new Image();
+          el.onload = () => resolve(el);
+          el.src = imgData;
+        });
+        const imgH = pdfW * (img.naturalHeight / img.naturalWidth);
+        if (!pdf) {
+          pdf = new jsPDF({ orientation: isHoriz ? "landscape" : "portrait", unit: "mm", format: [pdfW, imgH] });
+        } else {
+          pdf.addPage([pdfW, imgH], isHoriz ? "landscape" : "portrait");
+        }
+        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, imgH);
+      }
 
       const filename = tipo === "usa" ? "wholesale-catalog.pdf" : "catalogo-argentina.pdf";
-      pdf.save(filename);
+      pdf!.save(filename);
     } catch (err) {
       console.error("Error generando PDF:", err);
       alert("No se pudo generar el PDF. Revisá la consola para más detalles.");

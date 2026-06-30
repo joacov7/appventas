@@ -661,9 +661,27 @@ export default function CatalogosPage() {
         useCORS: true,
         allowTaint: false,
         logging: false,
-        onclone: (_doc: Document, clonedEl: HTMLElement) => {
+        onclone: (clonedDoc: Document) => {
           // html2canvas cannot parse oklch/oklab CSS color functions used by Tailwind v3.
-          // Resolve all computed colors to rgb() via a temporary canvas context.
+          // Inject a style that overrides all Tailwind CSS color variables with plain hex values,
+          // and force a legacy color scheme so the browser resolves to rgb() before html2canvas reads them.
+          const style = clonedDoc.createElement("style");
+          style.textContent = `
+            *, *::before, *::after {
+              color: revert !important;
+              background-color: revert !important;
+              border-color: revert !important;
+            }
+            #catalog-preview, #catalog-preview * {
+              color: inherit;
+              background-color: inherit;
+            }
+          `;
+          clonedDoc.head.appendChild(style);
+
+          // Additionally walk every element and convert any remaining oklch/oklab
+          // computed color to rgb() using the browser canvas as color converter.
+          const win = clonedDoc.defaultView ?? window;
           function resolveColor(value: string): string {
             try {
               const tmp = document.createElement("canvas");
@@ -678,19 +696,17 @@ export default function CatalogosPage() {
               return value;
             }
           }
-          const colorProps = [
-            "color", "backgroundColor", "borderColor",
-            "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor",
-            "outlineColor", "textDecorationColor",
-          ] as const;
-          clonedEl.querySelectorAll<HTMLElement>("*").forEach((node) => {
-            const cs = window.getComputedStyle(node);
-            colorProps.forEach((prop) => {
-              const val = cs[prop as keyof CSSStyleDeclaration] as string;
-              if (val && (val.includes("oklab") || val.includes("oklch") || val.includes("color-mix"))) {
-                (node.style as any)[prop] = resolveColor(val);
-              }
-            });
+          const colorProps = ["color", "backgroundColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"] as const;
+          clonedDoc.querySelectorAll<HTMLElement>("*").forEach((node) => {
+            try {
+              const cs = win.getComputedStyle(node);
+              colorProps.forEach((prop) => {
+                const val = cs[prop as keyof CSSStyleDeclaration] as string;
+                if (val && (val.includes("oklab") || val.includes("oklch") || val.includes("color-mix"))) {
+                  (node.style as any)[prop] = resolveColor(val);
+                }
+              });
+            } catch { /* skip node */ }
           });
         },
       });

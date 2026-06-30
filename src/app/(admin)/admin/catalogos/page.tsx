@@ -612,20 +612,18 @@ export default function CatalogosPage() {
     setGenerating(true);
     try {
       const { default: jsPDF } = await import("jspdf");
-      const { default: html2canvas } = await import("html2canvas");
+      const { toJpeg } = await import("html-to-image");
       const el = document.getElementById("catalog-preview");
       if (!el) return;
 
-      // Replace cross-origin img src with proxied data URLs so html2canvas can capture them
+      // Proxy cross-origin images to data URLs so html-to-image can embed them
       const imgs = Array.from(el.querySelectorAll("img")) as HTMLImageElement[];
       const origSrcs: string[] = [];
       await Promise.all(imgs.map(async (img, i) => {
         origSrcs[i] = img.src;
-        // Only proxy absolute http(s) URLs — skip relative paths and data URLs
         if (!img.src.startsWith("http")) return;
         try {
-          const proxyUrl = `/api/imagen-proxy?url=${encodeURIComponent(img.src)}`;
-          const res = await fetch(proxyUrl);
+          const res = await fetch(`/api/imagen-proxy?url=${encodeURIComponent(img.src)}`);
           if (!res.ok) return;
           const blob = await res.blob();
           await new Promise<void>((resolve) => {
@@ -637,7 +635,7 @@ export default function CatalogosPage() {
         } catch { /* keep original */ }
       }));
 
-      // Remove decorative styles that distort PDF layout
+      // Temporarily remove decorative styles that distort layout
       const savedStyle = el.getAttribute("style") || "";
       el.style.maxWidth = "";
       el.style.margin = "0";
@@ -645,81 +643,26 @@ export default function CatalogosPage() {
       el.style.boxShadow = "none";
       el.style.border = "none";
 
+      // html-to-image uses SVG foreignObject — the browser renders CSS natively,
+      // so oklch/oklab/color-mix work without any patching.
+      const imgData = await toJpeg(el, { quality: 0.92, pixelRatio: 2, skipFonts: false });
+
+      // Restore
+      el.setAttribute("style", savedStyle);
+      imgs.forEach((img, i) => { img.src = origSrcs[i]; });
+
       const isHoriz = cfg.orientacion === "horizontal";
       const fmtDims = cfg.formato === "carta" ? [215.9, 279.4] : [210, 297];
       const pdfW = isHoriz ? fmtDims[1] : fmtDims[0];
 
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        logging: false,
-        onclone: async (clonedDoc: Document) => {
-          // html2canvas 1.x cannot parse modern CSS color functions (oklch, oklab, lab, lch,
-          // color-mix) used by Tailwind v4. Colors live in both inline <style> tags and
-          // external <link rel="stylesheet"> files — we must patch both before html2canvas reads them.
-          function resolveColor(match: string): string {
-            try {
-              const tmp = document.createElement("canvas");
-              tmp.width = tmp.height = 1;
-              const ctx = tmp.getContext("2d");
-              if (!ctx) return "rgb(0,0,0)";
-              ctx.fillStyle = match;
-              ctx.fillRect(0, 0, 1, 1);
-              const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
-              return a < 255 ? `rgba(${r},${g},${b},${(a / 255).toFixed(3)})` : `rgb(${r},${g},${b})`;
-            } catch {
-              return "rgb(0,0,0)";
-            }
-          }
-
-          function patchCss(css: string): string {
-            // Replace color-mix(...) — may contain nested parens — with a neutral gray
-            let out = css.replace(/color-mix\s*\((?:[^()]*|\([^()]*\))*\)/gi, "rgb(128,128,128)");
-            // Replace simple modern color functions (args never nest)
-            out = out.replace(/\b(?:oklch|oklab|lab|lch)\s*\([^()]+\)/gi, resolveColor);
-            return out;
-          }
-
-          // Patch inline <style> elements
-          clonedDoc.querySelectorAll("style").forEach((styleEl) => {
-            if (styleEl.textContent) styleEl.textContent = patchCss(styleEl.textContent);
-          });
-
-          // Fetch and patch external <link rel="stylesheet"> files, then replace with <style>
-          const links = Array.from(
-            clonedDoc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
-          );
-          await Promise.all(links.map(async (link) => {
-            try {
-              const res = await fetch(link.href);
-              if (!res.ok) { link.remove(); return; }
-              const css = await res.text();
-              const style = clonedDoc.createElement("style");
-              style.textContent = patchCss(css);
-              link.replaceWith(style);
-            } catch {
-              link.remove();
-            }
-          }));
-
-          // Patch inline style attributes
-          clonedDoc.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
-            const s = el.getAttribute("style") ?? "";
-            if (/oklch|oklab|lab\(|lch\(|color-mix/i.test(s)) {
-              el.setAttribute("style", patchCss(s));
-            }
-          });
-        },
+      // Determine image dimensions from data URL
+      const imgEl = await new Promise<HTMLImageElement>((resolve) => {
+        const i = new Image();
+        i.onload = () => resolve(i);
+        i.src = imgData;
       });
-      const imgData = canvas.toDataURL("image/jpeg", 0.92);
-      const imgH = pdfW * (canvas.height / canvas.width);
+      const imgH = pdfW * (imgEl.naturalHeight / imgEl.naturalWidth);
 
-      // Restore original values
-      el.setAttribute("style", savedStyle);
-      imgs.forEach((img, i) => { img.src = origSrcs[i]; });
-
-      // Use a single page sized to the full content height to avoid cutting products mid-element
       const pdf = new jsPDF({
         orientation: isHoriz ? "landscape" : "portrait",
         unit: "mm",

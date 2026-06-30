@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings,
 } from "lucide-react";
 
 const NAV = [
@@ -27,6 +27,7 @@ const NAV = [
   { href: "/admin/suscripciones", label: "Reposiciones", icon: RefreshCw },
   { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
   { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
+  { href: "/admin/configuracion", label: "Configuración", icon: Settings },
 ];
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {

@@ -13,14 +13,18 @@ export function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const totalItems = useCartStore((s) => s.getTotalItems());
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoAltura, setLogoAltura] = useState(40);
   const [storeName, setStoreName] = useState("AppVentas");
+  const [textoAlCostado, setTextoAlCostado] = useState("");
 
   useEffect(() => {
     fetch("/api/store-config")
       .then(r => r.json())
       .then(data => {
         if (data.logoUrl) setLogoUrl(data.logoUrl);
+        if (data.logoAltura) setLogoAltura(data.logoAltura);
         if (data.storeName) setStoreName(data.storeName);
+        if (data.textoAlCostado) setTextoAlCostado(data.textoAlCostado);
       })
       .catch(() => {});
   }, []);
@@ -32,7 +36,10 @@ export function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-xl text-gray-900">
             {logoUrl ? (
-              <Image src={logoUrl} alt={storeName} height={40} width={120} className="object-contain h-10 w-auto" unoptimized />
+              <>
+                <img src={logoUrl} alt={storeName} style={{ height: logoAltura, width: "auto", objectFit: "contain" }} />
+                {textoAlCostado && <span className="font-bold text-gray-900">{textoAlCostado}</span>}
+              </>
             ) : (
               <>
                 <Store size={24} className="text-emerald-600" />

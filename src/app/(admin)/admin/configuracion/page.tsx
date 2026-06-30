@@ -7,7 +7,9 @@ import Image from "next/image";
 
 export default function ConfiguracionPage() {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoAltura, setLogoAltura] = useState(40);
   const [storeName, setStoreName] = useState("");
+  const [textoAlCostado, setTextoAlCostado] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -17,7 +19,9 @@ export default function ConfiguracionPage() {
       .then(r => r.json())
       .then(data => {
         setLogoUrl(data.logoUrl ?? null);
+        setLogoAltura(data.logoAltura ?? 40);
         setStoreName(data.storeName ?? "");
+        setTextoAlCostado(data.textoAlCostado ?? "");
       })
       .finally(() => setLoading(false));
   }, []);
@@ -27,7 +31,7 @@ export default function ConfiguracionPage() {
     await fetch("/api/store-config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ logoUrl, storeName }),
+      body: JSON.stringify({ logoUrl, logoAltura, storeName, textoAlCostado }),
     });
     setSaving(false);
     setSaved(true);
@@ -44,24 +48,59 @@ export default function ConfiguracionPage() {
       </div>
 
       <div className="bg-white rounded-2xl border p-6 space-y-6">
+        {/* Vista previa */}
+        {logoUrl && (
+          <div>
+            <p className="text-xs font-medium text-gray-500 mb-2">Vista previa del navbar</p>
+            <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3 border">
+              <img src={logoUrl} alt="Logo" style={{ height: logoAltura, width: "auto", objectFit: "contain" }} />
+              {textoAlCostado && (
+                <span className="font-bold text-gray-900 text-lg">{textoAlCostado}</span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Logo */}
         <div>
           <label className="text-sm font-medium text-gray-700 block mb-2">Logo de la tienda</label>
-          {logoUrl && (
-            <div className="mb-3 relative h-16 w-48">
-              <Image src={logoUrl} alt="Logo" fill className="object-contain" unoptimized />
-            </div>
-          )}
           <MediaUpload
             urls={logoUrl ? [logoUrl] : []}
             onChange={urls => setLogoUrl(urls[0] ?? null)}
           />
-          <p className="text-xs text-gray-400 mt-1">Recomendado: PNG o SVG con fondo transparente, alto máximo 80px.</p>
+          <p className="text-xs text-gray-400 mt-1">PNG o SVG con fondo transparente.</p>
         </div>
 
-        {/* Nombre */}
+        {/* Altura del logo */}
         <div>
-          <label className="text-sm font-medium text-gray-700 block mb-1">Nombre de la tienda</label>
+          <label className="text-sm font-medium text-gray-700 block mb-1">
+            Tamaño del logo: {logoAltura}px
+          </label>
+          <input
+            type="range" min={24} max={80} value={logoAltura}
+            onChange={e => setLogoAltura(Number(e.target.value))}
+            className="w-full accent-emerald-600"
+          />
+          <div className="flex justify-between text-xs text-gray-400 mt-0.5">
+            <span>Chico</span><span>Grande</span>
+          </div>
+        </div>
+
+        {/* Texto al costado */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 block mb-1">Texto al costado del logo</label>
+          <input
+            value={textoAlCostado}
+            onChange={e => setTextoAlCostado(e.target.value)}
+            placeholder="Pava Negra"
+            className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">Opcional. Aparece junto al logo en el navbar.</p>
+        </div>
+
+        {/* Nombre fallback */}
+        <div>
+          <label className="text-sm font-medium text-gray-700 block mb-1">Nombre de la tienda (sin logo)</label>
           <input
             value={storeName}
             onChange={e => setStoreName(e.target.value)}

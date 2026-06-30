@@ -662,51 +662,42 @@ export default function CatalogosPage() {
         allowTaint: false,
         logging: false,
         onclone: (clonedDoc: Document) => {
-          // html2canvas cannot parse oklch/oklab CSS color functions used by Tailwind v3.
-          // Inject a style that overrides all Tailwind CSS color variables with plain hex values,
-          // and force a legacy color scheme so the browser resolves to rgb() before html2canvas reads them.
-          const style = clonedDoc.createElement("style");
-          style.textContent = `
-            *, *::before, *::after {
-              color: revert !important;
-              background-color: revert !important;
-              border-color: revert !important;
-            }
-            #catalog-preview, #catalog-preview * {
-              color: inherit;
-              background-color: inherit;
-            }
-          `;
-          clonedDoc.head.appendChild(style);
-
-          // Additionally walk every element and convert any remaining oklch/oklab
-          // computed color to rgb() using the browser canvas as color converter.
-          const win = clonedDoc.defaultView ?? window;
-          function resolveColor(value: string): string {
+          // html2canvas parses CSS stylesheets directly and crashes on modern color
+          // functions (oklch, oklab, lab, lch, color-mix) used by Tailwind v3.
+          // Use the browser's canvas 2d context as a color converter to resolve
+          // every occurrence in <style> text content to rgb() before html2canvas reads it.
+          function resolveColor(match: string): string {
             try {
               const tmp = document.createElement("canvas");
               tmp.width = tmp.height = 1;
               const ctx = tmp.getContext("2d");
-              if (!ctx) return value;
-              ctx.fillStyle = value;
+              if (!ctx) return "rgb(0,0,0)";
+              ctx.fillStyle = match;
               ctx.fillRect(0, 0, 1, 1);
               const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
               return a < 255 ? `rgba(${r},${g},${b},${(a / 255).toFixed(3)})` : `rgb(${r},${g},${b})`;
             } catch {
-              return value;
+              return "rgb(0,0,0)";
             }
           }
-          const colorProps = ["color", "backgroundColor", "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor"] as const;
-          clonedDoc.querySelectorAll<HTMLElement>("*").forEach((node) => {
-            try {
-              const cs = win.getComputedStyle(node);
-              colorProps.forEach((prop) => {
-                const val = cs[prop as keyof CSSStyleDeclaration] as string;
-                if (val && (val.includes("oklab") || val.includes("oklch") || val.includes("color-mix"))) {
-                  (node.style as any)[prop] = resolveColor(val);
-                }
-              });
-            } catch { /* skip node */ }
+
+          // Regex matches oklch(...), oklab(...), lab(...), lch(...) with simple args (no nested parens)
+          const modernColorRe = /\b(?:oklch|oklab|lab|lch)\s*\([^()]+\)/gi;
+
+          // Patch every <style> element in the cloned document
+          clonedDoc.querySelectorAll("style").forEach((styleEl) => {
+            if (styleEl.textContent) {
+              styleEl.textContent = styleEl.textContent.replace(modernColorRe, resolveColor);
+            }
+          });
+
+          // Also patch inline style attributes
+          clonedDoc.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
+            const s = el.getAttribute("style") ?? "";
+            if (modernColorRe.test(s)) {
+              modernColorRe.lastIndex = 0;
+              el.setAttribute("style", s.replace(modernColorRe, resolveColor));
+            }
           });
         },
       });

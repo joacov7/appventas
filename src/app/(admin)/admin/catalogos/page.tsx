@@ -654,11 +654,10 @@ export default function CatalogosPage() {
         useCORS: true,
         allowTaint: false,
         logging: false,
-        onclone: (clonedDoc: Document) => {
-          // html2canvas parses CSS stylesheets directly and crashes on modern color
-          // functions (oklch, oklab, lab, lch, color-mix) used by Tailwind v3.
-          // Use the browser's canvas 2d context as a color converter to resolve
-          // every occurrence in <style> text content to rgb() before html2canvas reads it.
+        onclone: async (clonedDoc: Document) => {
+          // html2canvas 1.x cannot parse modern CSS color functions (oklch, oklab, lab, lch,
+          // color-mix) used by Tailwind v4. Colors live in both inline <style> tags and
+          // external <link rel="stylesheet"> files — we must patch both before html2canvas reads them.
           function resolveColor(match: string): string {
             try {
               const tmp = document.createElement("canvas");
@@ -674,22 +673,41 @@ export default function CatalogosPage() {
             }
           }
 
-          // Regex matches oklch(...), oklab(...), lab(...), lch(...) with simple args (no nested parens)
-          const modernColorRe = /\b(?:oklch|oklab|lab|lch)\s*\([^()]+\)/gi;
+          function patchCss(css: string): string {
+            // Replace color-mix(...) — may contain nested parens — with a neutral gray
+            let out = css.replace(/color-mix\s*\((?:[^()]*|\([^()]*\))*\)/gi, "rgb(128,128,128)");
+            // Replace simple modern color functions (args never nest)
+            out = out.replace(/\b(?:oklch|oklab|lab|lch)\s*\([^()]+\)/gi, resolveColor);
+            return out;
+          }
 
-          // Patch every <style> element in the cloned document
+          // Patch inline <style> elements
           clonedDoc.querySelectorAll("style").forEach((styleEl) => {
-            if (styleEl.textContent) {
-              styleEl.textContent = styleEl.textContent.replace(modernColorRe, resolveColor);
-            }
+            if (styleEl.textContent) styleEl.textContent = patchCss(styleEl.textContent);
           });
 
-          // Also patch inline style attributes
+          // Fetch and patch external <link rel="stylesheet"> files, then replace with <style>
+          const links = Array.from(
+            clonedDoc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')
+          );
+          await Promise.all(links.map(async (link) => {
+            try {
+              const res = await fetch(link.href);
+              if (!res.ok) { link.remove(); return; }
+              const css = await res.text();
+              const style = clonedDoc.createElement("style");
+              style.textContent = patchCss(css);
+              link.replaceWith(style);
+            } catch {
+              link.remove();
+            }
+          }));
+
+          // Patch inline style attributes
           clonedDoc.querySelectorAll<HTMLElement>("[style]").forEach((el) => {
             const s = el.getAttribute("style") ?? "";
-            if (modernColorRe.test(s)) {
-              modernColorRe.lastIndex = 0;
-              el.setAttribute("style", s.replace(modernColorRe, resolveColor));
+            if (/oklch|oklab|lab\(|lch\(|color-mix/i.test(s)) {
+              el.setAttribute("style", patchCss(s));
             }
           });
         },

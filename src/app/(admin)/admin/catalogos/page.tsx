@@ -656,7 +656,44 @@ export default function CatalogosPage() {
       const pdfW = isHoriz ? fmtDims[1] : fmtDims[0];
       const pdfH = isHoriz ? fmtDims[0] : fmtDims[1];
 
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, allowTaint: false, logging: false });
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        onclone: (_doc: Document, clonedEl: HTMLElement) => {
+          // html2canvas cannot parse oklch/oklab CSS color functions used by Tailwind v3.
+          // Resolve all computed colors to rgb() via a temporary canvas context.
+          function resolveColor(value: string): string {
+            try {
+              const tmp = document.createElement("canvas");
+              tmp.width = tmp.height = 1;
+              const ctx = tmp.getContext("2d");
+              if (!ctx) return value;
+              ctx.fillStyle = value;
+              ctx.fillRect(0, 0, 1, 1);
+              const [r, g, b, a] = ctx.getImageData(0, 0, 1, 1).data;
+              return a < 255 ? `rgba(${r},${g},${b},${(a / 255).toFixed(3)})` : `rgb(${r},${g},${b})`;
+            } catch {
+              return value;
+            }
+          }
+          const colorProps = [
+            "color", "backgroundColor", "borderColor",
+            "borderTopColor", "borderRightColor", "borderBottomColor", "borderLeftColor",
+            "outlineColor", "textDecorationColor",
+          ] as const;
+          clonedEl.querySelectorAll<HTMLElement>("*").forEach((node) => {
+            const cs = window.getComputedStyle(node);
+            colorProps.forEach((prop) => {
+              const val = cs[prop as keyof CSSStyleDeclaration] as string;
+              if (val && (val.includes("oklab") || val.includes("oklch") || val.includes("color-mix"))) {
+                (node.style as any)[prop] = resolveColor(val);
+              }
+            });
+          });
+        },
+      });
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
       const ratio = canvas.width / canvas.height;
       const imgH = pdfW / ratio;

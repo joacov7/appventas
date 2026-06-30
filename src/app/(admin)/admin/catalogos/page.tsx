@@ -647,14 +647,7 @@ export default function CatalogosPage() {
 
       const isHoriz = cfg.orientacion === "horizontal";
       const fmtDims = cfg.formato === "carta" ? [215.9, 279.4] : [210, 297];
-      const pdf = new jsPDF({
-        orientation: isHoriz ? "landscape" : "portrait",
-        unit: "mm",
-        format: fmtDims as any,
-      });
-
       const pdfW = isHoriz ? fmtDims[1] : fmtDims[0];
-      const pdfH = isHoriz ? fmtDims[0] : fmtDims[1];
 
       const canvas = await html2canvas(el, {
         scale: 2,
@@ -702,24 +695,19 @@ export default function CatalogosPage() {
         },
       });
       const imgData = canvas.toDataURL("image/jpeg", 0.92);
-      const ratio = canvas.width / canvas.height;
-      const imgH = pdfW / ratio;
+      const imgH = pdfW * (canvas.height / canvas.width);
 
       // Restore original values
       el.setAttribute("style", savedStyle);
       imgs.forEach((img, i) => { img.src = origSrcs[i]; });
 
-      let y = 0;
-      let page = 0;
-      while (y < imgH) {
-        if (page > 0) pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, -y, pdfW, imgH);
-        pdf.setFontSize(8);
-        pdf.setTextColor(150);
-        pdf.text(`${page + 1}`, pdfW - 10, pdfH - 5);
-        y += pdfH;
-        page++;
-      }
+      // Use a single page sized to the full content height to avoid cutting products mid-element
+      const pdf = new jsPDF({
+        orientation: isHoriz ? "landscape" : "portrait",
+        unit: "mm",
+        format: [pdfW, imgH],
+      });
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfW, imgH);
 
       const filename = tipo === "usa" ? "wholesale-catalog.pdf" : "catalogo-argentina.pdf";
       pdf.save(filename);

@@ -26,6 +26,7 @@ const NAV = [
   { href: "/admin/referidos", label: "Referidos", icon: Gift },
   { href: "/admin/suscripciones", label: "Reposiciones", icon: RefreshCw },
   { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
+  { href: "/admin/combos", label: "Combos", icon: Gift },
   { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
   { href: "/admin/configuracion", label: "Configuración", icon: Settings },
 ];

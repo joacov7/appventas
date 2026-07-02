@@ -53,22 +53,35 @@ function normFacebook(v?: string): string | null {
   return `https://facebook.com/${s.replace(/^@/, "").replace(/\/$/, "")}`;
 }
 
-function buildQuery(zona: string, rubrosOsm: string[]): string {
+// Geocodifica "zona, país" a un area id de Overpass usando Nominatim.
+// Devuelve null si no encuentra un área (relación/way) para esa zona.
+async function geocodeArea(zona: string, pais: string): Promise<{ areaId: number; displayName: string } | null> {
+  const q = `${zona}, ${pais}`;
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=0`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": "AppVentas/1.0 (prospector; contacto tienda)",
+      Accept: "application/json",
+      "Accept-Language": "es",
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) return null;
+  const arr: any[] = await res.json();
+  const hit = arr[0];
+  if (!hit) return null;
+  // Overpass area id: relation -> 3600000000 + id ; way -> 2400000000 + id
+  const osmId = Number(hit.osm_id);
+  if (hit.osm_type === "relation") return { areaId: 3600000000 + osmId, displayName: hit.display_name };
+  if (hit.osm_type === "way")      return { areaId: 2400000000 + osmId, displayName: hit.display_name };
+  return null; // un nodo no define un área
+}
+
+function buildQuery(areaId: number, rubrosOsm: string[]): string {
   const filtro = rubrosOsm.join("|");
-  // Escapar caracteres especiales de regex y matchear insensible a mayúsculas y acentos
-  const acentos: Record<string, string> = {
-    a: "[aáàäâ]", e: "[eéèëê]", i: "[iíìïî]", o: "[oóòöô]", u: "[uúùüû]", n: "[nñ]",
-  };
-  const zonaRegex = zona
-    .normalize("NFD").replace(/[̀-ͯ]/g, "")   // quitar acentos que tipeó el usuario
-    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")             // escapar regex
-    .toLowerCase()
-    .replace(/[aeioun]/g, (c) => acentos[c] ?? c);      // cada vocal matchea su versión con acento
-  // Busca el área administrativa por nombre (provincia o ciudad) dentro de Argentina
   return `
     [out:json][timeout:80];
-    area["name"="Argentina"]["admin_level"="2"]->.ar;
-    area["name"~"^${zonaRegex}$",i]["boundary"="administrative"](area.ar)->.z;
+    area(${areaId})->.z;
     (
       nwr["shop"~"^(${filtro})$"]["name"](area.z);
     );
@@ -92,12 +105,24 @@ export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   await ensureTable();
 
-  const { zona, rubros } = await req.json();
+  const { zona, rubros, pais } = await req.json();
   if (!zona?.trim()) return NextResponse.json({ error: "Zona (provincia o ciudad) requerida" }, { status: 400 });
+  const paisFinal = (pais?.trim() || "Argentina");
 
   const claves: string[] = Array.isArray(rubros) && rubros.length ? rubros : Object.keys(RUBROS);
   const rubrosOsm = claves.map(k => RUBROS[k]?.osm).filter(Boolean);
   if (!rubrosOsm.length) return NextResponse.json({ error: "Rubros inválidos" }, { status: 400 });
+
+  // Geocodificar la zona dentro del país para acotar bien el área
+  let area: { areaId: number; displayName: string } | null = null;
+  try {
+    area = await geocodeArea(zona.trim(), paisFinal);
+  } catch {
+    return NextResponse.json({ error: "No se pudo geolocalizar la zona. Probá de nuevo en un momento." }, { status: 502 });
+  }
+  if (!area) {
+    return NextResponse.json({ error: `No se encontró "${zona}" en ${paisFinal}. Revisá el nombre de la provincia/ciudad y el país.`, total: 0 }, { status: 200 });
+  }
 
   // Mapa inverso osm -> label para etiquetar cada resultado
   const osmLabel = new Map<string, string>();
@@ -108,7 +133,7 @@ export async function POST(req: NextRequest) {
     "https://overpass.kumi.systems/api/interpreter",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   ];
-  const body = "data=" + encodeURIComponent(buildQuery(zona.trim(), rubrosOsm));
+  const body = "data=" + encodeURIComponent(buildQuery(area.areaId, rubrosOsm));
 
   let data: any = null;
   let lastStatus = 0;
@@ -166,6 +191,9 @@ export async function POST(req: NextRequest) {
 
   if (!unicos.length) return NextResponse.json({ error: "Se encontraron comercios pero sin nombre público.", total: 0 }, { status: 200 });
 
+  // Etiqueta de zona a guardar (incluye país si no es Argentina)
+  const zonaLabel = paisFinal.toLowerCase() === "argentina" ? zona.trim() : `${zona.trim()}, ${paisFinal}`;
+
   // Bulk upsert por osm_id
   const CHUNK = 100;
   let insertados = 0;
@@ -176,7 +204,7 @@ export async function POST(req: NextRequest) {
     let idx = 1;
     for (const p of chunk) {
       values.push(`($${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++})`);
-      paramsArr.push(p.nombre, p.rubro, p.direccion, p.telefono, p.website, p.instagram, p.facebook, zona.trim(), p.lat, p.lon, p.osm_id);
+      paramsArr.push(p.nombre, p.rubro, p.direccion, p.telefono, p.website, p.instagram, p.facebook, zonaLabel, p.lat, p.lon, p.osm_id);
     }
     await (prisma as any).$executeRawUnsafe(`
       INSERT INTO prospectos (nombre, rubro, direccion, telefono, website, instagram, facebook, provincia, lat, lon, osm_id)

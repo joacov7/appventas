@@ -66,6 +66,7 @@ export default function CaptacionPage() {
   const [pLoading, setPLoading] = useState(true);
   const [pFiltro, setPFiltro] = useState("");
   const [pZona, setPZona] = useState("");
+  const [pPais, setPPais] = useState("Argentina");
   const [pRubros, setPRubros] = useState<string[]>(["regaleria", "tabaqueria", "bazar"]);
   const [pBuscando, setPBuscando] = useState(false);
   const [pMsg, setPMsg] = useState("");
@@ -117,7 +118,7 @@ export default function CaptacionPage() {
       const res = await fetch("/api/captacion/prospectos", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ zona: pZona.trim(), rubros: pRubros }),
+        body: JSON.stringify({ zona: pZona.trim(), pais: pPais.trim() || "Argentina", rubros: pRubros }),
       });
       const data = await res.json();
       if (!res.ok) { setPMsg(data.error ?? "Error en la búsqueda"); return; }
@@ -232,6 +233,16 @@ export default function CaptacionPage() {
                   onKeyDown={(e) => e.key === "Enter" && buscarProspectos()}
                   className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
                   placeholder="Ej: Córdoba, Rosario, Mendoza"
+                />
+              </div>
+              <div className="sm:w-48">
+                <label className="text-sm font-medium text-gray-700">País</label>
+                <input
+                  value={pPais}
+                  onChange={(e) => setPPais(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && buscarProspectos()}
+                  className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500"
+                  placeholder="Argentina"
                 />
               </div>
               <div className="flex items-end">

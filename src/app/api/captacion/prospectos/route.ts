@@ -37,6 +37,7 @@ async function ensureTable() {
   // Columnas nuevas (para tablas ya creadas antes de esta feature)
   await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS instagram TEXT`);
   await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS facebook TEXT`);
+  await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS mensaje_abordaje TEXT`);
 }
 
 // Normaliza un handle o URL de Instagram a URL completa

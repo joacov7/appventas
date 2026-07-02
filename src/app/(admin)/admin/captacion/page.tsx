@@ -37,8 +37,20 @@ type Prospecto = {
   lon: number | null;
   estado: string;
   notas: string | null;
+  mensaje_abordaje: string | null;
   creado_en: string;
 };
+
+// Prioridad de contacto: nuevos y contactables primero
+function prioridadProspecto(p: Prospecto): number {
+  let score = 0;
+  if (p.estado === "nuevo") score += 4;
+  else if (p.estado === "interesado") score += 6; // los calientes, arriba de todo
+  else if (p.estado === "contactado") score += 2;
+  if (p.telefono) score += 3;
+  if (p.instagram || p.facebook) score += 1;
+  return score;
+}
 
 const RUBROS_PROSPECTO: { key: string; label: string }[] = [
   { key: "regaleria", label: "Regalerías" },
@@ -145,10 +157,33 @@ export default function CaptacionPage() {
     setProspectos((prev) => prev.filter((p) => p.id !== id));
   }
 
-  function waLink(tel: string) {
+  function waLink(tel: string, texto?: string | null) {
     const d = tel.replace(/[^\d]/g, "");
     const num = d.startsWith("54") ? d : `54${d}`;
-    return `https://wa.me/${num}`;
+    return `https://wa.me/${num}${texto ? `?text=${encodeURIComponent(texto)}` : ""}`;
+  }
+
+  const [generandoMsg, setGenerandoMsg] = useState<number | null>(null);
+  const [msgAbierto, setMsgAbierto] = useState<number | null>(null);
+
+  async function generarAbordaje(p: Prospecto) {
+    setGenerandoMsg(p.id);
+    try {
+      const r = await fetch("/api/empleado/abordaje", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prospectoId: p.id }),
+      });
+      const data = await r.json();
+      if (r.ok) {
+        setProspectos(prev => prev.map(x => x.id === p.id ? { ...x, mensaje_abordaje: data.mensaje } : x));
+        setMsgAbierto(p.id);
+      } else {
+        alert(data.error ?? "Error al generar el mensaje");
+      }
+    } catch {
+      alert("Error de conexión");
+    } finally { setGenerandoMsg(null); }
   }
 
   async function cambiarEstado(id: number, estado: string) {
@@ -294,7 +329,7 @@ export default function CaptacionPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {prospectos.map((p) => (
+              {[...prospectos].sort((a, b) => prioridadProspecto(b) - prioridadProspecto(a)).map((p) => (
                 <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -329,6 +364,42 @@ export default function CaptacionPage() {
                         {p.lat && p.lon && (
                           <a href={`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`} target="_blank" rel="noopener noreferrer"
                             className="text-xs text-gray-400 hover:text-emerald-600 flex items-center gap-1"><ExternalLink size={11} /> Ver en mapa</a>
+                        )}
+                      </div>
+
+                      {/* Mensaje de abordaje IA */}
+                      <div className="mt-3">
+                        {p.mensaje_abordaje ? (
+                          <button onClick={() => setMsgAbierto(msgAbierto === p.id ? null : p.id)}
+                            className="text-xs text-purple-600 hover:text-purple-800 font-medium">
+                            {msgAbierto === p.id ? "Ocultar mensaje" : "Ver mensaje de abordaje"}
+                          </button>
+                        ) : (
+                          <button onClick={() => generarAbordaje(p)} disabled={generandoMsg !== null}
+                            className="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50">
+                            {generandoMsg === p.id
+                              ? <><RefreshCw size={11} className="animate-spin" /> Generando...</>
+                              : <>✨ Generar mensaje de abordaje</>}
+                          </button>
+                        )}
+                        {msgAbierto === p.id && p.mensaje_abordaje && (
+                          <div className="mt-2 bg-purple-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed">
+                            {p.mensaje_abordaje}
+                            <div className="flex items-center gap-3 mt-3 flex-wrap">
+                              <button onClick={() => navigator.clipboard.writeText(p.mensaje_abordaje!)}
+                                className="text-xs text-purple-600 hover:underline">Copiar texto</button>
+                              <button onClick={() => generarAbordaje(p)} disabled={generandoMsg !== null}
+                                className="text-xs text-gray-400 hover:text-gray-600 disabled:opacity-50">
+                                {generandoMsg === p.id ? "Generando..." : "Regenerar"}
+                              </button>
+                              {p.telefono && (
+                                <a href={waLink(p.telefono, p.mensaje_abordaje)} target="_blank" rel="noopener noreferrer"
+                                  className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors">
+                                  <MessageCircle size={12} fill="white" strokeWidth={0} /> Enviar por WhatsApp
+                                </a>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>

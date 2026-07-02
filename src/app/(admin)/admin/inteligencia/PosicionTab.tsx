@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { RefreshCw, Link2, Check, X, ExternalLink, AlertTriangle, Target } from "lucide-react";
+import { RefreshCw, Link2, Check, X, ExternalLink, AlertTriangle, Target, Zap } from "lucide-react";
 
 type Posicion = {
   product_id: string;
@@ -17,6 +17,7 @@ type Posicion = {
   margen_pct: number | null;
   margen_si_igualo_min: number | null;
   bajadas_recientes: number;
+  sugerencia: { precio: number; motivo: string; margen_resultante: number | null } | null;
 };
 
 type ProductoPropio = { id: string; name: string };
@@ -48,6 +49,8 @@ export function PosicionTab() {
   const [links, setLinks] = useState<Link[]>([]);
   const [sugerencias, setSugerencias] = useState<Candidato[]>([]);
   const [cargandoSug, setCargandoSug] = useState(false);
+  const [aplicando, setAplicando] = useState<string | null>(null);
+  const [aplicarMsg, setAplicarMsg] = useState("");
 
   async function fetchPosiciones() {
     setLoading(true);
@@ -89,6 +92,26 @@ export function PosicionTab() {
     fetchPosiciones();
   }
 
+  async function aplicarPrecio(p: Posicion) {
+    if (!p.sugerencia) return;
+    const margen = p.sugerencia.margen_resultante != null ? ` (margen resultante: ${p.sugerencia.margen_resultante.toFixed(0)}%)` : "";
+    if (!confirm(`¿Cambiar el precio de "${p.producto}" de ${fmt(p.mi_precio)} a ${fmt(p.sugerencia.precio)}?${margen}\n\n${p.sugerencia.motivo}.`)) return;
+    setAplicando(p.product_id); setAplicarMsg("");
+    try {
+      const r = await fetch("/api/inteligencia/aplicar-precio", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: p.product_id, precio: p.sugerencia.precio }),
+      });
+      const data = await r.json();
+      if (!r.ok) { setAplicarMsg(data.error ?? "Error al aplicar"); return; }
+      setAplicarMsg(`✓ "${p.producto}": ${fmt(data.precio_anterior)} → ${fmt(data.precio_nuevo)} (variante ${data.variante})`);
+      fetchPosiciones();
+    } catch {
+      setAplicarMsg("Error de conexión");
+    } finally { setAplicando(null); }
+  }
+
   async function quitarLink(linkId: number, productId: string) {
     await fetch(`/api/inteligencia/links?id=${linkId}`, { method: "DELETE" });
     await abrirVinculacion(productId);
@@ -121,6 +144,10 @@ export function PosicionTab() {
         </button>
       </div>
 
+      {aplicarMsg && (
+        <p className={`text-sm mb-3 ${aplicarMsg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{aplicarMsg}</p>
+      )}
+
       {loading ? (
         <p className="text-gray-400 text-sm">Cargando...</p>
       ) : posiciones.length === 0 ? (
@@ -140,6 +167,7 @@ export function PosicionTab() {
                 <th className="px-4 py-3 text-center">Posición</th>
                 <th className="px-4 py-3 text-right">Margen</th>
                 <th className="px-4 py-3 text-center">Alerta</th>
+                <th className="px-4 py-3 text-center">Sugerido</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
@@ -170,6 +198,19 @@ export function PosicionTab() {
                         <AlertTriangle size={13} /> {p.bajadas_recientes} bajada{p.bajadas_recientes > 1 ? "s" : ""}
                       </span>
                     ) : <span className="text-gray-300">—</span>}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {p.sugerencia ? (
+                      <button
+                        onClick={() => aplicarPrecio(p)}
+                        disabled={aplicando === p.product_id}
+                        title={`${p.sugerencia.motivo}${p.sugerencia.margen_resultante != null ? ` · margen resultante ${p.sugerencia.margen_resultante.toFixed(0)}%` : ""}`}
+                        className="inline-flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors"
+                      >
+                        <Zap size={12} />
+                        {aplicando === p.product_id ? "..." : fmt(p.sugerencia.precio)}
+                      </button>
+                    ) : <span className="text-gray-300 text-xs">ok</span>}
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={() => abrirVinculacion(p.product_id)}

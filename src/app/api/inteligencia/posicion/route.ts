@@ -4,6 +4,50 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
+const MARGEN_PISO_PCT = 15; // nunca sugerir un precio con margen menor a esto
+
+type Sugerencia = { precio: number; motivo: string; margen_resultante: number | null } | null;
+
+function redondear(n: number): number {
+  return Math.round(n / 100) * 100;
+}
+
+// Sugerencia determinística: alinear al mercado sin perforar el margen piso.
+function calcularSugerencia(
+  miPrecio: number | null, costo: number | null,
+  mercadoMin: number | null, prom: number | null
+): Sugerencia {
+  if (miPrecio == null || !prom || !mercadoMin) return null;
+  const piso = costo != null ? costo / (1 - MARGEN_PISO_PCT / 100) : null;
+  const margenDe = (precio: number) =>
+    costo != null && precio > 0 ? ((precio - costo) / precio) * 100 : null;
+
+  // Estoy caro: >3% sobre el promedio → bajar hacia el promedio (respetando piso)
+  if (miPrecio > prom * 1.03) {
+    let objetivo = redondear(prom);
+    if (piso != null && objetivo < piso) objetivo = redondear(piso);
+    if (objetivo >= miPrecio) return null; // el piso no me deja bajar
+    return {
+      precio: objetivo,
+      motivo: `Estás ${(((miPrecio - prom) / prom) * 100).toFixed(0)}% arriba del promedio del mercado`,
+      margen_resultante: margenDe(objetivo),
+    };
+  }
+
+  // Estoy regalando: >5% debajo del mínimo del mercado → subir cerca del mínimo
+  if (miPrecio < mercadoMin * 0.95) {
+    const objetivo = redondear(mercadoMin * 0.99);
+    if (objetivo <= miPrecio) return null;
+    return {
+      precio: objetivo,
+      motivo: `Estás debajo del competidor más barato (${new Intl.NumberFormat("es-AR").format(mercadoMin)}) — estás dejando plata`,
+      margen_resultante: margenDe(objetivo),
+    };
+  }
+
+  return null; // alineado: no tocar
+}
+
 // Posición competitiva: por cada producto propio con links confirmados,
 // compara mi precio contra el mercado y calcula margen usando el costo real.
 export async function GET() {
@@ -66,6 +110,7 @@ export async function GET() {
       margen_pct: margenPct,
       margen_si_igualo_min: margenSiIgualo,
       bajadas_recientes: r.bajadas_recientes,
+      sugerencia: calcularSugerencia(miPrecio, costo, mercadoMin, prom),
     };
   });
 

@@ -15,7 +15,7 @@ type Producto = {
 const TABS = ["Búsquedas", "Tiendas", "Productos", "Mi posición"] as const;
 type Tab = typeof TABS[number];
 
-const PLATAFORMAS = ["todas", "tiendanube", "empretienda", "mercadolibre"];
+const PLATAFORMAS = ["todas", "tiendanube", "empretienda", "shopify", "woocommerce", "mercadolibre"];
 
 function pctCambio(prod: Producto) {
   if (!prod.precio || !prod.precio_anterior) return null;

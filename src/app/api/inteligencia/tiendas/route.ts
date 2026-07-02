@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
   let plataforma = "desconocido";
   if (url.includes("mitiendanube.com") || url.includes("tiendanube.com")) plataforma = "tiendanube";
   else if (url.includes("empretienda.com.ar")) plataforma = "empretienda";
+  else if (url.includes("myshopify.com")) plataforma = "shopify";
   else if (url.includes("mercadolibre.com")) plataforma = "mercadolibre";
 
   if (!nombre?.trim()) {

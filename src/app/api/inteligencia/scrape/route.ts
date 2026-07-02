@@ -132,6 +132,89 @@ async function scrapeEmpretienda(base: string): Promise<Producto[]> {
   return results;
 }
 
+// ─── Shopify ──────────────────────────────────────────────────────────────────
+async function scrapeShopify(base: string): Promise<Producto[]> {
+  const results: Producto[] = [];
+  const vistos = new Set<string>();
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    let res: Response;
+    try {
+      res = await fetchWithRetry(`${base}/products.json?limit=250&page=${page}`);
+    } catch {
+      break;
+    }
+    const data = await res.json();
+    const items: any[] = data.products ?? [];
+    if (!items.length) break;
+
+    let nuevos = 0;
+    for (const item of items) {
+      const url = `${base}/products/${item.handle}`;
+      if (vistos.has(url)) continue;
+      vistos.add(url);
+      nuevos++;
+
+      const variants: any[] = item.variants ?? [];
+      const prices = variants
+        .filter((v: any) => v.available !== false)
+        .map((v: any) => Number(v.price || 0))
+        .filter(p => p > 0);
+      const todas = prices.length ? prices : variants.map((v: any) => Number(v.price || 0)).filter(p => p > 0);
+      const precio = todas.length ? Math.min(...todas) : 0;
+      if (!precio) continue;
+      results.push({
+        nombre: String(item.title ?? ""),
+        precio,
+        categoria: item.product_type || null,
+        url,
+        imagen: item.images?.[0]?.src ?? null,
+      });
+    }
+    if (nuevos === 0) break;
+  }
+  return results;
+}
+
+// ─── WooCommerce (Store API pública) ─────────────────────────────────────────
+async function scrapeWoo(base: string): Promise<Producto[]> {
+  const results: Producto[] = [];
+  const vistos = new Set<string>();
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    let res: Response;
+    try {
+      res = await fetchWithRetry(`${base}/wp-json/wc/store/v1/products?per_page=100&page=${page}`);
+    } catch {
+      break;
+    }
+    const data = await res.json();
+    const items: any[] = Array.isArray(data) ? data : [];
+    if (!items.length) break;
+
+    let nuevos = 0;
+    for (const item of items) {
+      const url = item.permalink ?? `${base}/?p=${item.id}`;
+      if (vistos.has(url)) continue;
+      vistos.add(url);
+      nuevos++;
+
+      // La Store API devuelve precios en unidades menores (centavos)
+      const minorUnit = Number(item.prices?.currency_minor_unit ?? 2);
+      const raw = Number(item.prices?.price ?? 0);
+      const precio = raw / Math.pow(10, minorUnit);
+      if (!precio) continue;
+      results.push({
+        nombre: String(item.name ?? ""),
+        precio,
+        categoria: item.categories?.[0]?.name ?? null,
+        url,
+        imagen: item.images?.[0]?.src ?? null,
+      });
+    }
+    if (nuevos === 0) break;
+  }
+  return results;
+}
+
 // ─── MercadoLibre (por término de búsqueda) ──────────────────────────────────
 async function scrapeML(termino: string): Promise<Producto[]> {
   const results: Producto[] = [];
@@ -178,6 +261,14 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
   if (plataforma === "empretienda") {
     return { productos: await scrapeEmpretienda(base), plataformaDetectada: "empretienda" };
   }
+  if (plataforma === "shopify") {
+    const productos = await scrapeShopify(base);
+    if (productos.length) return { productos, plataformaDetectada: "shopify" };
+  }
+  if (plataforma === "woocommerce") {
+    const productos = await scrapeWoo(base);
+    if (productos.length) return { productos, plataformaDetectada: "woocommerce" };
+  }
   if (plataforma === "tiendanube") {
     const productos = await scrapeTiendanube(base);
     if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
@@ -201,6 +292,20 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
     }
   }
 
+  // Intentar Shopify
+  if (plataforma !== "shopify") {
+    try {
+      const res = await fetchWithRetry(`${base}/products.json?limit=1`);
+      const data = await res.json();
+      if (Array.isArray(data.products)) {
+        const productos = await scrapeShopify(base);
+        if (productos.length) return { productos, plataformaDetectada: "shopify" };
+      }
+    } catch (e: any) {
+      detalle = detalle ?? e?.message;
+    }
+  }
+
   // Intentar Empretienda
   try {
     const res = await fetchWithRetry(`${base}/catalog/api/products?per_page=1&page=1`);
@@ -211,6 +316,20 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
     }
   } catch (e: any) {
     detalle = detalle ?? e?.message;
+  }
+
+  // Intentar WooCommerce (Store API pública)
+  if (plataforma !== "woocommerce") {
+    try {
+      const res = await fetchWithRetry(`${base}/wp-json/wc/store/v1/products?per_page=1`);
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const productos = await scrapeWoo(base);
+        if (productos.length) return { productos, plataformaDetectada: "woocommerce" };
+      }
+    } catch (e: any) {
+      detalle = detalle ?? e?.message;
+    }
   }
 
   return { productos: [], plataformaDetectada: plataforma, detalle };

@@ -249,6 +249,22 @@ async function scrapeML(termino: string): Promise<Producto[]> {
   return results;
 }
 
+// ─── Detección por huellas en el HTML de la portada ──────────────────────────
+async function sniffPlataforma(base: string): Promise<string | null> {
+  try {
+    const res = await fetchWithRetry(base, { headers: { Accept: "text/html" } }, 2);
+    const html = (await res.text()).slice(0, 200_000).toLowerCase();
+    if (html.includes("cdn.shopify.com") || html.includes("shopify.theme") || html.includes("myshopify.com")) return "shopify";
+    if (html.includes("tiendanube") || html.includes("nuvemshop") || html.includes("tienda-nube")) return "tiendanube";
+    if (html.includes("woocommerce") || html.includes("wp-content/plugins/woocommerce")) return "woocommerce";
+    if (html.includes("empretienda")) return "empretienda";
+    if (html.includes("wixstatic.com") || html.includes("wix.com")) return "wix";
+    if (html.includes("vtex")) return "vtex";
+    if (html.includes("mercadoshops")) return "mercadoshops";
+  } catch {}
+  return null;
+}
+
 // ─── Auto-detect platform ─────────────────────────────────────────────────────
 async function detectAndScrape(url: string, plataforma: string): Promise<{ productos: Producto[]; plataformaDetectada: string; detalle?: string }> {
   // Normalizar a la raíz del dominio: si guardaron la URL con path
@@ -276,6 +292,29 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
   }
 
   let detalle: string | undefined;
+
+  // Plataforma desconocida: oler el HTML de la portada para ir directo
+  const olfateada = await sniffPlataforma(base);
+  if (olfateada === "shopify") {
+    const productos = await scrapeShopify(base);
+    if (productos.length) return { productos, plataformaDetectada: "shopify" };
+  } else if (olfateada === "woocommerce") {
+    const productos = await scrapeWoo(base);
+    if (productos.length) return { productos, plataformaDetectada: "woocommerce" };
+  } else if (olfateada === "tiendanube") {
+    const productos = await scrapeTiendanube(base);
+    if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
+  } else if (olfateada === "empretienda") {
+    const productos = await scrapeEmpretienda(base);
+    if (productos.length) return { productos, plataformaDetectada: "empretienda" };
+  } else if (olfateada) {
+    // Plataforma identificada pero sin API pública que podamos leer
+    return {
+      productos: [],
+      plataformaDetectada: olfateada,
+      detalle: `plataforma ${olfateada} — no tiene catálogo público accesible`,
+    };
+  }
 
   // Intentar Tiendanube primero (incluso para dominios propios),
   // salvo que ya lo hayamos intentado directo arriba
@@ -467,10 +506,15 @@ export async function POST(req: NextRequest) {
 
     if (!productos.length) {
       const esBloqueo = detalle?.includes("403") || detalle?.includes("401");
-      const msg = esBloqueo
-        ? `La tienda bloquea el acceso automático (${detalle}). Su protección anti-bots no permite leer el catálogo desde un servidor.`
-        : `No se encontraron productos${detalle ? ` (${detalle})` : ""}. La tienda puede no tener API pública o el formato no es compatible.`;
-      return NextResponse.json({ error: msg }, { status: 422 });
+      let msg: string;
+      if (detalle?.startsWith("plataforma ")) {
+        msg = `Detectamos la ${detalle}. Si la tienda vende en MercadoLibre, seguila desde la pestaña Búsquedas.`;
+      } else if (esBloqueo) {
+        msg = `La tienda bloquea el acceso automático (${detalle}). Su protección anti-bots no permite leer el catálogo desde un servidor.`;
+      } else {
+        msg = `No se encontraron productos${detalle ? ` (${detalle})` : ""}. La tienda puede no tener API pública o el formato no es compatible.`;
+      }
+      return NextResponse.json({ error: msg, plataforma: plataformaDetectada }, { status: 422 });
     }
 
     const total = await bulkUpsert(Number(tiendaId), productos);

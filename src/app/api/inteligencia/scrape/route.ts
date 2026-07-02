@@ -278,6 +278,34 @@ async function sniffPlataforma(base: string): Promise<string | null> {
   return null;
 }
 
+// ─── Diagnóstico: sondea cada endpoint y reporta qué devuelve ────────────────
+async function diagnosticar(base: string): Promise<string> {
+  const probar = async (ruta: string): Promise<string> => {
+    try {
+      const res = await fetch(`${base}${ruta}`, {
+        signal: AbortSignal.timeout(12000),
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          Accept: "application/json, text/html, */*",
+          "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+        },
+      });
+      const ct = (res.headers.get("content-type") ?? "").split(";")[0];
+      return `${res.status} ${ct || "?"}`;
+    } catch (e: any) {
+      return e?.name === "TimeoutError" ? "timeout" : (e?.message ?? "error");
+    }
+  };
+  const [home, tn1, tn2, empre, woo] = await Promise.all([
+    probar("/"),
+    probar("/productos.json?per_page=1"),
+    probar("/products.json?limit=1"),
+    probar("/catalog/api/products?per_page=1"),
+    probar("/wp-json/wc/store/v1/products?per_page=1"),
+  ]);
+  return `home:${home} · /productos.json:${tn1} · /products.json:${tn2} · empretienda:${empre} · woo:${woo}`;
+}
+
 // ─── Auto-detect platform ─────────────────────────────────────────────────────
 async function detectAndScrape(url: string, plataforma: string): Promise<{ productos: Producto[]; plataformaDetectada: string; detalle?: string }> {
   // Normalizar a la raíz del dominio: si guardaron la URL con path
@@ -380,7 +408,9 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
     }
   }
 
-  return { productos: [], plataformaDetectada: plataforma, detalle };
+  // Nada funcionó: correr diagnóstico para reportar qué devuelve cada endpoint
+  const diag = await diagnosticar(base);
+  return { productos: [], plataformaDetectada: plataforma, detalle: detalle ? `${detalle} | ${diag}` : diag };
 }
 
 // ─── Ensure unique constraint exists ─────────────────────────────────────────

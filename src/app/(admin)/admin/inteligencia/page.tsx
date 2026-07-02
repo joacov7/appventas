@@ -2,19 +2,20 @@
 
 import { useEffect, useState } from "react";
 import { TrendingDown, TrendingUp, Store, Search, Plus, Trash2, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Bell, Package } from "lucide-react";
+import { PosicionTab } from "./PosicionTab";
 
 type Busqueda = { id: number; termino: string; plataforma: string; activa: boolean; umbral_alerta: number };
-type Tienda = { id: number; nombre: string; url: string; plataforma: string; activa: boolean; ultimo_scrape: string; total_productos: number };
+type Tienda = { id: number; nombre: string; url: string; plataforma: string; activa: boolean; ultimo_scrape: string; total_productos: number; bajadas: number };
 type Producto = {
   id: number; nombre: string; precio: number | null; precio_anterior: number | null;
   categoria: string | null; url: string; imagen: string | null;
   ultima_vez: string; tienda_nombre: string; tienda_url: string; plataforma: string;
 };
 
-const TABS = ["Búsquedas", "Tiendas", "Productos"] as const;
+const TABS = ["Búsquedas", "Tiendas", "Productos", "Mi posición"] as const;
 type Tab = typeof TABS[number];
 
-const PLATAFORMAS = ["todas", "tiendanube", "empretienda"];
+const PLATAFORMAS = ["todas", "tiendanube", "empretienda", "shopify", "woocommerce", "mercadolibre"];
 
 function pctCambio(prod: Producto) {
   if (!prod.precio || !prod.precio_anterior) return null;
@@ -32,11 +33,18 @@ export default function InteligenciaPage() {
   const [tiendas, setTiendas] = useState<Tienda[]>([]);
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(false);
+  const [scraping, setScraping] = useState<number | null>(null);
+  const [scrapeMsg, setScrapeMsg] = useState<string | null>(null);
 
   // Form nueva búsqueda
   const [termino, setTermino] = useState("");
   const [plataforma, setPlataforma] = useState("todas");
   const [umbral, setUmbral] = useState(10);
+
+  // ML scrape by term
+  const [mlTermino, setMlTermino] = useState("");
+  const [mlScraping, setMlScraping] = useState(false);
+  const [mlMsg, setMlMsg] = useState<string | null>(null);
 
   // Filtros productos
   const [filtroBusqueda, setFiltroBusqueda] = useState("");
@@ -86,6 +94,45 @@ export default function InteligenciaPage() {
     fetchBusquedas();
   }
 
+  async function scrapearTienda(id: number) {
+    setScraping(id);
+    setScrapeMsg(null);
+    try {
+      const r = await fetch("/api/inteligencia/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tiendaId: id }),
+      });
+      const data = await r.json();
+      setScrapeMsg(r.ok ? `✓ ${data.total} productos actualizados` : `✗ ${data.error}`);
+      fetchTiendas();
+    } catch {
+      setScrapeMsg("✗ Error de red");
+    } finally {
+      setScraping(null);
+    }
+  }
+
+  async function scrapeML() {
+    if (!mlTermino.trim()) return;
+    setMlScraping(true);
+    setMlMsg(null);
+    try {
+      const r = await fetch("/api/inteligencia/scrape", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ termino: mlTermino }),
+      });
+      const data = await r.json();
+      setMlMsg(r.ok ? `✓ ${data.total} productos de MercadoLibre` : `✗ ${data.error}`);
+      fetchTiendas();
+    } catch {
+      setMlMsg("✗ Error de red");
+    } finally {
+      setMlScraping(false);
+    }
+  }
+
   async function eliminarBusqueda(id: number) {
     if (!confirm("¿Eliminar esta búsqueda?")) return;
     await fetch(`/api/inteligencia/busquedas/${id}`, { method: "DELETE" });
@@ -125,7 +172,34 @@ export default function InteligenciaPage() {
       {/* ── Tab: Búsquedas ── */}
       {tab === "Búsquedas" && (
         <div className="space-y-4">
-          {/* Form agregar */}
+          {/* MercadoLibre scrape */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4">
+            <p className="text-sm font-semibold text-yellow-800 mb-1 flex items-center gap-1.5">
+              <Search size={14} /> Buscar precios en MercadoLibre
+            </p>
+            <p className="text-xs text-yellow-600 mb-3">Ingresá un término y traemos hasta 200 resultados de la API pública de ML.</p>
+            <div className="flex gap-2 flex-wrap">
+              <input
+                value={mlTermino}
+                onChange={e => setMlTermino(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && scrapeML()}
+                placeholder="ej: mate calabaza artesanal"
+                className="flex-1 min-w-48 border border-yellow-300 bg-white rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-yellow-400"
+              />
+              <button
+                onClick={scrapeML}
+                disabled={mlScraping || !mlTermino.trim()}
+                className="flex items-center gap-2 bg-yellow-500 hover:bg-yellow-600 disabled:opacity-50 text-white px-4 py-2 rounded-xl text-sm font-medium"
+              >
+                {mlScraping ? <><RefreshCw size={13} className="animate-spin" /> Buscando...</> : "Buscar en ML"}
+              </button>
+            </div>
+            {mlMsg && (
+              <p className={`text-xs mt-2 font-medium ${mlMsg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{mlMsg}</p>
+            )}
+          </div>
+
+          {/* Form agregar búsqueda */}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
             <p className="text-sm font-medium text-gray-700 mb-3">Nueva búsqueda</p>
             <div className="flex gap-2 flex-wrap">
@@ -134,7 +208,7 @@ export default function InteligenciaPage() {
                 onChange={(e) => setTermino(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && agregarBusqueda()}
                 placeholder="ej: mates madera mayorista"
-                className="flex-1 min-w-48 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                className="flex-1 min-w-0 w-full sm:min-w-48 border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
               <select
                 value={plataforma}
@@ -219,6 +293,9 @@ export default function InteligenciaPage() {
               </button>
             </div>
             <p className="text-xs text-gray-400 mt-2">El scraper va a visitar estas tiendas automáticamente en cada corrida y detectar cambios de precio.</p>
+          {scrapeMsg && (
+            <p className={`text-xs mt-2 font-medium ${scrapeMsg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{scrapeMsg}</p>
+          )}
           </div>
 
           <div className="flex justify-between items-center mb-4">
@@ -245,29 +322,45 @@ export default function InteligenciaPage() {
                       <ExternalLink size={15} />
                     </a>
                   </div>
-                  <div className="mt-3 flex items-center gap-3 text-xs text-gray-400">
+                  <div className="mt-3 flex items-center gap-3 text-xs text-gray-400 flex-wrap">
                     <span className="flex items-center gap-1"><Package size={11} /> {t.total_productos} productos</span>
+                    {t.bajadas > 0 && (
+                      <span className="flex items-center gap-1 text-red-500 font-medium">
+                        <TrendingDown size={11} /> {t.bajadas} bajadas
+                      </span>
+                    )}
                     {t.ultimo_scrape && (
                       <span>Scrapeado {new Date(t.ultimo_scrape).toLocaleDateString("es-AR")}</span>
                     )}
+                    <span className="bg-gray-100 px-1.5 py-0.5 rounded-full">{t.plataforma}</span>
                   </div>
-                  <div className="mt-3 flex items-center justify-between">
+                  <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
                     <button
                       onClick={() => { setFiltroTienda(String(t.id)); setTab("Productos"); }}
                       className="text-xs text-emerald-600 hover:underline"
                     >
                       Ver productos →
                     </button>
-                    <button
-                      onClick={async () => {
-                        if (!confirm(`¿Eliminar ${t.nombre}?`)) return;
-                        await fetch(`/api/inteligencia/tiendas/${t.id}`, { method: "DELETE" });
-                        fetchTiendas();
-                      }}
-                      className="text-gray-300 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={14} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => scrapearTienda(t.id)}
+                        disabled={scraping === t.id}
+                        className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-2.5 py-1 rounded-lg"
+                      >
+                        <RefreshCw size={11} className={scraping === t.id ? "animate-spin" : ""} />
+                        {scraping === t.id ? "Scrapeando..." : "Scrapear"}
+                      </button>
+                      <button
+                        onClick={async () => {
+                          if (!confirm(`¿Eliminar ${t.nombre}?`)) return;
+                          await fetch(`/api/inteligencia/tiendas/${t.id}`, { method: "DELETE" });
+                          fetchTiendas();
+                        }}
+                        className="text-gray-300 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -314,7 +407,7 @@ export default function InteligenciaPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-              <table className="w-full text-sm">
+              <div className="overflow-x-auto"><table className="w-full text-sm min-w-[640px]">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr>
                     <th className="px-4 py-3 text-left">Producto</th>
@@ -365,11 +458,14 @@ export default function InteligenciaPage() {
                     );
                   })}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           )}
         </div>
       )}
+
+      {/* ── Tab: Mi posición ── */}
+      {tab === "Mi posición" && <PosicionTab />}
     </div>
   );
 }

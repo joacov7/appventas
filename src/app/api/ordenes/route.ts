@@ -3,6 +3,21 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
 
+async function getTiersFromDB(): Promise<{ min_qty: number; descuento_pct: number }[]> {
+  try {
+    return await (prisma as any).$queryRawUnsafe(
+      `SELECT min_qty, descuento_pct::float FROM precio_tiers WHERE activo = true ORDER BY min_qty ASC`
+    );
+  } catch {
+    return [];
+  }
+}
+
+function getTierDiscount(tiers: { min_qty: number; descuento_pct: number }[], qty: number): number {
+  const applicable = tiers.filter((t) => qty >= t.min_qty).sort((a, b) => b.min_qty - a.min_qty);
+  return applicable[0]?.descuento_pct ?? 0;
+}
+
 const shippingSchema = z.object({
   fullName: z.string().min(1),
   phone: z.string().min(1),
@@ -54,11 +69,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const subtotal = body.items.reduce(
-      (acc, i) => acc + i.unitPrice * i.quantity,
-      0
-    );
-    const total = subtotal; // podés agregar shipping después
+    const priceTiers = await getTiersFromDB();
+
+    // Precio SIEMPRE desde la base — nunca confiar en el unitPrice del cliente
+    const itemsWithPrice = body.items.map((item) => {
+      const variant = variants.find((v) => v.id === item.variantId)!;
+      const basePrice = Number(variant.price);
+      const pct = getTierDiscount(priceTiers, item.quantity);
+      const effectivePrice = pct > 0 ? basePrice * (1 - pct / 100) : basePrice;
+      return { ...item, effectivePrice };
+    });
+
+    const subtotal = itemsWithPrice.reduce((acc, i) => acc + i.effectivePrice * i.quantity, 0);
+    const total = subtotal;
 
     const order = await prisma.order.create({
       data: {
@@ -69,12 +92,12 @@ export async function POST(req: NextRequest) {
         subtotal: subtotal.toString(),
         total: total.toString(),
         items: {
-          create: body.items.map((item) => ({
+          create: itemsWithPrice.map((item) => ({
             variantId: item.variantId,
             productId: variants.find((v) => v.id === item.variantId)!.productId,
             quantity: item.quantity,
-            unitPrice: item.unitPrice.toString(),
-            subtotal: (item.unitPrice * item.quantity).toString(),
+            unitPrice: item.effectivePrice.toString(),
+            subtotal: (item.effectivePrice * item.quantity).toString(),
           })),
         },
       },

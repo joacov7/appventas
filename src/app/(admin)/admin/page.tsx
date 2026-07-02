@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { Package, ShoppingBag, DollarSign, Users } from "lucide-react";
+import { BriefingCard } from "@/components/admin/BriefingCard";
 
 async function getStats() {
   try {
@@ -39,6 +40,9 @@ export default async function AdminDashboard() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-8">Dashboard</h1>
+      <div className="mb-6">
+        <BriefingCard />
+      </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
         {stats.map(({ label, value, icon: Icon, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-gray-100 p-5 flex items-center gap-4">

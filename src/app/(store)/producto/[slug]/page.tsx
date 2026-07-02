@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Image from "next/image";
-import { ShoppingCart, ArrowLeft, Eye, Flame, Shield, Truck, CreditCard } from "lucide-react";
+import { ShoppingCart, ArrowLeft, Eye, Flame, Shield, Truck, CreditCard, X, ChevronLeft, ChevronRight, ZoomIn } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -12,6 +12,10 @@ import { useCartStore } from "@/store/cartStore";
 import { useViewers } from "@/hooks/useViewers";
 import { WhatsAppButton, buildWaLink } from "@/components/store/WhatsAppButton";
 import type { ProductPublic, ProductVariantPublic } from "@/types/product";
+import { VolumePricing } from "@/components/store/VolumePricing";
+import { SubscribeReposicion } from "@/components/store/SubscribeReposicion";
+import { CuotasModal } from "@/components/store/CuotasModal";
+import { useTiers } from "@/hooks/useTiers";
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -21,8 +25,13 @@ export default function ProductPage() {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariantPublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [added, setAdded] = useState(false);
+  const [activeImg, setActiveImg] = useState(0);
+  const [lightbox, setLightbox] = useState<number | null>(null);
   const addItem = useCartStore((s) => s.addItem);
   const viewers = useViewers(slug);
+  const tiers = useTiers();
+  const [quantity, setQuantity] = useState(1);
+  const [showCuotas, setShowCuotas] = useState(false);
 
   useEffect(() => {
     fetch(`/api/productos/${slug}`)
@@ -35,6 +44,11 @@ export default function ProductPage() {
       });
   }, [slug]);
 
+  function handleVariantSelect(v: ProductVariantPublic) {
+    setSelectedVariant(v);
+    setActiveImg(0); // reset to first image when switching variant
+  }
+
   function handleAddToCart() {
     if (!product || !selectedVariant) return;
     addItem({
@@ -46,10 +60,33 @@ export default function ProductPage() {
       imageUrl: selectedVariant.imageUrl ?? product.imageUrls[0] ?? null,
       stock: selectedVariant.stock,
       slug: product.slug,
+      quantity,
     });
     setAdded(true);
     setTimeout(() => setAdded(false), 2000);
   }
+
+  // Build image list: variant image first (if any), then product images
+  const allImages = [
+    ...(selectedVariant?.imageUrl ? [selectedVariant.imageUrl] : []),
+    ...(product?.imageUrls ?? []).filter((u) => u !== selectedVariant?.imageUrl),
+  ];
+  if (allImages.length === 0) allImages.push("/images/placeholder.png");
+
+  const closeLightbox = useCallback(() => setLightbox(null), []);
+  const prevLightbox = useCallback(() => setLightbox((i) => (i !== null ? (i - 1 + allImages.length) % allImages.length : null)), [allImages.length]);
+  const nextLightbox = useCallback(() => setLightbox((i) => (i !== null ? (i + 1) % allImages.length : null)), [allImages.length]);
+
+  useEffect(() => {
+    if (lightbox === null) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") closeLightbox();
+      if (e.key === "ArrowLeft") prevLightbox();
+      if (e.key === "ArrowRight") nextLightbox();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox, closeLightbox, prevLightbox, nextLightbox]);
 
   if (loading) {
     return (
@@ -68,21 +105,87 @@ export default function ProductPage() {
     );
   }
 
-  const mainImage = selectedVariant?.imageUrl ?? product.imageUrls[0] ?? "/images/placeholder.png";
   const hasStock = (selectedVariant?.stock ?? 0) > 0;
   const isLowStock = hasStock && (selectedVariant?.stock ?? 0) <= LOW_STOCK_THRESHOLD;
-  const cuotas = selectedVariant ? formatCuotas(selectedVariant.price) : null;
+  const displayPrice = selectedVariant?.price ?? 0;
+  const cuotas = displayPrice ? formatCuotas(displayPrice) : null;
 
   return (
+    <>
+    {showCuotas && selectedVariant && (
+      <CuotasModal price={displayPrice} onClose={() => setShowCuotas(false)} />
+    )}
+    {/* Lightbox */}
+    {lightbox !== null && (
+      <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center" onClick={closeLightbox}>
+        <button onClick={closeLightbox} className="absolute top-4 right-4 text-white/70 hover:text-white p-2">
+          <X size={28} />
+        </button>
+        {allImages.length > 1 && (
+          <>
+            <button onClick={(e) => { e.stopPropagation(); prevLightbox(); }}
+              className="absolute left-4 text-white/70 hover:text-white p-2">
+              <ChevronLeft size={36} />
+            </button>
+            <button onClick={(e) => { e.stopPropagation(); nextLightbox(); }}
+              className="absolute right-4 text-white/70 hover:text-white p-2">
+              <ChevronRight size={36} />
+            </button>
+          </>
+        )}
+        <div className="relative w-full max-w-3xl max-h-[85vh] aspect-square mx-16" onClick={(e) => e.stopPropagation()}>
+          <Image src={allImages[lightbox]} alt={product.name} fill className="object-contain" sizes="90vw" />
+        </div>
+        {allImages.length > 1 && (
+          <div className="absolute bottom-4 flex gap-2">
+            {allImages.map((_, i) => (
+              <button key={i} onClick={(e) => { e.stopPropagation(); setLightbox(i); }}
+                className={`w-2 h-2 rounded-full transition-colors ${i === lightbox ? "bg-white" : "bg-white/40"}`} />
+            ))}
+          </div>
+        )}
+      </div>
+    )}
+
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <Link href="/productos" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900 mb-6">
         <ArrowLeft size={16} /> Volver al catálogo
       </Link>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {/* Imagen */}
-        <div className="relative aspect-square rounded-2xl overflow-hidden bg-gray-50">
-          <Image src={mainImage} alt={product.name} fill className="object-cover" priority sizes="(max-width: 768px) 100vw, 50vw" />
+        {/* Galería */}
+        <div className="flex flex-col gap-3">
+          {/* Imagen principal */}
+          <div
+            className="relative aspect-square rounded-2xl overflow-hidden bg-gray-50 cursor-zoom-in group"
+            onClick={() => setLightbox(activeImg)}
+          >
+            <Image
+              src={allImages[activeImg]}
+              alt={product.name}
+              fill className="object-cover transition-transform duration-300 group-hover:scale-105"
+              priority sizes="(max-width: 768px) 100vw, 50vw"
+            />
+            <div className="absolute bottom-3 right-3 bg-black/40 text-white rounded-lg p-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <ZoomIn size={16} />
+            </div>
+          </div>
+          {/* Miniaturas */}
+          {allImages.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {allImages.map((img, i) => (
+                <button
+                  key={i}
+                  onClick={() => setActiveImg(i)}
+                  className={`relative w-16 h-16 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${
+                    i === activeImg ? "border-emerald-500" : "border-transparent hover:border-gray-300"
+                  }`}
+                >
+                  <Image src={img} alt={`${product.name} ${i + 1}`} fill className="object-cover" sizes="64px" />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Info */}
@@ -96,14 +199,24 @@ export default function ProductPage() {
           {/* Precio y cuotas */}
           {selectedVariant && (
             <div className="space-y-1">
-              <p className="text-3xl font-bold text-emerald-700">{formatPrice(selectedVariant.price)}</p>
-              {cuotas && hasStock && (
-                <p className="text-sm text-gray-600">
-                  {cuotas.cuotas} cuotas de{" "}
-                  <span className="font-semibold text-emerald-600">{cuotas.valorCuota}</span>{" "}
-                  <span className="text-emerald-600 font-medium">sin interés</span>
-                </p>
-              )}
+              <div className="flex items-baseline gap-3">
+                <p className="text-3xl font-bold text-emerald-700">{formatPrice(displayPrice)}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                {cuotas && hasStock && (
+                  <p className="text-sm text-gray-600">
+                    {cuotas.cuotas} cuotas de{" "}
+                    <span className="font-semibold text-emerald-600">{cuotas.valorCuota}</span>{" "}
+                    <span className="text-emerald-600 font-medium">sin interés</span>
+                  </p>
+                )}
+                <button
+                  onClick={() => setShowCuotas(true)}
+                  className="text-xs text-blue-600 hover:underline font-medium"
+                >
+                  Ver cuotas
+                </button>
+              </div>
             </div>
           )}
 
@@ -127,7 +240,7 @@ export default function ProductPage() {
                 {product.variants.map((v) => (
                   <button
                     key={v.id}
-                    onClick={() => setSelectedVariant(v)}
+                    onClick={() => handleVariantSelect(v)}
                     className={`px-4 py-2 rounded-xl text-sm border transition-all ${
                       selectedVariant?.id === v.id
                         ? "border-emerald-500 bg-emerald-50 text-emerald-700 font-medium"
@@ -140,6 +253,30 @@ export default function ProductPage() {
                   </button>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Cantidad y precios por volumen */}
+          {selectedVariant && hasStock && (
+            <div className="space-y-3">
+              {/* Quantity selector */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Cantidad</p>
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden">
+                    <button
+                      onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                      className="px-3 py-2 text-gray-600 hover:bg-gray-50 text-lg font-medium"
+                    >−</button>
+                    <span className="px-4 py-2 text-sm font-semibold text-gray-900 min-w-[40px] text-center">{quantity}</span>
+                    <button
+                      onClick={() => setQuantity((q) => Math.min(selectedVariant.stock, q + 1))}
+                      className="px-3 py-2 text-gray-600 hover:bg-gray-50 text-lg font-medium"
+                    >+</button>
+                  </div>
+                </div>
+              </div>
+              <VolumePricing basePrice={selectedVariant.price} />
             </div>
           )}
 
@@ -175,6 +312,15 @@ export default function ProductPage() {
             />
           </div>
 
+          {selectedVariant && hasStock && (
+            <SubscribeReposicion
+              variantId={selectedVariant.id}
+              productName={product.name}
+              variantName={selectedVariant.name}
+              productSlug={product.slug}
+            />
+          )}
+
           {/* Garantías */}
           <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
             {[
@@ -192,5 +338,6 @@ export default function ProductPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

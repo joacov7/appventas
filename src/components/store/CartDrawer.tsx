@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { X, ShoppingBag, Trash2, Plus, Minus, Tag, CheckCircle, MessageCircle } from "lucide-react";
+import { useState, useRef } from "react";
+import { X, ShoppingBag, Trash2, Plus, Minus, Tag, CheckCircle, MessageCircle, Mail } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { formatPrice } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import Image from "next/image";
 import Link from "next/link";
+import { CartUpsell } from "./CartUpsell";
+import { useTiers, getCartTier, getNextCartTier, applyTier } from "@/hooks/useTiers";
 
 interface CartDrawerProps {
   open: boolean;
@@ -29,9 +31,23 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const [couponError, setCouponError] = useState("");
   const [couponLoading, setCouponLoading] = useState(false);
 
+  const [cartEmail, setCartEmail] = useState("");
+  const [cartEmailSaved, setCartEmailSaved] = useState(false);
+  const cartEmailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const tiers = useTiers();
+
   const subtotal = getTotalPrice();
   const discount = coupon?.discount ?? 0;
-  const total = subtotal - discount;
+
+  // Cart-level wholesale discount
+  const cartQty = items.reduce((acc, i) => acc + i.quantity, 0);
+  const cartMonto = subtotal;
+  const cartTier = getCartTier(tiers, cartQty, cartMonto);
+  const nextInfo = getNextCartTier(tiers, cartQty, cartMonto);
+  const tierDiscount = cartTier ? subtotal * (cartTier.descuento_pct / 100) : 0;
+
+  const total = subtotal - discount - tierDiscount;
 
   async function applyCoupon() {
     if (!couponCode.trim()) return;
@@ -55,6 +71,34 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
     } finally {
       setCouponLoading(false);
     }
+  }
+
+  function handleCartEmailChange(email: string) {
+    setCartEmail(email);
+    setCartEmailSaved(false);
+    if (cartEmailTimerRef.current) clearTimeout(cartEmailTimerRef.current);
+    const trimmed = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) return;
+    cartEmailTimerRef.current = setTimeout(async () => {
+      try {
+        await fetch("/api/carritos-abandonados", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            email: trimmed,
+            items: items.map((i) => ({
+              productName: i.productName,
+              variantName: i.diseno ? `Virola personalizada · ${i.diseno.virolaName}` : i.variantName,
+              quantity: i.quantity,
+              price: i.price,
+              imageUrl: i.diseno?.preview ?? i.imageUrl ?? null,
+            })),
+            total: getTotalPrice(),
+          }),
+        });
+        setCartEmailSaved(true);
+      } catch {}
+    }, 800);
   }
 
   function removeCoupon() {
@@ -135,6 +179,7 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               </div>
             ))
           )}
+          {items.length > 0 && <CartUpsell cartItems={items} />}
         </div>
 
         {/* Footer */}
@@ -173,21 +218,58 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               </div>
             )}
 
+            {/* Nudge mayorista */}
+            {!cartTier && nextInfo && (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 text-xs text-emerald-700">
+                <span>
+                  {nextInfo.missingQty != null
+                    ? <><span className="font-bold">{nextInfo.missingQty} unidades más</span> para {nextInfo.tier.descuento_pct}% OFF en todo el carrito</>
+                    : <><span className="font-bold">{formatPrice(nextInfo.missingMonto ?? 0)} más</span> para {nextInfo.tier.descuento_pct}% OFF en todo el carrito</>}
+                </span>
+              </div>
+            )}
+            {cartTier && (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-2 text-xs text-emerald-700 font-medium">
+                🎉 Descuento mayorista {cartTier.descuento_pct}% aplicado a todo el carrito
+              </div>
+            )}
+
             {/* Totales */}
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-gray-600">
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotal)}</span>
               </div>
+              {tierDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-medium">
+                  <span>Dto. mayorista {cartTier?.descuento_pct}%</span>
+                  <span>− {formatPrice(tierDiscount)}</span>
+                </div>
+              )}
               {discount > 0 && (
                 <div className="flex justify-between text-emerald-600 font-medium">
-                  <span>Descuento</span>
+                  <span>Cupón</span>
                   <span>− {formatPrice(discount)}</span>
                 </div>
               )}
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="font-semibold text-gray-900">Total</span>
                 <span className="text-xl font-bold">{formatPrice(total)}</span>
+              </div>
+            </div>
+
+            {/* Captura de email para carrito abandonado */}
+            <div className="space-y-1">
+              <div className="flex items-center border border-gray-200 rounded-xl px-3 gap-2">
+                <Mail size={14} className="text-gray-400 shrink-0" />
+                <input
+                  type="email"
+                  value={cartEmail}
+                  onChange={(e) => handleCartEmailChange(e.target.value)}
+                  placeholder="Tu email para guardar el carrito"
+                  className="flex-1 py-2 text-sm text-gray-900 outline-none bg-transparent"
+                />
+                {cartEmailSaved && <CheckCircle size={14} className="text-emerald-500 shrink-0" />}
               </div>
             </div>
 

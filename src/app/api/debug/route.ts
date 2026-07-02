@@ -1,16 +1,31 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isAdmin } from "@/lib/admin-auth";
 
 export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  const checks: Record<string, any> = {
+    DATABASE_URL: !!process.env.DATABASE_URL,
+    ADMIN_SECRET: !!process.env.ADMIN_SECRET,
+  };
+
   try {
-    const url = process.env.DATABASE_URL ?? "NOT SET";
-    const host = url.match(/@([^/]+)\//)?.[1] ?? "unknown";
-    await prisma.$queryRaw`SELECT 1`;
-    const tables = await prisma.$queryRaw<{tablename: string}[]>`
-      SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename
-    `;
-    return NextResponse.json({ host, tables: tables.map(t => t.tablename) });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) });
+    await (prisma as any).$queryRawUnsafe("SELECT 1");
+    checks.db_connection = "ok";
+  } catch (e: any) {
+    checks.db_connection = e?.message ?? "error";
   }
+
+  try {
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name='virolas'"
+    );
+    checks.virolas_table = rows.length > 0 ? "exists" : "missing";
+  } catch (e: any) {
+    checks.virolas_table = e?.message ?? "error";
+  }
+
+  return NextResponse.json(checks);
 }

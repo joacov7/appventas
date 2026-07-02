@@ -119,6 +119,296 @@ export async function sendOrderConfirmationToCustomer(data: OrderEmailData) {
   });
 }
 
+// ── Carrito abandonado ────────────────────────────────────────────────────────
+
+interface CartItem {
+  productName: string;
+  variantName?: string;
+  quantity: number;
+  price: number;
+  imageUrl?: string | null;
+}
+
+function cartItemsHtml(items: CartItem[]) {
+  return items.map((i) => `
+    <tr>
+      <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;">
+        <strong style="color:#111827;">${i.productName}</strong>
+        ${i.variantName ? `<br/><span style="color:#6b7280;font-size:13px;">${i.variantName}</span>` : ""}
+      </td>
+      <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;text-align:center;color:#374151;">×${i.quantity}</td>
+      <td style="padding:10px 12px;border-bottom:1px solid #f3f4f6;text-align:right;font-weight:600;color:#059669;">${formatPrice(i.price * i.quantity)}</td>
+    </tr>
+  `).join("");
+}
+
+export async function sendAbandonedCartEmail({
+  email,
+  items,
+  total,
+  etapa,
+  couponCode,
+}: {
+  email: string;
+  items: CartItem[];
+  total: number;
+  etapa: "2h" | "24h";
+  couponCode?: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+  const cartUrl = `${appUrl}/checkout`;
+
+  const es24h = etapa === "24h";
+  const asunto = es24h
+    ? `⏰ Última oportunidad — tu carrito te espera`
+    : `🛒 Olvidaste algo en tu carrito`;
+
+  const cuponHtml = es24h && couponCode ? `
+    <div style="margin:24px 0;background:#fef3c7;border:2px dashed #f59e0b;border-radius:12px;padding:20px;text-align:center;">
+      <p style="margin:0 0 8px;color:#92400e;font-size:14px;">¡Un regalo para que vuelvas!</p>
+      <p style="margin:0 0 4px;font-size:28px;font-weight:900;letter-spacing:4px;color:#b45309;">${couponCode}</p>
+      <p style="margin:0;color:#92400e;font-size:13px;">Usá este cupón en el checkout y llevate un descuento especial</p>
+    </div>
+  ` : "";
+
+  await getResend().emails.send({
+    from: "AppVentas <onboarding@resend.dev>",
+    to: email,
+    subject: asunto,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+        <div style="background:#059669;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">
+            ${es24h ? "⏰ Tu carrito está por vencer" : "🛒 Dejaste algo en tu carrito"}
+          </h1>
+          <p style="color:#d1fae5;margin:8px 0 0;font-size:14px;">
+            ${es24h ? "Es tu última oportunidad de completar tu compra" : "Todavía tenés tiempo de completar tu pedido"}
+          </p>
+        </div>
+
+        <div style="padding:32px;">
+          <p style="color:#374151;font-size:15px;margin:0 0 24px;">
+            ${es24h
+              ? "Notamos que no completaste tu compra. Los productos en tu carrito tienen stock limitado."
+              : "¡Hola! Guardamos tu carrito por si lo necesitás. Podés completar tu compra en cualquier momento."}
+          </p>
+
+          ${cuponHtml}
+
+          <h2 style="color:#111827;font-size:15px;margin:0 0 12px;">Tu carrito</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;margin-bottom:16px;">
+            <tbody>${cartItemsHtml(items)}</tbody>
+            <tfoot>
+              <tr>
+                <td colspan="2" style="padding:12px;text-align:right;font-weight:700;color:#111827;">Total:</td>
+                <td style="padding:12px;text-align:right;font-weight:700;font-size:18px;color:#059669;">${formatPrice(total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${cartUrl}" style="display:inline-block;background:#059669;color:#fff;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+              Completar mi compra →
+            </a>
+          </div>
+
+          <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
+            Si no querés recibir más emails, ignorá este mensaje.<br/>
+            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+// ── Newsletter: bienvenida ────────────────────────────────────────────────────
+
+export async function sendWelcomeEmail({
+  email,
+  nombre,
+  couponCode,
+}: {
+  email: string;
+  nombre?: string | null;
+  couponCode: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+
+  await getResend().emails.send({
+    from: "AppVentas <onboarding@resend.dev>",
+    to: email,
+    subject: "🎁 ¡Bienvenido/a! Acá va tu cupón de descuento",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+        <div style="background:#059669;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:24px;">¡Gracias por suscribirte!</h1>
+          <p style="color:#d1fae5;margin:8px 0 0;">Ya sos parte de nuestra comunidad</p>
+        </div>
+        <div style="padding:32px;">
+          <p style="color:#374151;font-size:15px;">
+            Hola${nombre ? ` <strong>${nombre}</strong>` : ""}! Como regalo de bienvenida, te regalamos un cupón exclusivo de descuento.
+          </p>
+          <div style="margin:24px 0;background:#f0fdf4;border:2px dashed #059669;border-radius:12px;padding:24px;text-align:center;">
+            <p style="margin:0 0 8px;color:#065f46;font-size:14px;">Tu cupón de bienvenida:</p>
+            <p style="margin:0 0 4px;font-size:32px;font-weight:900;letter-spacing:4px;color:#059669;">${couponCode}</p>
+            <p style="margin:0;color:#065f46;font-size:13px;">Ingresalo en el checkout para obtener tu descuento</p>
+          </div>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${appUrl}/productos" style="display:inline-block;background:#059669;color:#fff;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+              Ver productos →
+            </a>
+          </div>
+          <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
+            Si no querés recibir más emails, ignorá este mensaje.<br/>
+            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+// ── Reactivación 30 días ──────────────────────────────────────────────────────
+
+export async function sendReactivationEmail({
+  email,
+  couponCode,
+  daysSinceOrder,
+}: {
+  email: string;
+  couponCode: string;
+  daysSinceOrder: number;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+
+  await getResend().emails.send({
+    from: "AppVentas <onboarding@resend.dev>",
+    to: email,
+    subject: "💛 ¡Te extrañamos! Un descuento especial para vos",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+        <div style="background:#111827;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">💛 ¡Hace ${daysSinceOrder}+ días que no te vemos!</h1>
+          <p style="color:#9ca3af;margin:8px 0 0;font-size:14px;">Te tenemos un regalo para que vuelvas</p>
+        </div>
+        <div style="padding:32px;">
+          <p style="color:#374151;font-size:15px;">
+            Hola! Notamos que hace un tiempo que no visitás nuestra tienda. Queremos que vuelvas con un descuento especial para tu próxima compra.
+          </p>
+          <div style="margin:24px 0;background:#fef3c7;border:2px dashed #f59e0b;border-radius:12px;padding:24px;text-align:center;">
+            <p style="margin:0 0 8px;color:#92400e;font-size:14px;">Tu cupón exclusivo:</p>
+            <p style="margin:0 0 4px;font-size:32px;font-weight:900;letter-spacing:4px;color:#b45309;">${couponCode}</p>
+            <p style="margin:0;color:#92400e;font-size:13px;">Descuento especial por tiempo limitado</p>
+          </div>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${appUrl}/productos" style="display:inline-block;background:#059669;color:#fff;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+              Ver novedades →
+            </a>
+          </div>
+          <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
+            Si no querés recibir más emails, ignorá este mensaje.<br/>
+            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+// ── Suscripciones: recordatorio de reposición ────────────────────────────────
+
+export async function sendReposicionEmail({
+  email,
+  productName,
+  variantName,
+  quantity,
+  frecuenciaDias,
+  buyLink,
+}: {
+  email: string;
+  productName: string;
+  variantName: string;
+  quantity: number;
+  frecuenciaDias: number;
+  buyLink: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+
+  await getResend().emails.send({
+    from: "AppVentas <onboarding@resend.dev>",
+    to: email,
+    subject: `🔄 Es hora de reponer: ${productName}`,
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+        <div style="background:#059669;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">🔄 ¡Hora de reponer!</h1>
+          <p style="color:#d1fae5;margin:8px 0 0;font-size:14px;">Han pasado ${frecuenciaDias} días desde tu última compra</p>
+        </div>
+        <div style="padding:32px;">
+          <p style="color:#374151;font-size:15px;">
+            Hola! Te recordamos que es momento de reponer <strong>${productName}</strong>${variantName ? ` (${variantName})` : ""}.
+          </p>
+          <div style="margin:24px 0;background:#f9fafb;border-radius:12px;padding:20px;">
+            <p style="margin:0 0 4px;font-size:13px;color:#6b7280;">Producto</p>
+            <p style="margin:0;font-size:16px;font-weight:700;color:#111827;">${productName}</p>
+            ${variantName ? `<p style="margin:4px 0 0;font-size:13px;color:#6b7280;">${variantName}</p>` : ""}
+            <p style="margin:8px 0 0;font-size:13px;color:#6b7280;">Cantidad habitual: <strong>${quantity} unid.</strong></p>
+          </div>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${buyLink}" style="display:inline-block;background:#059669;color:#fff;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+              Comprar ahora →
+            </a>
+          </div>
+          <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
+            Recibís este email porque suscribiste la reposición automática de este producto.<br/>
+            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+          </p>
+        </div>
+      </div>
+    `,
+  });
+}
+
+// ── Referidos: notificación al referidor ─────────────────────────────────────
+
+export async function sendReferralNotification({
+  referrerEmail,
+  codigo,
+}: {
+  referrerEmail: string;
+  codigo: string;
+}) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+
+  await getResend().emails.send({
+    from: "AppVentas <onboarding@resend.dev>",
+    to: referrerEmail,
+    subject: "🎉 ¡Alguien usó tu link de referido!",
+    html: `
+      <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#fff;">
+        <div style="background:#059669;padding:32px;text-align:center;">
+          <h1 style="color:#fff;margin:0;font-size:22px;">🎉 ¡Tu link funcionó!</h1>
+          <p style="color:#d1fae5;margin:8px 0 0;">Alguien compró usando tu código de referido</p>
+        </div>
+        <div style="padding:32px;">
+          <p style="color:#374151;font-size:15px;">
+            ¡Excelente! Alguien usó tu código <strong style="color:#059669;letter-spacing:2px;">${codigo}</strong> y realizó una compra.
+          </p>
+          <p style="color:#374151;font-size:15px;margin-top:16px;">
+            Seguí compartiendo tu link para acumular más referidos y desbloquear beneficios exclusivos.
+          </p>
+          <div style="text-align:center;margin:24px 0;">
+            <a href="${appUrl}" style="display:inline-block;background:#059669;color:#fff;padding:16px 40px;border-radius:12px;text-decoration:none;font-weight:700;font-size:16px;">
+              Ver mi tienda →
+            </a>
+          </div>
+        </div>
+      </div>
+    `,
+  });
+}
+
 export async function sendNewOrderNotificationToAdmin(data: OrderEmailData) {
   const adminEmail = process.env.ADMIN_EMAIL_TO;
   if (!adminEmail) return;

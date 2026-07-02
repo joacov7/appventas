@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { ShoppingBag, Menu, X, Store } from "lucide-react";
 import { useCartStore } from "@/store/cartStore";
 import { CartDrawer } from "@/components/store/CartDrawer";
@@ -11,6 +12,22 @@ export function Navbar() {
   const [cartOpen, setCartOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const totalItems = useCartStore((s) => s.getTotalItems());
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoAltura, setLogoAltura] = useState(40);
+  const [storeName, setStoreName] = useState("AppVentas");
+  const [textoAlCostado, setTextoAlCostado] = useState("");
+
+  useEffect(() => {
+    fetch("/api/store-config")
+      .then(r => r.json())
+      .then(data => {
+        if (data.logoUrl) setLogoUrl(data.logoUrl);
+        if (data.logoAltura) setLogoAltura(data.logoAltura);
+        if (data.storeName) setStoreName(data.storeName);
+        if (data.textoAlCostado) setTextoAlCostado(data.textoAlCostado);
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <>
@@ -18,8 +35,17 @@ export function Navbar() {
         <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-xl text-gray-900">
-            <Store size={24} className="text-emerald-600" />
-            <span>AppVentas</span>
+            {logoUrl ? (
+              <>
+                <img src={logoUrl} alt={storeName} style={{ height: logoAltura, width: "auto", objectFit: "contain" }} />
+                {textoAlCostado && <span className="font-bold text-gray-900">{textoAlCostado}</span>}
+              </>
+            ) : (
+              <>
+                <Store size={24} className="text-emerald-600" />
+                <span>{storeName}</span>
+              </>
+            )}
           </Link>
 
           {/* Desktop nav */}

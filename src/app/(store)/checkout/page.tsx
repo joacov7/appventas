@@ -5,6 +5,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCartStore } from "@/store/cartStore";
+import { useTiers, getCartTier, applyTier } from "@/hooks/useTiers";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import Image from "next/image";
@@ -45,16 +46,23 @@ function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const couponCode = searchParams.get("cupon");
+  const refCode = searchParams.get("ref");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
+  const [refDiscount, setRefDiscount] = useState(0);
+  const [validatedRefCode, setValidatedRefCode] = useState<string | null>(null);
 
+  const tiers = useTiers();
   const subtotal = getTotalPrice();
+  const cartQty = items.reduce((acc, i) => acc + i.quantity, 0);
+  const cartTier = getCartTier(tiers, cartQty, subtotal);
+  const tierDiscount = cartTier ? subtotal * (cartTier.descuento_pct / 100) : 0;
   const shippingCost = selectedShipping ? Number(selectedShipping.price) : 0;
-  const total = subtotal - couponDiscount + shippingCost;
+  const total = subtotal - couponDiscount - refDiscount - tierDiscount + shippingCost;
 
   const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -75,6 +83,18 @@ function CheckoutContent() {
       body: JSON.stringify({ code: couponCode, subtotal }),
     }).then((r) => r.json()).then((d) => { if (d.discount) setCouponDiscount(d.discount); });
   }, [couponCode, subtotal]);
+
+  useEffect(() => {
+    if (!refCode) return;
+    fetch(`/api/referidos?codigo=${refCode}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.valid) {
+          setValidatedRefCode(d.codigo);
+          setRefDiscount(subtotal * (d.descuentoPct / 100));
+        }
+      });
+  }, [refCode, subtotal]);
 
   async function onSubmit(data: FormData) {
     if (items.length === 0) return;
@@ -102,7 +122,7 @@ function CheckoutContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: i.price })),
+          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: applyTier(i.price, cartTier) })),
           shippingAddress: {
             fullName: data.fullName, phone: data.phone,
             street: data.street, city: data.city,
@@ -128,6 +148,25 @@ function CheckoutContent() {
 
       if (!prefRes.ok) throw new Error("Error al crear preferencia de pago");
       const { initPoint, sandboxInitPoint } = await prefRes.json();
+
+      // mark abandoned cart as converted
+      fetch("/api/carritos-abandonados", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      }).catch(() => {});
+
+      // register referral use
+      if (validatedRefCode) {
+        fetch("/api/referidos", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo: validatedRefCode, emailComprador: data.email, orderId: order.id }),
+        }).catch(() => {});
+      }
+
+      // persist email for referral share on success page
+      sessionStorage.setItem("checkout_email", data.email);
 
       clearCart();
       window.location.href = process.env.NODE_ENV === "production" ? initPoint : (sandboxInitPoint ?? initPoint);
@@ -258,10 +297,22 @@ function CheckoutContent() {
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotal)}</span>
               </div>
+              {tierDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-medium">
+                  <span>Dto. mayorista {cartTier?.descuento_pct}%</span>
+                  <span>− {formatPrice(tierDiscount)}</span>
+                </div>
+              )}
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600">
-                  <span>Descuento ({couponCode})</span>
+                  <span>Cupón ({couponCode})</span>
                   <span>− {formatPrice(couponDiscount)}</span>
+                </div>
+              )}
+              {refDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Referido ({validatedRefCode})</span>
+                  <span>− {formatPrice(refDiscount)}</span>
                 </div>
               )}
               <div className="flex justify-between text-gray-600">

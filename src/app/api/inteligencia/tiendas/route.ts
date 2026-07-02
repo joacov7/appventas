@@ -41,6 +41,9 @@ export async function POST(req: NextRequest) {
 
   url = url.trim().replace(/\/$/, "");
   if (!url.startsWith("http")) url = "https://" + url;
+  // Guardar solo la raíz del dominio: la API de estas plataformas vive ahí,
+  // pegar la URL con path (ej. /productos) rompía el scrape
+  try { url = new URL(url).origin; } catch {}
 
   // Detect platform from URL hints (auto-detect will override on scrape)
   let plataforma = "desconocido";

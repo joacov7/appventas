@@ -162,7 +162,10 @@ async function scrapeML(termino: string): Promise<Producto[]> {
 
 // ─── Auto-detect platform ─────────────────────────────────────────────────────
 async function detectAndScrape(url: string, plataforma: string): Promise<{ productos: Producto[]; plataformaDetectada: string }> {
-  const base = url.replace(/\/$/, "");
+  // Normalizar a la raíz del dominio: si guardaron la URL con path
+  // (ej. https://tienda.com/productos), la API vive igual en la raíz.
+  let base = url.replace(/\/$/, "");
+  try { base = new URL(base).origin; } catch {}
 
   // Si ya sabemos la plataforma, ir directo al scrape (sin re-probar la
   // detección: un fallo transitorio del probe tiraba abajo todo el scrape)

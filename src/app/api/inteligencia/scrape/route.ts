@@ -28,9 +28,13 @@ async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3):
         },
       });
       if (res.ok) return res;
-      if (res.status === 404 || res.status === 403) throw new Error(`HTTP ${res.status}`);
+      // 4xx definitivos: reintentar no va a cambiar nada
+      if (res.status === 404 || res.status === 403 || res.status === 401 || res.status === 410) {
+        throw new Error(`HTTP ${res.status}`);
+      }
       lastError = new Error(`HTTP ${res.status}`);
-    } catch (e) {
+    } catch (e: any) {
+      if (/^HTTP (404|403|401|410)$/.test(e?.message ?? "")) throw e;
       lastError = e;
     }
     if (i < retries - 1) await new Promise(r => setTimeout(r, 500 * 2 ** i));
@@ -38,11 +42,16 @@ async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3):
   throw lastError;
 }
 
+// Tope de páginas para no exceder el maxDuration del serverless
+const MAX_PAGES = 30;
+
 // ─── Tiendanube ───────────────────────────────────────────────────────────────
 async function scrapeTiendanube(base: string): Promise<Producto[]> {
   const results: Producto[] = [];
-  let page = 1;
-  while (true) {
+  const vistos = new Set<string>();
+  // No asumimos que la tienda respete per_page: paginamos hasta página vacía
+  // o hasta que una página no aporte URLs nuevas (servidor que ignora `page`).
+  for (let page = 1; page <= MAX_PAGES; page++) {
     let res: Response;
     try {
       res = await fetchWithRetry(`${base}/productos.json?per_page=200&page=${page}`);
@@ -52,7 +61,14 @@ async function scrapeTiendanube(base: string): Promise<Producto[]> {
     const data = await res.json();
     const items: any[] = Array.isArray(data) ? data : (data.products ?? data.result ?? []);
     if (!items.length) break;
+
+    let nuevos = 0;
     for (const item of items) {
+      const url = item.canonical_url ?? item.permalink ?? `${base}/productos/${item.handle ?? item.id}`;
+      if (vistos.has(url)) continue;
+      vistos.add(url);
+      nuevos++;
+
       const variants: any[] = item.variants ?? [];
       const prices = variants.length > 0
         ? variants.map((v: any) => Number(v.promotional_price || v.price || 0)).filter(p => p > 0)
@@ -63,12 +79,11 @@ async function scrapeTiendanube(base: string): Promise<Producto[]> {
         nombre: String(item.name ?? item.nombre ?? ""),
         precio,
         categoria: item.categories?.[0]?.name ?? null,
-        url: item.canonical_url ?? item.permalink ?? `${base}/productos/${item.handle ?? item.id}`,
+        url,
         imagen: item.images?.[0]?.src ?? item.images?.[0]?.url ?? null,
       });
     }
-    if (items.length < 200) break;
-    page++;
+    if (nuevos === 0) break; // el servidor repite la misma página
   }
   return results;
 }
@@ -76,8 +91,8 @@ async function scrapeTiendanube(base: string): Promise<Producto[]> {
 // ─── Empretienda ──────────────────────────────────────────────────────────────
 async function scrapeEmpretienda(base: string): Promise<Producto[]> {
   const results: Producto[] = [];
-  let page = 1;
-  while (true) {
+  const vistos = new Set<string>();
+  for (let page = 1; page <= MAX_PAGES; page++) {
     let res: Response;
     try {
       res = await fetchWithRetry(`${base}/catalog/api/products?per_page=100&page=${page}`);
@@ -87,19 +102,25 @@ async function scrapeEmpretienda(base: string): Promise<Producto[]> {
     const data = await res.json();
     const items: any[] = data.data ?? data.products ?? (Array.isArray(data) ? data : []);
     if (!items.length) break;
+
+    let nuevos = 0;
     for (const item of items) {
+      const url = item.url ?? `${base}/productos/${item.slug ?? item.id}`;
+      if (vistos.has(url)) continue;
+      vistos.add(url);
+      nuevos++;
+
       const precio = Number(item.price ?? item.variants?.[0]?.price ?? 0);
       if (!precio) continue;
       results.push({
         nombre: String(item.name ?? ""),
         precio,
         categoria: item.category?.name ?? null,
-        url: item.url ?? `${base}/productos/${item.slug ?? item.id}`,
+        url,
         imagen: item.image?.url ?? item.images?.[0]?.src ?? null,
       });
     }
-    if (items.length < 100) break;
-    page++;
+    if (nuevos === 0) break;
   }
   return results;
 }
@@ -186,7 +207,14 @@ async function ensureConstraint() {
 }
 
 // ─── Bulk upsert ─────────────────────────────────────────────────────────────
-async function bulkUpsert(tiendaId: number, productos: Producto[]): Promise<number> {
+// marcarFaltantes: marcar disponible=false lo que no vino en este scrape.
+// Debe ser false para MercadoLibre: cada búsqueda trae un subconjunto distinto
+// y no debe pisar los resultados de búsquedas anteriores.
+async function bulkUpsert(tiendaId: number, productos: Producto[], marcarFaltantes = true): Promise<number> {
+  // Dedupe por URL: dos filas iguales en el mismo INSERT rompen el ON CONFLICT
+  const porUrl = new Map<string, Producto>();
+  for (const p of productos) porUrl.set(p.url, p);
+  productos = Array.from(porUrl.values());
   if (!productos.length) return 0;
 
   await ensureConstraint();
@@ -236,7 +264,7 @@ async function bulkUpsert(tiendaId: number, productos: Producto[]): Promise<numb
   }
 
   // Mark products not in this scrape as unavailable
-  if (productos.length > 0) {
+  if (marcarFaltantes && productos.length > 0) {
     const urls = productos.map(p => p.url);
     await (prisma as any).$executeRawUnsafe(`
       UPDATE productos_competidores
@@ -271,7 +299,7 @@ export async function POST(req: NextRequest) {
         RETURNING id
       `);
       const mlTiendaId = stores[0].id;
-      const total = await bulkUpsert(mlTiendaId, productos);
+      const total = await bulkUpsert(mlTiendaId, productos, false);
       await (prisma as any).$executeRawUnsafe(
         `UPDATE tiendas_competidoras SET ultimo_scrape = NOW() WHERE id = $1`, mlTiendaId
       );

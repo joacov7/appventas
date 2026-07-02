@@ -9,6 +9,7 @@ import {
   FileText, Globe, Instagram, Facebook,
 } from "lucide-react";
 import { MediaUpload } from "@/components/ui/MediaUpload";
+import { GeneradorCampana } from "./GeneradorCampana";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Campana {
@@ -1192,6 +1193,9 @@ export default function MetaAdsPage() {
           )}
         </div>
       </div>
+
+      {/* Generador IA */}
+      <GeneradorCampana onCreada={() => loadCampanas()} />
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-xl p-1 w-fit">

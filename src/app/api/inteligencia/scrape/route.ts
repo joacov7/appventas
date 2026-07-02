@@ -22,14 +22,12 @@ async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3):
         ...opts,
         signal: AbortSignal.timeout(15000),
         headers: {
-          // Headers de navegador real: los UA tipo "bot" activan el bloqueo
-          // anti-bot (Cloudflare) de muchas tiendas y devuelven 403
+          // UA de navegador real: los UA tipo "bot" activan el bloqueo
+          // anti-bot (Cloudflare). Sin headers Sec-Fetch-*: mandarlos con
+          // valores inconsistentes es una señal de bot peor que no mandarlos.
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
           Accept: "application/json, text/plain, */*",
           "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
-          "Sec-Fetch-Dest": "empty",
-          "Sec-Fetch-Mode": "cors",
-          "Sec-Fetch-Site": "same-origin",
           ...((opts.headers as Record<string, string>) ?? {}),
         },
       });
@@ -53,7 +51,22 @@ async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3):
 const MAX_PAGES = 30;
 
 // ─── Tiendanube ───────────────────────────────────────────────────────────────
+// Algunas tiendas sirven el catálogo en /products.json en vez de /productos.json
+async function resolverRutaTiendanube(base: string): Promise<string | null> {
+  for (const ruta of ["productos.json", "products.json"]) {
+    try {
+      const res = await fetchWithRetry(`${base}/${ruta}?per_page=1&page=1`, {}, 2);
+      const data = await res.json();
+      if (Array.isArray(data) || data.products || data.result) return ruta;
+    } catch {}
+  }
+  return null;
+}
+
 async function scrapeTiendanube(base: string): Promise<Producto[]> {
+  const ruta = await resolverRutaTiendanube(base);
+  if (!ruta) return [];
+
   const results: Producto[] = [];
   const vistos = new Set<string>();
   // No asumimos que la tienda respete per_page: paginamos hasta página vacía
@@ -61,7 +74,7 @@ async function scrapeTiendanube(base: string): Promise<Producto[]> {
   for (let page = 1; page <= MAX_PAGES; page++) {
     let res: Response;
     try {
-      res = await fetchWithRetry(`${base}/productos.json?per_page=200&page=${page}`);
+      res = await fetchWithRetry(`${base}/${ruta}?per_page=200&page=${page}`);
     } catch {
       break;
     }
@@ -320,12 +333,8 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
   // salvo que ya lo hayamos intentado directo arriba
   if (plataforma !== "tiendanube") {
     try {
-      const res = await fetchWithRetry(`${base}/productos.json?per_page=1&page=1`);
-      const data = await res.json();
-      if (Array.isArray(data) || data.products || data.result) {
-        const productos = await scrapeTiendanube(base);
-        if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
-      }
+      const productos = await scrapeTiendanube(base); // se auto-verifica (resuelve la ruta o devuelve vacío)
+      if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
     } catch (e: any) {
       detalle = e?.message;
     }

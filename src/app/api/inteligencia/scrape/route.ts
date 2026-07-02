@@ -28,13 +28,14 @@ async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3):
         },
       });
       if (res.ok) return res;
-      // 4xx definitivos: reintentar no va a cambiar nada
-      if (res.status === 404 || res.status === 403 || res.status === 401 || res.status === 410) {
+      // Solo 404/410 son definitivos (recurso inexistente). 403/401 pueden ser
+      // un WAF/Cloudflare transitorio: conviene reintentar.
+      if (res.status === 404 || res.status === 410) {
         throw new Error(`HTTP ${res.status}`);
       }
       lastError = new Error(`HTTP ${res.status}`);
     } catch (e: any) {
-      if (/^HTTP (404|403|401|410)$/.test(e?.message ?? "")) throw e;
+      if (/^HTTP (404|410)$/.test(e?.message ?? "")) throw e;
       lastError = e;
     }
     if (i < retries - 1) await new Promise(r => setTimeout(r, 500 * 2 ** i));
@@ -163,20 +164,29 @@ async function scrapeML(termino: string): Promise<Producto[]> {
 async function detectAndScrape(url: string, plataforma: string): Promise<{ productos: Producto[]; plataformaDetectada: string }> {
   const base = url.replace(/\/$/, "");
 
-  // Si ya sabemos la plataforma, usarla directamente
+  // Si ya sabemos la plataforma, ir directo al scrape (sin re-probar la
+  // detección: un fallo transitorio del probe tiraba abajo todo el scrape)
   if (plataforma === "empretienda") {
     return { productos: await scrapeEmpretienda(base), plataformaDetectada: "empretienda" };
   }
+  if (plataforma === "tiendanube") {
+    const productos = await scrapeTiendanube(base);
+    if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
+    // Si no trajo nada, seguir con la detección normal por las dudas
+  }
 
-  // Intentar Tiendanube primero (incluso para dominios propios)
-  try {
-    const res = await fetchWithRetry(`${base}/productos.json?per_page=1&page=1`);
-    const data = await res.json();
-    if (Array.isArray(data) || data.products || data.result) {
-      const productos = await scrapeTiendanube(base);
-      if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
-    }
-  } catch {}
+  // Intentar Tiendanube primero (incluso para dominios propios),
+  // salvo que ya lo hayamos intentado directo arriba
+  if (plataforma !== "tiendanube") {
+    try {
+      const res = await fetchWithRetry(`${base}/productos.json?per_page=1&page=1`);
+      const data = await res.json();
+      if (Array.isArray(data) || data.products || data.result) {
+        const productos = await scrapeTiendanube(base);
+        if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
+      }
+    } catch {}
+  }
 
   // Intentar Empretienda
   try {

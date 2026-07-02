@@ -34,6 +34,23 @@ async function ensureTable() {
       creado_en TIMESTAMPTZ DEFAULT now()
     )
   `);
+  // Columnas nuevas (para tablas ya creadas antes de esta feature)
+  await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS instagram TEXT`);
+  await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS facebook TEXT`);
+}
+
+// Normaliza un handle o URL de Instagram a URL completa
+function normInstagram(v?: string): string | null {
+  if (!v) return null;
+  const s = v.trim();
+  if (s.startsWith("http")) return s;
+  return `https://instagram.com/${s.replace(/^@/, "").replace(/\/$/, "")}`;
+}
+function normFacebook(v?: string): string | null {
+  if (!v) return null;
+  const s = v.trim();
+  if (s.startsWith("http")) return s;
+  return `https://facebook.com/${s.replace(/^@/, "").replace(/\/$/, "")}`;
 }
 
 function buildQuery(zona: string, rubrosOsm: string[]): string {
@@ -134,7 +151,9 @@ export async function POST(req: NextRequest) {
       rubro: osmLabel.get(t.shop) ?? t.shop ?? null,
       direccion: dir || null,
       telefono: t.phone ?? t["contact:phone"] ?? t.mobile ?? null,
-      website: t.website ?? t["contact:website"] ?? t["contact:instagram"] ?? t["contact:facebook"] ?? null,
+      website: t.website ?? t["contact:website"] ?? null,
+      instagram: normInstagram(t["contact:instagram"] ?? t.instagram),
+      facebook: normFacebook(t["contact:facebook"] ?? t.facebook),
       lat: el.lat ?? el.center?.lat ?? null,
       lon: el.lon ?? el.center?.lon ?? null,
       osm_id: `${el.type}/${el.id}`,
@@ -156,11 +175,11 @@ export async function POST(req: NextRequest) {
     const paramsArr: any[] = [];
     let idx = 1;
     for (const p of chunk) {
-      values.push(`($${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++})`);
-      paramsArr.push(p.nombre, p.rubro, p.direccion, p.telefono, p.website, zona.trim(), p.lat, p.lon, p.osm_id);
+      values.push(`($${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++},$${idx++})`);
+      paramsArr.push(p.nombre, p.rubro, p.direccion, p.telefono, p.website, p.instagram, p.facebook, zona.trim(), p.lat, p.lon, p.osm_id);
     }
     await (prisma as any).$executeRawUnsafe(`
-      INSERT INTO prospectos (nombre, rubro, direccion, telefono, website, provincia, lat, lon, osm_id)
+      INSERT INTO prospectos (nombre, rubro, direccion, telefono, website, instagram, facebook, provincia, lat, lon, osm_id)
       VALUES ${values.join(",")}
       ON CONFLICT (osm_id) DO UPDATE SET
         nombre    = EXCLUDED.nombre,
@@ -168,6 +187,8 @@ export async function POST(req: NextRequest) {
         direccion = EXCLUDED.direccion,
         telefono  = COALESCE(EXCLUDED.telefono, prospectos.telefono),
         website   = COALESCE(EXCLUDED.website, prospectos.website),
+        instagram = COALESCE(EXCLUDED.instagram, prospectos.instagram),
+        facebook  = COALESCE(EXCLUDED.facebook, prospectos.facebook),
         provincia = EXCLUDED.provincia
     `, ...paramsArr);
     insertados += chunk.length;

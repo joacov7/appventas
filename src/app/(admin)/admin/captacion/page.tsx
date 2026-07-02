@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, RefreshCw, Star, ExternalLink, Plus, Trash2, MapPin, X, MessageCircle, Search, Store, Phone, Globe } from "lucide-react";
+import { Users, RefreshCw, Star, ExternalLink, Plus, Trash2, MapPin, X, MessageCircle, Search, Store, Phone, Globe, Instagram, Facebook } from "lucide-react";
 
 type Lead = {
   id: number;
@@ -30,6 +30,8 @@ type Prospecto = {
   direccion: string | null;
   telefono: string | null;
   website: string | null;
+  instagram: string | null;
+  facebook: string | null;
   provincia: string | null;
   lat: number | null;
   lon: number | null;
@@ -301,9 +303,17 @@ export default function CaptacionPage() {
                             </a>
                           </>
                         )}
+                        {p.instagram && (
+                          <a href={p.instagram} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-pink-500 hover:text-pink-600 flex items-center gap-1"><Instagram size={11} /> Instagram</a>
+                        )}
+                        {p.facebook && (
+                          <a href={p.facebook} target="_blank" rel="noopener noreferrer"
+                            className="text-xs text-blue-600 hover:text-blue-700 flex items-center gap-1"><Facebook size={11} /> Facebook</a>
+                        )}
                         {p.website && (
                           <a href={p.website.startsWith("http") ? p.website : `https://${p.website}`} target="_blank" rel="noopener noreferrer"
-                            className="text-xs text-gray-400 hover:text-emerald-600 flex items-center gap-1"><Globe size={11} /> Sitio / redes</a>
+                            className="text-xs text-gray-400 hover:text-emerald-600 flex items-center gap-1"><Globe size={11} /> Sitio web</a>
                         )}
                         {p.lat && p.lon && (
                           <a href={`https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`} target="_blank" rel="noopener noreferrer"

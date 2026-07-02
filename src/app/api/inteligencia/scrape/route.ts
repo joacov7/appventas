@@ -54,9 +54,10 @@ async function scrapeTiendanube(base: string): Promise<Producto[]> {
     if (!items.length) break;
     for (const item of items) {
       const variants: any[] = item.variants ?? [];
-      const precio = variants.length > 0
-        ? Math.min(...variants.map((v: any) => Number(v.promotional_price ?? v.price ?? 0)).filter(Boolean))
-        : Number(item.promotional_price ?? item.price ?? 0);
+      const prices = variants.length > 0
+        ? variants.map((v: any) => Number(v.promotional_price || v.price || 0)).filter(p => p > 0)
+        : [Number(item.promotional_price || item.price || 0)].filter(p => p > 0);
+      const precio = prices.length > 0 ? Math.min(...prices) : 0;
       if (!precio) continue;
       results.push({
         nombre: String(item.name ?? item.nombre ?? ""),

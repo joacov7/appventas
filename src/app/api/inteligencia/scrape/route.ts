@@ -22,8 +22,14 @@ async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3):
         ...opts,
         signal: AbortSignal.timeout(15000),
         headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; PriceBot/1.0)",
-          Accept: "application/json",
+          // Headers de navegador real: los UA tipo "bot" activan el bloqueo
+          // anti-bot (Cloudflare) de muchas tiendas y devuelven 403
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+          Accept: "application/json, text/plain, */*",
+          "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+          "Sec-Fetch-Dest": "empty",
+          "Sec-Fetch-Mode": "cors",
+          "Sec-Fetch-Site": "same-origin",
           ...((opts.headers as Record<string, string>) ?? {}),
         },
       });
@@ -161,7 +167,7 @@ async function scrapeML(termino: string): Promise<Producto[]> {
 }
 
 // ─── Auto-detect platform ─────────────────────────────────────────────────────
-async function detectAndScrape(url: string, plataforma: string): Promise<{ productos: Producto[]; plataformaDetectada: string }> {
+async function detectAndScrape(url: string, plataforma: string): Promise<{ productos: Producto[]; plataformaDetectada: string; detalle?: string }> {
   // Normalizar a la raíz del dominio: si guardaron la URL con path
   // (ej. https://tienda.com/productos), la API vive igual en la raíz.
   let base = url.replace(/\/$/, "");
@@ -178,6 +184,8 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
     // Si no trajo nada, seguir con la detección normal por las dudas
   }
 
+  let detalle: string | undefined;
+
   // Intentar Tiendanube primero (incluso para dominios propios),
   // salvo que ya lo hayamos intentado directo arriba
   if (plataforma !== "tiendanube") {
@@ -188,7 +196,9 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
         const productos = await scrapeTiendanube(base);
         if (productos.length) return { productos, plataformaDetectada: "tiendanube" };
       }
-    } catch {}
+    } catch (e: any) {
+      detalle = e?.message;
+    }
   }
 
   // Intentar Empretienda
@@ -199,9 +209,11 @@ async function detectAndScrape(url: string, plataforma: string): Promise<{ produ
       const productos = await scrapeEmpretienda(base);
       if (productos.length) return { productos, plataformaDetectada: "empretienda" };
     }
-  } catch {}
+  } catch (e: any) {
+    detalle = detalle ?? e?.message;
+  }
 
-  return { productos: [], plataformaDetectada: plataforma };
+  return { productos: [], plataformaDetectada: plataforma, detalle };
 }
 
 // ─── Ensure unique constraint exists ─────────────────────────────────────────
@@ -332,12 +344,14 @@ export async function POST(req: NextRequest) {
   if (!tienda) return NextResponse.json({ error: "Tienda no encontrada" }, { status: 404 });
 
   try {
-    const { productos, plataformaDetectada } = await detectAndScrape(tienda.url, tienda.plataforma);
+    const { productos, plataformaDetectada, detalle } = await detectAndScrape(tienda.url, tienda.plataforma);
 
     if (!productos.length) {
-      return NextResponse.json({
-        error: "No se encontraron productos. La tienda puede no tener API pública o el formato no es compatible.",
-      }, { status: 422 });
+      const esBloqueo = detalle?.includes("403") || detalle?.includes("401");
+      const msg = esBloqueo
+        ? `La tienda bloquea el acceso automático (${detalle}). Su protección anti-bots no permite leer el catálogo desde un servidor.`
+        : `No se encontraron productos${detalle ? ` (${detalle})` : ""}. La tienda puede no tener API pública o el formato no es compatible.`;
+      return NextResponse.json({ error: msg }, { status: 422 });
     }
 
     const total = await bulkUpsert(Number(tiendaId), productos);

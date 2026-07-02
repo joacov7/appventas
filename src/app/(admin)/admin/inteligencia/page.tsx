@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { TrendingDown, TrendingUp, Store, Search, Plus, Trash2, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Bell, Package } from "lucide-react";
+import { PosicionTab } from "./PosicionTab";
 
 type Busqueda = { id: number; termino: string; plataforma: string; activa: boolean; umbral_alerta: number };
 type Tienda = { id: number; nombre: string; url: string; plataforma: string; activa: boolean; ultimo_scrape: string; total_productos: number; bajadas: number };
@@ -11,7 +12,7 @@ type Producto = {
   ultima_vez: string; tienda_nombre: string; tienda_url: string; plataforma: string;
 };
 
-const TABS = ["Búsquedas", "Tiendas", "Productos"] as const;
+const TABS = ["Búsquedas", "Tiendas", "Productos", "Mi posición"] as const;
 type Tab = typeof TABS[number];
 
 const PLATAFORMAS = ["todas", "tiendanube", "empretienda", "mercadolibre"];
@@ -462,6 +463,9 @@ export default function InteligenciaPage() {
           )}
         </div>
       )}
+
+      {/* ── Tab: Mi posición ── */}
+      {tab === "Mi posición" && <PosicionTab />}
     </div>
   );
 }

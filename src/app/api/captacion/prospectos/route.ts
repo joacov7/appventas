@@ -77,18 +77,39 @@ export async function POST(req: NextRequest) {
   const osmLabel = new Map<string, string>();
   for (const v of Object.values(RUBROS)) osmLabel.set(v.osm, v.label);
 
-  let data: any;
-  try {
-    const res = await fetch("https://overpass-api.de/api/interpreter", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: "data=" + encodeURIComponent(buildQuery(zona.trim(), rubrosOsm)),
-      signal: AbortSignal.timeout(85000),
-    });
-    if (!res.ok) return NextResponse.json({ error: `Overpass respondió ${res.status}. Probá de nuevo en un momento.` }, { status: 502 });
-    data = await res.json();
-  } catch (e: any) {
-    return NextResponse.json({ error: `No se pudo consultar el mapa: ${e?.message ?? "error"}` }, { status: 502 });
+  const ENDPOINTS = [
+    "https://overpass-api.de/api/interpreter",
+    "https://overpass.kumi.systems/api/interpreter",
+    "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+  ];
+  const body = "data=" + encodeURIComponent(buildQuery(zona.trim(), rubrosOsm));
+
+  let data: any = null;
+  let lastStatus = 0;
+  let lastErr = "";
+  for (const endpoint of ENDPOINTS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Accept: "application/json",
+          "User-Agent": "AppVentas/1.0 (prospector; contacto tienda)",
+        },
+        body,
+        signal: AbortSignal.timeout(85000),
+      });
+      if (res.ok) { data = await res.json(); break; }
+      lastStatus = res.status;
+      // 429/504/502/406: probar siguiente mirror
+    } catch (e: any) {
+      lastErr = e?.message ?? "error";
+    }
+  }
+
+  if (!data) {
+    const detalle = lastStatus ? `respondió ${lastStatus}` : lastErr;
+    return NextResponse.json({ error: `No se pudo consultar el mapa (${detalle}). Probá de nuevo en un momento.` }, { status: 502 });
   }
 
   const elements: any[] = data.elements ?? [];

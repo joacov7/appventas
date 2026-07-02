@@ -71,10 +71,12 @@ export async function POST(req: NextRequest) {
 
     const priceTiers = await getTiersFromDB();
 
-    // Apply volume discounts server-side
+    // Precio SIEMPRE desde la base — nunca confiar en el unitPrice del cliente
     const itemsWithPrice = body.items.map((item) => {
+      const variant = variants.find((v) => v.id === item.variantId)!;
+      const basePrice = Number(variant.price);
       const pct = getTierDiscount(priceTiers, item.quantity);
-      const effectivePrice = pct > 0 ? item.unitPrice * (1 - pct / 100) : item.unitPrice;
+      const effectivePrice = pct > 0 ? basePrice * (1 - pct / 100) : basePrice;
       return { ...item, effectivePrice };
     });
 

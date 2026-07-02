@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isAdmin } from "@/lib/admin-auth";
 
 export async function GET() {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const checks: Record<string, any> = {
     DATABASE_URL: !!process.env.DATABASE_URL,
     ADMIN_SECRET: !!process.env.ADMIN_SECRET,

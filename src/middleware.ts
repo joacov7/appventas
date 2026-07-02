@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifyAdminToken } from "@/lib/admin-token";
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (pathname.startsWith("/admin")) {
-    const adminToken = request.cookies.get("admin-token")?.value;
-    if (!adminToken || adminToken !== process.env.ADMIN_SECRET) {
+    const token = request.cookies.get("admin-token")?.value;
+    const ok = await verifyAdminToken(token, process.env.ADMIN_SECRET);
+    if (!ok) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
   }

@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
+import { verifyAdminToken } from "@/lib/admin-token";
 
 export async function GET() {
   const adminSecret = process.env.ADMIN_SECRET;
@@ -14,8 +15,8 @@ export async function GET() {
   if (!token) {
     return NextResponse.json({ admin: false, reason: "Cookie admin-token no encontrada — necesitás iniciar sesión" });
   }
-  if (token !== adminSecret) {
-    return NextResponse.json({ admin: false, reason: "Cookie inválida — el secreto cambió, volvé a iniciar sesión" });
+  if (!(await verifyAdminToken(token, adminSecret))) {
+    return NextResponse.json({ admin: false, reason: "Sesión inválida o vencida — volvé a iniciar sesión" });
   }
   return NextResponse.json({ admin: true });
 }

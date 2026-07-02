@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const ids = req.nextUrl.searchParams.get("ids");
   if (!ids) return NextResponse.json({});
   const idList = ids.split(",").filter(Boolean);

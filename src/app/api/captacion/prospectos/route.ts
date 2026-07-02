@@ -38,11 +38,20 @@ async function ensureTable() {
 
 function buildQuery(zona: string, rubrosOsm: string[]): string {
   const filtro = rubrosOsm.join("|");
+  // Escapar caracteres especiales de regex y matchear insensible a mayúsculas y acentos
+  const acentos: Record<string, string> = {
+    a: "[aáàäâ]", e: "[eéèëê]", i: "[iíìïî]", o: "[oóòöô]", u: "[uúùüû]", n: "[nñ]",
+  };
+  const zonaRegex = zona
+    .normalize("NFD").replace(/[̀-ͯ]/g, "")   // quitar acentos que tipeó el usuario
+    .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")             // escapar regex
+    .toLowerCase()
+    .replace(/[aeioun]/g, (c) => acentos[c] ?? c);      // cada vocal matchea su versión con acento
   // Busca el área administrativa por nombre (provincia o ciudad) dentro de Argentina
   return `
     [out:json][timeout:80];
     area["name"="Argentina"]["admin_level"="2"]->.ar;
-    area["name"="${zona.replace(/"/g, "")}"]["boundary"="administrative"](area.ar)->.z;
+    area["name"~"^${zonaRegex}$",i]["boundary"="administrative"](area.ar)->.z;
     (
       nwr["shop"~"^(${filtro})$"]["name"](area.z);
     );
@@ -132,13 +141,17 @@ export async function POST(req: NextRequest) {
     };
   }).filter(p => p.nombre);
 
-  if (!prospectos.length) return NextResponse.json({ error: "Se encontraron comercios pero sin nombre público.", total: 0 }, { status: 200 });
+  // Deduplicar por osm_id (evita "cannot affect row a second time" en el upsert)
+  const vistos = new Set<string>();
+  const unicos = prospectos.filter(p => vistos.has(p.osm_id) ? false : (vistos.add(p.osm_id), true));
+
+  if (!unicos.length) return NextResponse.json({ error: "Se encontraron comercios pero sin nombre público.", total: 0 }, { status: 200 });
 
   // Bulk upsert por osm_id
   const CHUNK = 100;
   let insertados = 0;
-  for (let i = 0; i < prospectos.length; i += CHUNK) {
-    const chunk = prospectos.slice(i, i + CHUNK);
+  for (let i = 0; i < unicos.length; i += CHUNK) {
+    const chunk = unicos.slice(i, i + CHUNK);
     const values: string[] = [];
     const paramsArr: any[] = [];
     let idx = 1;

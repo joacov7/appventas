@@ -229,35 +229,69 @@ async function scrapeWoo(base: string): Promise<Producto[]> {
 }
 
 // ─── MercadoLibre (por término de búsqueda) ──────────────────────────────────
+// La API pública /sites/MLA/search fue cerrada por ML (ahora exige OAuth).
+// Leemos la página pública de resultados y extraemos los datos del HTML.
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(Number(n)))
+    .replace(/&nbsp;/g, " ").trim();
+}
+
 async function scrapeML(termino: string): Promise<Producto[]> {
   const results: Producto[] = [];
-  let offset = 0;
-  const limit = 50;
-  while (offset < 200) {
+  const vistos = new Set<string>();
+  const slug = encodeURIComponent(termino.trim().replace(/\s+/g, "-").toLowerCase());
+
+  // Hasta 5 páginas (ML pagina de a ~48/50 con el parámetro _Desde_)
+  for (let page = 0; page < 5; page++) {
+    const desde = page * 50 + 1;
+    const url = page === 0
+      ? `https://listado.mercadolibre.com.ar/${slug}`
+      : `https://listado.mercadolibre.com.ar/${slug}_Desde_${desde}`;
+
     let res: Response;
     try {
-      res = await fetchWithRetry(
-        `https://api.mercadolibre.com/sites/MLA/search?q=${encodeURIComponent(termino)}&limit=${limit}&offset=${offset}`
-      );
+      res = await fetchWithRetry(url, { headers: { Accept: "text/html" } });
     } catch {
       break;
     }
-    const data = await res.json();
-    const items: any[] = data.results ?? [];
-    if (!items.length) break;
-    for (const item of items) {
-      const precio = Number(item.price ?? 0);
+    const html = await res.text();
+
+    // Cada tarjeta de producto es un <li ...poly-card...> con título, precio y link
+    const tarjetas = html.split(/<li[^>]*class="[^"]*ui-search-layout__item/).slice(1);
+    let nuevos = 0;
+
+    for (const bloque of tarjetas.length > 1 ? tarjetas : [html]) {
+      // Link + título
+      const linkMatch = bloque.match(/<a[^>]+class="[^"]*poly-component__title[^"]*"[^>]+href="([^"]+)"[^>]*>([^<]+)</)
+        || bloque.match(/<a[^>]+href="(https:\/\/[^"]*(?:articulo\.mercadolibre|www\.mercadolibre)[^"]+)"[^>]*>([^<]{6,})</);
+      if (!linkMatch) continue;
+      const urlProd = decodeEntities(linkMatch[1]).split("#")[0].split("?")[0];
+      const nombre = decodeEntities(linkMatch[2]);
+      if (!urlProd || !nombre || vistos.has(urlProd)) continue;
+
+      // Precio: primer andes-money-amount__fraction dentro de la tarjeta
+      const precioMatch = bloque.match(/andes-money-amount__fraction[^>]*>([\d.]+)</);
+      if (!precioMatch) continue;
+      const precio = Number(precioMatch[1].replace(/\./g, ""));
       if (!precio) continue;
+
+      // Imagen (lazy o src)
+      const imgMatch = bloque.match(/<img[^>]+(?:data-src|src)="(https:\/\/http2\.mlstatic\.com[^"]+)"/);
+
+      vistos.add(urlProd);
+      nuevos++;
       results.push({
-        nombre: String(item.title ?? ""),
+        nombre,
         precio,
-        categoria: item.category_id ?? null,
-        url: item.permalink ?? "",
-        imagen: item.thumbnail?.replace(/\-I\.jpg$/, "-O.jpg") ?? null,
+        categoria: null,
+        url: urlProd,
+        imagen: imgMatch ? imgMatch[1] : null,
       });
     }
-    if (items.length < limit) break;
-    offset += limit;
+
+    if (nuevos === 0) break;
   }
   return results;
 }
@@ -511,7 +545,7 @@ export async function POST(req: NextRequest) {
   if (termino) {
     try {
       const productos = await scrapeML(termino);
-      if (!productos.length) return NextResponse.json({ error: "Sin resultados en MercadoLibre" }, { status: 422 });
+      if (!productos.length) return NextResponse.json({ error: `Sin resultados en MercadoLibre para "${termino}". Probá con un término más común o revisá la ortografía.` }, { status: 422 });
 
       // Store under a virtual ML store
       const stores: any[] = await (prisma as any).$queryRawUnsafe(`

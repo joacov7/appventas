@@ -5,6 +5,7 @@ import { consultarCompetencia, buscarEnCompetencia } from "@/lib/services/inteli
 import { buscarProspectos, contarProspectosPorEstado } from "@/lib/services/prospectos.service";
 import { calcularPresupuesto } from "@/lib/services/presupuesto.service";
 import { recolectarDatos } from "@/lib/briefing";
+import { remember, recall } from "@/lib/memory";
 
 // Cada tool: nombre, categoría, efecto, validación zod, params documentados y handler.
 export const TOOLS: Tool[] = [
@@ -101,5 +102,47 @@ export const TOOLS: Tool[] = [
     input: z.object({}),
     params: [],
     run: () => recolectarDatos(),
+  },
+  {
+    name: "consultar_memoria",
+    description: "Consulta la memoria de la empresa por espacio (productos, clientes, comercial, decisiones, etc.), con filtros por texto o etiquetas.",
+    category: "Memoria",
+    sideEffect: "read",
+    input: z.object({
+      namespace: z.string(),
+      query: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      limit: z.number().int().positive().max(50).optional(),
+    }),
+    params: [
+      { nombre: "namespace", tipo: "string", requerido: true, descripcion: "productos|clientes|comercial|mercadolibre|reglas|aprendizajes|decisiones" },
+      { nombre: "query", tipo: "string", requerido: false, descripcion: "Texto a buscar en el contenido" },
+      { nombre: "tags", tipo: "array", requerido: false, descripcion: "Etiquetas a filtrar" },
+      { nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de resultados" },
+    ],
+    run: (i) => recall(i),
+  },
+  {
+    name: "guardar_memoria",
+    description: "Guarda un aprendizaje o dato en la memoria de la empresa para que cualquier agente lo reutilice.",
+    category: "Memoria",
+    sideEffect: "write",
+    input: z.object({
+      namespace: z.string(),
+      key: z.string(),
+      value: z.any(),
+      kind: z.string().optional(),
+      tags: z.array(z.string()).optional(),
+      source: z.string().optional(),
+    }),
+    params: [
+      { nombre: "namespace", tipo: "string", requerido: true, descripcion: "Espacio de memoria" },
+      { nombre: "key", tipo: "string", requerido: true, descripcion: "Clave única dentro del espacio" },
+      { nombre: "value", tipo: "object", requerido: true, descripcion: "Contenido a guardar" },
+      { nombre: "kind", tipo: "string", requerido: false, descripcion: "Tipo/categoría" },
+      { nombre: "tags", tipo: "array", requerido: false, descripcion: "Etiquetas" },
+      { nombre: "source", tipo: "string", requerido: false, descripcion: "Origen del dato" },
+    ],
+    run: (i) => remember(i),
   },
 ];

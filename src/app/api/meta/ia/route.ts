@@ -3,7 +3,7 @@ export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
-import { aiComplete } from "@/lib/ai";
+import { aiCompleteCached } from "@/lib/memory";
 
 const SYSTEM = `Sos un experto en publicidad digital y marketing para Facebook e Instagram en Argentina.
 Tu especialidad es vender mates, termos, bombillas y accesorios relacionados.
@@ -28,19 +28,20 @@ export async function POST(req: NextRequest) {
     };
 
     const prompt = prompts[tipo] ?? prompts.textos;
-    const text = await aiComplete({
+    // Cacheado: si ya se generó para este mismo tipo+contexto, no gasta tokens
+    const { text, cached } = await aiCompleteCached({
       system: SYSTEM,
       maxTokens: 1024,
       fast: true, // tarea simple: usa el modelo rápido si está configurado
       json: true,
       messages: [{ role: "user", content: prompt }],
-    });
+    }, { ttlHours: 24 * 30 });
 
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
 
-    return NextResponse.json({ tipo, result });
+    return NextResponse.json({ tipo, result, cached });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 });
   }

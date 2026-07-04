@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { remember } from "@/lib/memory";
 
 // Aplica un precio sugerido: actualiza la variante activa MÁS BARATA del
 // producto (la que se compara contra el mercado) y registra el cambio
@@ -50,6 +51,17 @@ export async function POST(req: NextRequest) {
      VALUES ($1, $2, $3, $4, 'sugerencia-competencia')`,
     String(productId), `variante:${variante.name}`, precioAnterior, nuevoPrecio
   ).catch(() => {});
+
+  // Memoria: registrar la decisión aceptada (el sistema aprende del usuario)
+  remember({
+    namespace: "decisiones",
+    kind: "precio_aplicado",
+    key: `precio:${productId}:${Date.now()}`,
+    value: { productId, variante: variante.name, precio_anterior: precioAnterior, precio_nuevo: nuevoPrecio },
+    source: "sugerencia-competencia",
+    tags: ["precio", "aceptada"],
+    confidence: 0.8,
+  }).catch(() => {});
 
   return NextResponse.json({
     ok: true,

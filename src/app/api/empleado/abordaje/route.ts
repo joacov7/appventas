@@ -4,7 +4,7 @@ export const maxDuration = 30;
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import Anthropic from "@anthropic-ai/sdk";
+import { aiComplete } from "@/lib/ai";
 
 const SYSTEM = `Sos el empleado virtual de ventas mayoristas de una tienda argentina de mates, bombillas y regionales.
 Escribís mensajes de primer contacto por WhatsApp para comercios (regalerías, tabaquerías, bazares, kioscos) ofreciéndoles ser su proveedor mayorista.
@@ -20,9 +20,6 @@ Respondé SOLO con el texto del mensaje, sin comillas ni explicaciones.`;
 
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY no configurada" }, { status: 503 });
-  }
 
   const { prospectoId } = await req.json();
   if (!prospectoId) return NextResponse.json({ error: "prospectoId requerido" }, { status: 400 });
@@ -61,14 +58,11 @@ export async function POST(req: NextRequest) {
 
   let mensaje: string;
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 400,
+    mensaje = (await aiComplete({
       system: SYSTEM,
+      maxTokens: 400,
       messages: [{ role: "user", content: `Generá el mensaje de primer contacto para:\n${JSON.stringify(contexto, null, 2)}` }],
-    });
-    mensaje = (msg.content[0].type === "text" ? msg.content[0].text : "").trim();
+    })).trim();
     if (!mensaje) throw new Error("respuesta vacía");
   } catch (e: any) {
     return NextResponse.json({ error: `Error generando el mensaje: ${e?.message}` }, { status: 500 });

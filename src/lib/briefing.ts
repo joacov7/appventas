@@ -2,7 +2,7 @@
 // Recolecta señales de todos los módulos y genera un briefing accionable con IA.
 
 import { prisma } from "./prisma";
-import Anthropic from "@anthropic-ai/sdk";
+import { aiComplete } from "@/lib/ai";
 
 export type DatosBriefing = {
   fecha: string;
@@ -143,14 +143,12 @@ Respondé SIEMPRE con JSON válido, sin markdown, con esta estructura exacta:
 Máximo 5 acciones, ordenadas por impacto económico.`;
 
 export async function generarBriefing(datos: DatosBriefing): Promise<Briefing> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-  const msg = await client.messages.create({
-    model: "claude-sonnet-5",
-    max_tokens: 1500,
+  const text = await aiComplete({
     system: SYSTEM,
+    maxTokens: 1500,
+    json: true,
     messages: [{ role: "user", content: `Datos de hoy:\n${JSON.stringify(datos, null, 2)}` }],
   });
-  const text = msg.content[0].type === "text" ? msg.content[0].text : "";
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error("La IA no devolvió un briefing válido");
   const parsed = JSON.parse(jsonMatch[0]);

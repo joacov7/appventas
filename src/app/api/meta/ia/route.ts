@@ -3,7 +3,7 @@ export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
-import Anthropic from "@anthropic-ai/sdk";
+import { aiComplete } from "@/lib/ai";
 
 const SYSTEM = `Sos un experto en publicidad digital y marketing para Facebook e Instagram en Argentina.
 Tu especialidad es vender mates, termos, bombillas y accesorios relacionados.
@@ -14,8 +14,6 @@ export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   try {
     const { tipo, contexto } = await req.json();
-
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const prompts: Record<string, string> = {
       textos: `Generá 3 variantes de texto publicitario para un anuncio de Meta Ads. Contexto: ${contexto ?? "venta de mates artesanales"}. Respondé con JSON: {"variantes": [{"texto": "...", "tono": "emocional|urgencia|beneficio"}]}`,
@@ -30,14 +28,14 @@ export async function POST(req: NextRequest) {
     };
 
     const prompt = prompts[tipo] ?? prompts.textos;
-    const msg = await client.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 1024,
+    const text = await aiComplete({
       system: SYSTEM,
+      maxTokens: 1024,
+      fast: true, // tarea simple: usa el modelo rápido si está configurado
+      json: true,
       messages: [{ role: "user", content: prompt }],
     });
 
-    const text = msg.content[0].type === "text" ? msg.content[0].text : "";
     // Extract JSON from response
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };

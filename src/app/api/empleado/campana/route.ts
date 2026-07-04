@@ -4,7 +4,7 @@ export const maxDuration = 60;
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
-import Anthropic from "@anthropic-ai/sdk";
+import { aiComplete } from "@/lib/ai";
 
 // ─── GET: productos candidatos para campaña, rankeados ───────────────────────
 // Estrategia "ventas": mejor margen × ventas recientes (empujar lo que funciona)
@@ -90,9 +90,6 @@ Exactamente 2 anuncios con enfoques distintos (ej: emocional vs beneficio/precio
 // ─── POST: generar borrador de campaña completo para un producto ─────────────
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY no configurada" }, { status: 503 });
-  }
 
   const { productId, estrategia } = await req.json();
   if (!productId) return NextResponse.json({ error: "productId requerido" }, { status: 400 });
@@ -124,14 +121,12 @@ export async function POST(req: NextRequest) {
 
   let plan: any;
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const msg = await client.messages.create({
-      model: "claude-sonnet-5",
-      max_tokens: 1500,
+    const text = await aiComplete({
       system: SYSTEM,
+      maxTokens: 1500,
+      json: true,
       messages: [{ role: "user", content: `Generá el borrador de campaña para:\n${JSON.stringify(contexto, null, 2)}` }],
     });
-    const text = msg.content[0].type === "text" ? msg.content[0].text : "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("La IA no devolvió un plan válido");
     plan = JSON.parse(jsonMatch[0]);

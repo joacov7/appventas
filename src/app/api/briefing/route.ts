@@ -22,9 +22,6 @@ export async function GET(req: NextRequest) {
 // POST → generar/regenerar el briefing de hoy a demanda
 export async function POST() {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY no configurada" }, { status: 503 });
-  }
   try {
     const briefing = await generarYGuardarBriefing();
     return NextResponse.json(briefing, { status: 201 });

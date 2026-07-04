@@ -16,10 +16,6 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json({ error: "ANTHROPIC_API_KEY no configurada" }, { status: 503 });
-  }
-
   try {
     const briefing = await generarYGuardarBriefing();
     return NextResponse.json({ ok: true, fecha: briefing.fecha });

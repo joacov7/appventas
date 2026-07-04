@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot,
 } from "lucide-react";
 
 const NAV = [
@@ -28,6 +28,7 @@ const NAV = [
   { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
   { href: "/admin/combos", label: "Combos", icon: Gift },
   { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
+  { href: "/admin/ia", label: "Inteligencia Artificial", icon: Bot },
   { href: "/admin/configuracion", label: "Configuración", icon: Settings },
 ];
 

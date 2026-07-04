@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-export const maxDuration = 90;
+export const maxDuration = 60; // límite del plan Hobby de Vercel
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
@@ -100,7 +100,7 @@ function buildQuery(areaId: number, seleccionados: { key: string; value: string 
     .map(([key, vals]) => `nwr["${key}"~"^(${vals.join("|")})$"]["name"](area.z);`)
     .join("\n      ");
   return `
-    [out:json][timeout:80];
+    [out:json][timeout:45];
     area(${areaId})->.z;
     (
       ${clausulas}
@@ -175,7 +175,7 @@ export async function POST(req: NextRequest) {
           "User-Agent": "AppVentas/1.0 (prospector; contacto tienda)",
         },
         body,
-        signal: AbortSignal.timeout(85000),
+        signal: AbortSignal.timeout(50000),
       });
       if (res.ok) { data = await res.json(); break; }
       lastStatus = res.status;

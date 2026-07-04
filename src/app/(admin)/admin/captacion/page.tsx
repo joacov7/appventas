@@ -100,6 +100,11 @@ export default function CaptacionPage() {
   const [pRubros, setPRubros] = useState<string[]>(["regaleria", "tabaqueria", "bazar"]);
   const [pBuscando, setPBuscando] = useState(false);
   const [pMsg, setPMsg] = useState("");
+  // Filtros de la lista de resultados
+  const [pTexto, setPTexto] = useState("");
+  const [pRubroFiltro, setPRubroFiltro] = useState("");
+  const [pZonaFiltro, setPZonaFiltro] = useState("");
+  const [pSoloContacto, setPSoloContacto] = useState(false);
 
   // ── Leads ──
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -329,7 +334,7 @@ export default function CaptacionPage() {
           </div>
 
           {/* Filtros de estado */}
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-3">
             <div className="flex gap-2 flex-wrap">
               <button onClick={() => { setPFiltro(""); fetchProspectos(); }}
                 className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${pFiltro === "" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
@@ -344,7 +349,50 @@ export default function CaptacionPage() {
             </div>
           </div>
 
-          {pLoading ? (
+          {/* Filtros de la lista: buscador + rubro + zona + solo con contacto */}
+          {prospectos.length > 0 && (() => {
+            const rubrosDisponibles = Array.from(new Set(prospectos.map(p => p.rubro).filter(Boolean))) as string[];
+            const zonasDisponibles = Array.from(new Set(prospectos.map(p => p.provincia).filter(Boolean))) as string[];
+            return (
+              <div className="flex flex-wrap gap-2 mb-4 items-center">
+                <div className="relative flex-1 min-w-[180px]">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input value={pTexto} onChange={e => setPTexto(e.target.value)}
+                    placeholder="Buscar por nombre..."
+                    className="w-full border rounded-xl pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                {rubrosDisponibles.length > 1 && (
+                  <select value={pRubroFiltro} onChange={e => setPRubroFiltro(e.target.value)}
+                    className="border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                    <option value="">Todos los rubros</option>
+                    {rubrosDisponibles.sort().map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                )}
+                {zonasDisponibles.length > 1 && (
+                  <select value={pZonaFiltro} onChange={e => setPZonaFiltro(e.target.value)}
+                    className="border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                    <option value="">Todas las zonas</option>
+                    {zonasDisponibles.sort().map(z => <option key={z} value={z}>{z}</option>)}
+                  </select>
+                )}
+                <button onClick={() => setPSoloContacto(v => !v)}
+                  className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${pSoloContacto ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  Con teléfono
+                </button>
+              </div>
+            );
+          })()}
+
+          {(() => {
+            const q = pTexto.trim().toLowerCase();
+            const filtrados = prospectos.filter(p =>
+              (!q || p.nombre.toLowerCase().includes(q)) &&
+              (!pRubroFiltro || p.rubro === pRubroFiltro) &&
+              (!pZonaFiltro || p.provincia === pZonaFiltro) &&
+              (!pSoloContacto || !!p.telefono)
+            );
+
+          return pLoading ? (
             <p className="text-gray-400 text-sm">Cargando prospectos...</p>
           ) : prospectos.length === 0 ? (
             <div className="text-center py-16 text-gray-400">
@@ -352,9 +400,16 @@ export default function CaptacionPage() {
               <p className="mb-2">Todavía no buscaste comercios.</p>
               <p className="text-xs max-w-sm mx-auto">Escribí una provincia arriba y hacé clic en Buscar para traer revendedores potenciales.</p>
             </div>
+          ) : filtrados.length === 0 ? (
+            <div className="text-center py-12 text-gray-400">
+              <p className="text-sm">Ningún prospecto coincide con los filtros.</p>
+              <button onClick={() => { setPTexto(""); setPRubroFiltro(""); setPZonaFiltro(""); setPSoloContacto(false); }}
+                className="text-xs text-emerald-600 hover:underline mt-2">Limpiar filtros</button>
+            </div>
           ) : (
             <div className="space-y-3">
-              {[...prospectos].sort((a, b) => prioridadProspecto(b) - prioridadProspecto(a)).map((p) => (
+              <p className="text-xs text-gray-400 mb-1">{filtrados.length} de {prospectos.length} prospectos</p>
+              {[...filtrados].sort((a, b) => prioridadProspecto(b) - prioridadProspecto(a)).map((p) => (
                 <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -445,7 +500,8 @@ export default function CaptacionPage() {
                 </div>
               ))}
             </div>
-          )}
+          );
+          })()}
         </>
       )}
 

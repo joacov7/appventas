@@ -5,15 +5,26 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 
-// Rubros de OSM que suelen revender mates/bombillas/regionales
-const RUBROS: Record<string, { osm: string; label: string }> = {
-  regaleria:    { osm: "gift",           label: "Regalería" },
-  tabaqueria:   { osm: "tobacco",        label: "Tabaquería" },
-  kiosco:       { osm: "convenience",    label: "Kiosco / Almacén" },
-  bazar:        { osm: "variety_store",  label: "Bazar" },
-  hogar:        { osm: "houseware",      label: "Artículos de hogar" },
-  artesanias:   { osm: "craft",          label: "Artesanías" },
-  kiosk:        { osm: "kiosk",          label: "Kiosco de calle" },
+// Rubros de OSM. `key` es la clave OSM (shop, office, man_made, ...) y
+// `value` el valor. Así podemos buscar tanto comercios (revendedores)
+// como empresas/industrias (clientes B2B de personalizados).
+const RUBROS: Record<string, { key: string; value: string; label: string }> = {
+  // ── Comercios (revendedores de mates/regionales) ──
+  regaleria:    { key: "shop",     value: "gift",               label: "Regalería" },
+  tabaqueria:   { key: "shop",     value: "tobacco",            label: "Tabaquería" },
+  kiosco:       { key: "shop",     value: "convenience",        label: "Kiosco / Almacén" },
+  bazar:        { key: "shop",     value: "variety_store",      label: "Bazar" },
+  hogar:        { key: "shop",     value: "houseware",          label: "Artículos de hogar" },
+  artesanias:   { key: "shop",     value: "craft",              label: "Artesanías" },
+  // ── B2B: clientes de personalizados / merchandising ──
+  industria:    { key: "man_made", value: "works",              label: "Industrias / fábricas" },
+  empresa:      { key: "office",   value: "company",            label: "Empresas / oficinas" },
+  publicidad:   { key: "office",   value: "advertising_agency", label: "Agencias de publicidad" },
+  seguros:      { key: "office",   value: "insurance",          label: "Agencias de seguros" },
+  inmobiliaria: { key: "office",   value: "estate_agent",       label: "Inmobiliarias" },
+  cooperativa:  { key: "office",   value: "cooperative",        label: "Cooperativas" },
+  acopio:       { key: "man_made", value: "silo",               label: "Silos / acopio" },
+  gobierno:     { key: "office",   value: "government",         label: "Organismos públicos" },
 };
 
 async function ensureTable() {
@@ -78,13 +89,21 @@ async function geocodeArea(zona: string, pais: string): Promise<{ areaId: number
   return null; // un nodo no define un área
 }
 
-function buildQuery(areaId: number, rubrosOsm: string[]): string {
-  const filtro = rubrosOsm.join("|");
+function buildQuery(areaId: number, seleccionados: { key: string; value: string }[]): string {
+  // Agrupar por clave OSM: una cláusula nwr por cada key (shop, office, ...)
+  const porKey = new Map<string, string[]>();
+  for (const r of seleccionados) {
+    if (!porKey.has(r.key)) porKey.set(r.key, []);
+    porKey.get(r.key)!.push(r.value);
+  }
+  const clausulas = Array.from(porKey.entries())
+    .map(([key, vals]) => `nwr["${key}"~"^(${vals.join("|")})$"]["name"](area.z);`)
+    .join("\n      ");
   return `
     [out:json][timeout:80];
     area(${areaId})->.z;
     (
-      nwr["shop"~"^(${filtro})$"]["name"](area.z);
+      ${clausulas}
     );
     out center tags 600;
   `;
@@ -111,8 +130,8 @@ export async function POST(req: NextRequest) {
   const paisFinal = (pais?.trim() || "Argentina");
 
   const claves: string[] = Array.isArray(rubros) && rubros.length ? rubros : Object.keys(RUBROS);
-  const rubrosOsm = claves.map(k => RUBROS[k]?.osm).filter(Boolean);
-  if (!rubrosOsm.length) return NextResponse.json({ error: "Rubros inválidos" }, { status: 400 });
+  const seleccionados = claves.map(k => RUBROS[k]).filter(Boolean);
+  if (!seleccionados.length) return NextResponse.json({ error: "Rubros inválidos" }, { status: 400 });
 
   // Geocodificar la zona dentro del país para acotar bien el área
   let area: { areaId: number; displayName: string } | null = null;
@@ -125,16 +144,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `No se encontró "${zona}" en ${paisFinal}. Revisá el nombre de la provincia/ciudad y el país.`, total: 0 }, { status: 200 });
   }
 
-  // Mapa inverso osm -> label para etiquetar cada resultado
+  // Mapa inverso "key=value" -> label para etiquetar cada resultado
   const osmLabel = new Map<string, string>();
-  for (const v of Object.values(RUBROS)) osmLabel.set(v.osm, v.label);
+  for (const v of Object.values(RUBROS)) osmLabel.set(`${v.key}=${v.value}`, v.label);
+  const CLAVES_OSM = ["shop", "office", "man_made", "building"];
+  const etiquetaRubro = (t: any): string | null => {
+    for (const k of CLAVES_OSM) {
+      if (t[k] && osmLabel.has(`${k}=${t[k]}`)) return osmLabel.get(`${k}=${t[k]}`)!;
+    }
+    return t.shop ?? t.office ?? t.man_made ?? null;
+  };
 
   const ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   ];
-  const body = "data=" + encodeURIComponent(buildQuery(area.areaId, rubrosOsm));
+  const body = "data=" + encodeURIComponent(buildQuery(area.areaId, seleccionados));
 
   let data: any = null;
   let lastStatus = 0;
@@ -174,7 +200,7 @@ export async function POST(req: NextRequest) {
     const dir = [t["addr:street"], t["addr:housenumber"], t["addr:city"]].filter(Boolean).join(" ");
     return {
       nombre: String(t.name ?? "").trim(),
-      rubro: osmLabel.get(t.shop) ?? t.shop ?? null,
+      rubro: etiquetaRubro(t),
       direccion: dir || null,
       telefono: t.phone ?? t["contact:phone"] ?? t.mobile ?? null,
       website: t.website ?? t["contact:website"] ?? null,

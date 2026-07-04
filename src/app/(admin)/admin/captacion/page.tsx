@@ -52,13 +52,31 @@ function prioridadProspecto(p: Prospecto): number {
   return score;
 }
 
-const RUBROS_PROSPECTO: { key: string; label: string }[] = [
-  { key: "regaleria", label: "Regalerías" },
-  { key: "tabaqueria", label: "Tabaquerías" },
-  { key: "kiosco", label: "Kioscos / Almacenes" },
-  { key: "bazar", label: "Bazares" },
-  { key: "hogar", label: "Artículos de hogar" },
-  { key: "artesanias", label: "Artesanías" },
+const GRUPOS_RUBRO: { grupo: string; rubros: { key: string; label: string }[] }[] = [
+  {
+    grupo: "Comercios (revendedores)",
+    rubros: [
+      { key: "regaleria", label: "Regalerías" },
+      { key: "tabaqueria", label: "Tabaquerías" },
+      { key: "kiosco", label: "Kioscos / Almacenes" },
+      { key: "bazar", label: "Bazares" },
+      { key: "hogar", label: "Artículos de hogar" },
+      { key: "artesanias", label: "Artesanías" },
+    ],
+  },
+  {
+    grupo: "Empresas (clientes de personalizados)",
+    rubros: [
+      { key: "industria", label: "Industrias / fábricas" },
+      { key: "empresa", label: "Empresas / oficinas" },
+      { key: "publicidad", label: "Agencias de publicidad" },
+      { key: "seguros", label: "Agencias de seguros" },
+      { key: "inmobiliaria", label: "Inmobiliarias" },
+      { key: "cooperativa", label: "Cooperativas" },
+      { key: "acopio", label: "Silos / acopio" },
+      { key: "gobierno", label: "Organismos públicos" },
+    ],
+  },
 ];
 
 const ESTADOS = ["nuevo", "contactado", "interesado", "descartado"];
@@ -253,8 +271,8 @@ export default function CaptacionPage() {
       {tab === "prospectos" && (
         <>
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-5 text-sm text-emerald-800">
-            <p className="font-medium mb-1 flex items-center gap-2"><Store size={16} /> Buscá revendedores automáticamente</p>
-            <p className="text-emerald-700">Escribí una provincia o ciudad y elegí rubros. El sistema busca comercios reales (regalerías, tabaquerías, bazares) con su dirección y contacto para que les ofrezcas mates al por mayor sin buscarlos uno por uno.</p>
+            <p className="font-medium mb-1 flex items-center gap-2"><Store size={16} /> Buscá clientes automáticamente</p>
+            <p className="text-emerald-700">Escribí una provincia o ciudad y elegí rubros. Encontrá <strong>comercios</strong> para venta mayorista o <strong>empresas</strong> (industrias, agencias, cooperativas, acopios) que compran mates personalizados como regalo corporativo — con su dirección y contacto, sin buscarlos uno por uno.</p>
           </div>
 
           {/* Buscador */}
@@ -288,17 +306,24 @@ export default function CaptacionPage() {
                 </button>
               </div>
             </div>
-            <div className="flex gap-2 flex-wrap">
-              {RUBROS_PROSPECTO.map((r) => {
-                const on = pRubros.includes(r.key);
-                return (
-                  <button key={r.key}
-                    onClick={() => setPRubros(prev => on ? prev.filter(x => x !== r.key) : [...prev, r.key])}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${on ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                    {r.label}
-                  </button>
-                );
-              })}
+            <div className="space-y-2.5">
+              {GRUPOS_RUBRO.map((g) => (
+                <div key={g.grupo}>
+                  <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide mb-1.5">{g.grupo}</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {g.rubros.map((r) => {
+                      const on = pRubros.includes(r.key);
+                      return (
+                        <button key={r.key}
+                          onClick={() => setPRubros(prev => on ? prev.filter(x => x !== r.key) : [...prev, r.key])}
+                          className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${on ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                          {r.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
             {pMsg && <p className={`text-sm mt-3 ${pMsg.startsWith("Se encontraron") ? "text-emerald-600" : "text-amber-600"}`}>{pMsg}</p>}
           </div>

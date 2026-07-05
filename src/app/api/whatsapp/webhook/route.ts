@@ -1,4 +1,5 @@
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 import { NextRequest, NextResponse } from "next/server";
 import { handleIncomingMessage } from "@/lib/whatsapp-bot";
@@ -44,10 +45,13 @@ export async function POST(req: NextRequest) {
       const text = message.text?.body ?? "";
       if (!text) continue;
 
-      // Process async (don't await to respond to Meta quickly)
-      handleIncomingMessage(waId, text).catch((e) =>
-        console.error("[WA Bot] handleIncomingMessage error:", e)
-      );
+      // IMPORTANTE: esperar el procesamiento. En serverless (Vercel) la función
+      // se congela al responder y mataría el envío de la respuesta a Meta.
+      try {
+        await handleIncomingMessage(waId, text);
+      } catch (e) {
+        console.error("[WA Bot] handleIncomingMessage error:", e);
+      }
     }
 
     return NextResponse.json({ status: "ok" });

@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare,
 } from "lucide-react";
 
 const NAV = [
@@ -29,6 +29,7 @@ const NAV = [
   { href: "/admin/combos", label: "Combos", icon: Gift },
   { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
   { href: "/admin/agentes", label: "Agentes", icon: Bot },
+  { href: "/admin/aprobaciones", label: "Aprobaciones", icon: CheckSquare },
   { href: "/admin/ia", label: "Inteligencia Artificial", icon: Cpu },
   { href: "/admin/memoria", label: "Memoria", icon: Brain },
   { href: "/admin/configuracion", label: "Configuración", icon: Settings },

@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox,
 } from "lucide-react";
 
 const NAV = [
@@ -28,6 +28,7 @@ const NAV = [
   { href: "/admin/mayorista", label: "Mayorista", icon: Layers },
   { href: "/admin/referidos", label: "Referidos", icon: Gift },
   { href: "/admin/suscripciones", label: "Reposiciones", icon: RefreshCw },
+  { href: "/admin/bandeja", label: "Bandeja", icon: Inbox },
   { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
   { href: "/admin/combos", label: "Combos", icon: Gift },
   { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },

@@ -7,6 +7,7 @@ import { calcularPresupuesto } from "@/lib/services/presupuesto.service";
 import { recolectarDatos } from "@/lib/briefing";
 import { remember, recall } from "@/lib/memory";
 import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
+import { resumenFinanciero, productosParaPromocionar } from "@/lib/services/finanzas.service";
 
 // Cada tool: nombre, categoría, efecto, validación zod, params documentados y handler.
 export const TOOLS: Tool[] = [
@@ -103,6 +104,24 @@ export const TOOLS: Tool[] = [
     input: z.object({}),
     params: [],
     run: () => recolectarDatos(),
+  },
+  {
+    name: "resumen_financiero",
+    description: "Ingresos aprobados (total y 30 días), órdenes pagadas/pendientes, ticket promedio y monto pendiente de cobro.",
+    category: "Finanzas",
+    sideEffect: "read",
+    input: z.object({}),
+    params: [],
+    run: () => resumenFinanciero(),
+  },
+  {
+    name: "productos_para_promocionar",
+    description: "Ranking de productos candidatos a publicidad: mejor margen ponderado por ventas recientes.",
+    category: "Marketing",
+    sideEffect: "read",
+    input: z.object({ limit: z.number().int().positive().max(20).optional() }),
+    params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de candidatos" }],
+    run: (i) => productosParaPromocionar(i.limit),
   },
   {
     name: "consultar_memoria",

@@ -114,6 +114,66 @@ export const AGENTS: AgentDef[] = [
       };
     },
   },
+
+  // ── Finanzas: salud del negocio (sin IA) ──
+  {
+    id: "finanzas",
+    nombre: "Finanzas",
+    rol: "Cobros y salud financiera",
+    objetivo: "Reporta ingresos, ticket promedio y plata pendiente de cobro. Sin gastar tokens.",
+    categoria: "Finanzas",
+    tools: ["resumen_financiero"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const f = await ctx.tool<any>("resumen_financiero");
+      const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(n);
+      const recomendaciones: { titulo: string; detalle: string }[] = [];
+
+      if (f.pendiente_de_cobro > 0) {
+        recomendaciones.push({
+          titulo: `${ars(f.pendiente_de_cobro)} pendientes de cobro`,
+          detalle: `Hay ${f.ordenes_pendientes} orden(es) sin pagar. Seguí esos cobros.`,
+        });
+      }
+      if (f.ticket_promedio != null) {
+        recomendaciones.push({
+          titulo: `Ticket promedio: ${ars(f.ticket_promedio)}`,
+          detalle: `Un combo o venta cruzada puede subirlo. Revisá el módulo Combos.`,
+        });
+      }
+      ctx.log(`ingresos 30d ${ars(f.ingresos_30d)} · ${f.ordenes_pagadas} pagadas · 0 tokens de IA`);
+      return {
+        resumen: `Ingresos aprobados: ${ars(f.ingresos_aprobados_total)} (${ars(f.ingresos_30d)} últimos 30 días). ${f.ordenes_pagadas} órdenes pagadas.`,
+        recomendaciones,
+        data: f,
+      };
+    },
+  },
+
+  // ── Marketing: qué producto conviene promocionar (sin IA para decidir) ──
+  {
+    id: "marketing",
+    nombre: "Marketing",
+    rol: "Publicidad y contenido",
+    objetivo: "Detecta el producto con mejor margen y rotación para publicitar. Sin gastar tokens para decidir.",
+    categoria: "Marketing",
+    tools: ["productos_para_promocionar"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const candidatos = await ctx.tool<any[]>("productos_para_promocionar", { limit: 5 });
+      const recomendaciones = candidatos.slice(0, 3).map((c, i) => ({
+        titulo: `${i + 1}. ${c.nombre}`,
+        detalle: `$${c.precio}${c.margen_pct != null ? ` · margen ${c.margen_pct.toFixed(0)}%` : ""} · ${c.ventas_30d} ventas/30d. Generá la campaña desde Meta Ads.`,
+      }));
+      ctx.log(`${candidatos.length} candidatos evaluados · 0 tokens de IA`);
+      return {
+        resumen: candidatos.length
+          ? `El mejor candidato para publicitar es "${candidatos[0]?.nombre}". Top 3 abajo.`
+          : `Sin productos con precio activo para promocionar.`,
+        recomendaciones,
+      };
+    },
+  },
 ];
 
 export function getAgent(id: string): AgentDef | undefined {

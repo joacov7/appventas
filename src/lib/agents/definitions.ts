@@ -175,6 +175,61 @@ export const AGENTS: AgentDef[] = [
     },
   },
 
+  // ── Calendario: avisa fechas comerciales con anticipación y prepara campaña ──
+  {
+    id: "calendario",
+    nombre: "Calendario",
+    rol: "Fechas y campañas de temporada",
+    objetivo: "Avisa con anticipación las fechas comerciales importantes (Día de la Madre, Navidad, etc.) y prepara el gancho de la campaña.",
+    categoria: "Marketing",
+    tools: ["fechas_comerciales", "productos_para_promocionar"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const fechas = await ctx.tool<any[]>("fechas_comerciales", { ventanaDias: 45 });
+      if (!fechas.length) {
+        ctx.log("sin fechas comerciales en los próximos 45 días · 0 tokens de IA");
+        return { resumen: "No hay fechas comerciales importantes en los próximos 45 días.", recomendaciones: [] };
+      }
+
+      const recomendaciones = fechas.map(f => ({
+        titulo: `${f.nombre} — en ${f.dias_restantes} día${f.dias_restantes !== 1 ? "s" : ""} (${f.fecha})`,
+        detalle: `${f.relevancia === "alta" ? "🔥 " : ""}${f.angulo}`,
+      }));
+
+      // Para la fecha más cercana de alta relevancia: preparar el gancho con IA
+      const destacada = fechas.find(f => f.relevancia === "alta") ?? fechas[0];
+      let ganchoTexto = "";
+      // Anticipación ideal: preparar la campaña ~2 semanas antes
+      if (destacada.dias_restantes <= 21) {
+        const candidatos = await ctx.tool<any[]>("productos_para_promocionar", { limit: 3 });
+        const producto = candidatos[0];
+        if (producto) {
+          const gancho = await ctx.ai({
+            system: "Sos redactor publicitario de una tienda argentina de mates. Escribí UN texto corto y persuasivo para una campaña de la fecha indicada, usando el producto que te paso. Español argentino, cálido. Máximo 2 oraciones. Solo el texto.",
+            messages: [{ role: "user", content: `Fecha: ${destacada.nombre} (${destacada.angulo}). Producto estrella: ${producto.nombre} ($${producto.precio}).` }],
+            maxTokens: 150,
+          });
+          ganchoTexto = gancho.trim();
+          recomendaciones.unshift({
+            titulo: `📣 Preparar campaña de ${destacada.nombre} ya`,
+            detalle: `Idea: "${ganchoTexto}" — generá la campaña completa en Meta Ads (producto sugerido: ${producto.nombre}).`,
+          });
+          await ctx.remember({
+            namespace: "comercial", kind: "gancho_fecha", key: `gancho:${destacada.nombre}:${destacada.fecha}`,
+            value: { fecha: destacada.nombre, producto: producto.nombre, texto: ganchoTexto },
+            source: "agente-calendario", confidence: 0.6,
+          });
+        }
+      }
+
+      ctx.log(`${fechas.length} fechas próximas · destacada: ${destacada.nombre} en ${destacada.dias_restantes} días`);
+      return {
+        resumen: `La próxima fecha fuerte es ${destacada.nombre}, en ${destacada.dias_restantes} días.${destacada.dias_restantes <= 21 ? " Conviene preparar la campaña ya." : " Todavía hay tiempo, pero conviene ir pensándola."}`,
+        recomendaciones,
+      };
+    },
+  },
+
   // ── WhatsApp: atiende lo que el bot de reglas no pudo resolver ──
   // Rules primero (el bot ya respondió lo fácil); la IA solo redacta lo difícil.
   {

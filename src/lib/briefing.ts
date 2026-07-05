@@ -3,6 +3,7 @@
 
 import { prisma } from "./prisma";
 import { aiComplete } from "@/lib/ai";
+import { proximasFechas } from "@/lib/services/calendario.service";
 
 export type DatosBriefing = {
   fecha: string;
@@ -14,6 +15,7 @@ export type DatosBriefing = {
   posicion_cara: { producto: string; mi_precio: number; mercado_prom: number; margen_pct: number | null }[];
   prospectos_nuevos_24h: number;
   sin_rotacion_30d: { producto: string }[];
+  fechas_proximas: { nombre: string; dias_restantes: number; relevancia: string; angulo: string }[];
 };
 
 export type Accion = { titulo: string; detalle: string; modulo: string };
@@ -131,6 +133,9 @@ export async function recolectarDatos(): Promise<DatosBriefing> {
     posicion_cara: posicionCara,
     prospectos_nuevos_24h: prospectos,
     sin_rotacion_30d: sinRotacion,
+    fechas_proximas: proximasFechas(30).map(f => ({
+      nombre: f.nombre, dias_restantes: f.dias_restantes, relevancia: f.relevancia, angulo: f.angulo,
+    })),
   };
 }
 
@@ -138,6 +143,7 @@ const SYSTEM = `Sos el empleado virtual de una tienda argentina de mates, bombil
 Cada mañana recibís los datos del negocio y generás un briefing corto y accionable para el dueño.
 Hablás en español argentino, directo y sin vueltas. No inventás datos: usás solo los que recibís.
 Priorizá lo que genera plata o evita perderla. Si un dato viene vacío o en cero, no lo menciones salvo que sea una señal (ej: cero ventas).
+Si en "fechas_proximas" hay una fecha comercial importante (relevancia alta) a menos de 30 días, incluíla como una acción con anticipación (ej: "Preparar campaña de Día de la Madre") usando el modulo "marketing".
 Respondé SIEMPRE con JSON válido, sin markdown, con esta estructura exacta:
 {"resumen": "2-4 oraciones con el estado del negocio hoy", "acciones": [{"titulo": "acción corta imperativa", "detalle": "1-2 oraciones con el dato concreto y qué hacer", "modulo": "ordenes|productos|inteligencia|captacion|combos|marketing"}]}
 Máximo 5 acciones, ordenadas por impacto económico.`;

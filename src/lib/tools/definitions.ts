@@ -9,6 +9,7 @@ import { remember, recall } from "@/lib/memory";
 import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 import { resumenFinanciero, productosParaPromocionar } from "@/lib/services/finanzas.service";
 import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
+import { proximasFechas } from "@/lib/services/calendario.service";
 
 // Cada tool: nombre, categoría, efecto, validación zod, params documentados y handler.
 export const TOOLS: Tool[] = [
@@ -144,6 +145,15 @@ export const TOOLS: Tool[] = [
       { nombre: "texto", tipo: "string", requerido: true, descripcion: "Mensaje a enviar" },
     ],
     run: (i) => enviarWhatsapp(i.to, i.texto),
+  },
+  {
+    name: "fechas_comerciales",
+    description: "Próximas fechas comerciales importantes (Día de la Madre, Navidad, Día del Mate, etc.) dentro de una ventana de días, con su relevancia y ángulo de venta.",
+    category: "Marketing",
+    sideEffect: "read",
+    input: z.object({ ventanaDias: z.number().int().positive().max(365).optional() }),
+    params: [{ nombre: "ventanaDias", tipo: "number", requerido: false, descripcion: "Anticipación en días (def. 60)" }],
+    run: async (i) => proximasFechas(i.ventanaDias ?? 60),
   },
   {
     name: "consultar_memoria",

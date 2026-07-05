@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { Tool } from "./types";
 import { buscarProductos, consultarStock } from "@/lib/services/productos.service";
 import { consultarCompetencia, buscarEnCompetencia } from "@/lib/services/inteligencia.service";
+import { alertasPrecio } from "@/lib/services/inteligencia-comercial.service";
 import { buscarProspectos, contarProspectosPorEstado } from "@/lib/services/prospectos.service";
 import { calcularPresupuesto } from "@/lib/services/presupuesto.service";
 import { recolectarDatos } from "@/lib/briefing";
@@ -59,6 +60,15 @@ export const TOOLS: Tool[] = [
       { nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de resultados" },
     ],
     run: (i) => buscarEnCompetencia(i.q, i.limit),
+  },
+  {
+    name: "alertas_precio",
+    description: "Analiza todo el catálogo vinculado a competencia y devuelve alertas de precio (dónde estás caro, barato o un competidor bajó). Determinístico, sin IA.",
+    category: "Inteligencia",
+    sideEffect: "read",
+    input: z.object({}),
+    params: [],
+    run: () => alertasPrecio(),
   },
   {
     name: "buscar_prospectos",

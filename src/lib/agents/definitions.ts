@@ -262,7 +262,51 @@ export const AGENTS: AgentDef[] = [
       };
     },
   },
+
+  // ── Inteligencia Comercial: alertas de precio de todo el catálogo (sin IA) ──
+  {
+    id: "inteligencia",
+    nombre: "Inteligencia Comercial",
+    rol: "Posición vs. competencia",
+    objetivo: "Escanea todo el catálogo vinculado a competidores y alerta dónde estás caro, barato o un rival bajó. Determinístico, 0 tokens.",
+    categoria: "Comercial",
+    tools: ["alertas_precio"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const res = await ctx.tool<any>("alertas_precio", {});
+      const accionables = (res?.alertas ?? []).filter((a: any) => a.tipo !== "ok");
+
+      const recomendaciones = accionables.slice(0, 15).map((a: any) => ({
+        titulo: `${a.producto}: ${etiquetaAlerta(a.tipo)}`,
+        detalle: `${a.mensaje} Tu precio: ${a.mi_precio != null ? "$" + a.mi_precio : "s/d"} · Mercado prom.: ${a.mercado_prom != null ? "$" + Math.round(a.mercado_prom) : "s/d"} (${a.competidores} comp.).`,
+      }));
+
+      // Guarda el pulso de mercado para que otros agentes lo aprovechen.
+      if (res?.productos_monitoreados) {
+        await ctx.remember({
+          namespace: "mercado", kind: "pulso_precios", key: `pulso:${new Date().toISOString().slice(0, 10)}`,
+          value: { caros: res.caros, baratos: res.baratos, competencia_bajo: res.competencia_bajo, monitoreados: res.productos_monitoreados },
+          source: "agente-inteligencia", tags: ["precios", "competencia"], confidence: 0.9,
+        }).catch(() => {});
+      }
+
+      ctx.log(`Monitoreados ${res?.productos_monitoreados ?? 0} · caros ${res?.caros ?? 0} · baratos ${res?.baratos ?? 0} · comp. bajó ${res?.competencia_bajo ?? 0} · 0 tokens`);
+      return {
+        resumen: accionables.length
+          ? `${accionables.length} alerta(s) de precio: ${res.caros} caro(s), ${res.baratos} barato(s), ${res.competencia_bajo} con competencia bajando.`
+          : `Sin alertas: revisé ${res?.productos_monitoreados ?? 0} productos con competencia y están bien posicionados.`,
+        recomendaciones,
+      };
+    },
+  },
 ];
+
+function etiquetaAlerta(tipo: string): string {
+  return tipo === "caro" ? "estás caro"
+    : tipo === "barato" ? "podés subir"
+    : tipo === "competencia_bajo" ? "un competidor bajó"
+    : "en línea";
+}
 
 export function getAgent(id: string): AgentDef | undefined {
   return AGENTS.find(a => a.id === id);

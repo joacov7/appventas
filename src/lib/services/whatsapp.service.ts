@@ -8,8 +8,9 @@ export interface ConversacionPendiente {
   fecha: string;
 }
 
-// Frases con las que el bot "se rinde" o deriva a una persona.
-const FALLBACK = ["No encontré", "Enseguida te conectamos", "Probá con"];
+// Frases con las que el bot "se rinde" o deriva a una persona (incluye el
+// fallback cálido "dejame chequear..." para que el agente las detecte).
+const FALLBACK = ["No encontré", "Enseguida te conectamos", "Probá con", "Dejame chequear", "chequear eso"];
 
 // Conversaciones que necesitan atención humana: el bot no supo responder
 // o el cliente pidió hablar con alguien. El agente las trabaja con IA.

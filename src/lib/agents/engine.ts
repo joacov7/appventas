@@ -61,11 +61,15 @@ export async function runAgent(def: AgentDef, autonomy: AutonomyMode): Promise<A
       // Escritura: solo se ejecuta en modo autónomo; si no, se PROPONE.
       if (toolDef?.sideEffect === "write" && autonomy !== "autonomous") {
         tel.accionesPropuestas.push({ tool: name, input });
-        tel.logs.push(`📝 propone ${name} (requiere aprobación en modo ${autonomy})`);
-        await (prisma as any).$executeRawUnsafe(
-          `INSERT INTO action_queue (agent_id, tool, input) VALUES ($1,$2,$3::jsonb)`,
-          def.id, name, JSON.stringify(input ?? {})
-        ).catch(() => {});
+        try {
+          await (prisma as any).$executeRawUnsafe(
+            `INSERT INTO action_queue (agent_id, tool, input, estado) VALUES ($1,$2,$3::jsonb,'pendiente')`,
+            def.id, name, JSON.stringify(input ?? {})
+          );
+          tel.logs.push(`📝 ${name} encolado en Aprobaciones (modo ${autonomy})`);
+        } catch (e: any) {
+          tel.logs.push(`✗ no se pudo encolar ${name}: ${e?.message ?? "error"}`);
+        }
         return { propuesta: true } as any;
       }
       const res = await registry.execute(name, input);

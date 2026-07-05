@@ -5,31 +5,55 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.verce
 
 // ── Send a text message via Meta Cloud API ───────────────────────────────────
 
-export async function sendWhatsAppMessage(to: string, text: string) {
+async function registrarError(to: string, texto: string) {
+  // Deja el error visible en el Historial (direccion 'error') para diagnosticar
+  try {
+    await (prisma as any).$executeRawUnsafe(`
+      CREATE TABLE IF NOT EXISTS whatsapp_mensajes (
+        id SERIAL PRIMARY KEY, wa_id TEXT NOT NULL,
+        direccion TEXT NOT NULL DEFAULT 'entrante', texto TEXT NOT NULL,
+        creado_en TIMESTAMPTZ DEFAULT now()
+      )`);
+    await (prisma as any).$executeRawUnsafe(
+      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'error', $2)`,
+      to, texto.slice(0, 800)
+    );
+  } catch { /* no crítico */ }
+}
+
+export async function sendWhatsAppMessage(to: string, text: string): Promise<{ ok: boolean; error?: string }> {
   const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
   if (!accessToken || !phoneNumberId) {
-    console.warn("[WA Bot] WhatsApp no configurado (token/phoneNumberId)");
-    return;
+    await registrarError(to, "WhatsApp no configurado: falta Access Token o Phone Number ID en el admin.");
+    return { ok: false, error: "no configurado" };
   }
-  const res = await fetch(
-    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        messaging_product: "whatsapp",
-        to,
-        type: "text",
-        text: { body: text },
-      }),
+  try {
+    const res = await fetch(
+      `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messaging_product: "whatsapp",
+          to,
+          type: "text",
+          text: { body: text },
+        }),
+      }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      console.error("[WA Bot] Send error:", err);
+      await registrarError(to, `Error al enviar (HTTP ${res.status}): ${err}`);
+      return { ok: false, error: err };
     }
-  );
-  if (!res.ok) {
-    const err = await res.text();
-    console.error("[WA Bot] Send error:", err);
+    return { ok: true };
+  } catch (e: any) {
+    await registrarError(to, `Error de conexión al enviar: ${e?.message ?? "desconocido"}`);
+    return { ok: false, error: e?.message };
   }
 }
 

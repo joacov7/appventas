@@ -21,12 +21,21 @@ async function registrarError(to: string, texto: string) {
   } catch { /* no crítico */ }
 }
 
+// Argentina: los wa_id entrantes vienen como 54 + 9 + área + número, pero para
+// ENVIAR hay que sacar ese "9" o Meta acepta el mensaje y no lo entrega.
+function normalizarDestino(to: string): string {
+  const d = to.replace(/[^\d]/g, "");
+  if (d.startsWith("549") && d.length >= 12) return "54" + d.slice(3);
+  return d;
+}
+
 export async function sendWhatsAppMessage(to: string, text: string): Promise<{ ok: boolean; error?: string }> {
   const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
   if (!accessToken || !phoneNumberId) {
     await registrarError(to, "WhatsApp no configurado: falta Access Token o Phone Number ID en el admin.");
     return { ok: false, error: "no configurado" };
   }
+  const destino = normalizarDestino(to);
   try {
     const res = await fetch(
       `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
@@ -38,7 +47,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<{ o
         },
         body: JSON.stringify({
           messaging_product: "whatsapp",
-          to,
+          to: destino,
           type: "text",
           text: { body: text },
         }),

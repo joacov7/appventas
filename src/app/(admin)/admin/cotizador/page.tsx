@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Calculator, Search, Plus, Trash2, Download, Save } from "lucide-react";
+import { Calculator, Search, Plus, Trash2, Download, Save, MessageCircle, Copy } from "lucide-react";
 
 interface ProductoCotizable {
   id: string; nombre: string; precio: number | null; precio_mayorista: number | null;
@@ -49,6 +49,9 @@ export default function CotizadorPage() {
   const [generando, setGenerando] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [guardadoOk, setGuardadoOk] = useState(false);
+  const [mensaje, setMensaje] = useState<string | null>(null);
+  const [generandoMsg, setGenerandoMsg] = useState(false);
+  const [copiado, setCopiado] = useState(false);
   const debounce = useRef<any>(null);
 
   // Datos de la empresa para el encabezado del PDF
@@ -116,6 +119,27 @@ export default function CotizadorPage() {
     });
     setGuardando(false);
     if (r.ok) { setGuardadoOk(true); setTimeout(() => setGuardadoOk(false), 2500); }
+  }
+
+  // Genera el mensaje de envío (IA solo redacta; hay fallback determinístico).
+  async function generarMensaje() {
+    if (!presupuesto || presupuesto.lineas.length === 0) return;
+    setGenerandoMsg(true); setMensaje(null);
+    const r = await fetch("/api/cotizador/mensaje", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cliente_nombre: cliente.nombre, canal: presupuesto.canal, medio_pago: presupuesto.medioPago,
+        lineas: presupuesto.lineas.map(l => ({ nombre: l.nombre, cantidad: l.cantidad, precio_unitario: l.precio_unitario, subtotal: l.subtotal })),
+        total: presupuesto.total, empresa: empresa.storeName,
+      }),
+    });
+    setGenerandoMsg(false);
+    if (r.ok) setMensaje((await r.json()).mensaje ?? "");
+  }
+
+  async function copiarMensaje() {
+    if (!mensaje) return;
+    try { await navigator.clipboard.writeText(mensaje); setCopiado(true); setTimeout(() => setCopiado(false), 2000); } catch { /* noop */ }
   }
 
   // Genera el PDF del presupuesto (texto nítido, sin imagen). Cliente-side.
@@ -334,7 +358,28 @@ export default function CotizadorPage() {
                   className="w-full mt-2 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl">
                   <Save size={16} /> {guardando ? "Guardando..." : guardadoOk ? "Guardado ✓" : "Guardar en historial"}
                 </button>
+                <button onClick={generarMensaje} disabled={generandoMsg || presupuesto.lineas.length === 0}
+                  className="w-full mt-2 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl">
+                  <MessageCircle size={16} /> {generandoMsg ? "Redactando..." : "Mensaje para el cliente"}
+                </button>
                 <a href="/admin/cotizador/historial" className="block text-center text-xs text-indigo-600 hover:underline mt-2">Ver historial de presupuestos</a>
+
+                {mensaje != null && (
+                  <div className="mt-3 border-t pt-3">
+                    <textarea value={mensaje} onChange={e => setMensaje(e.target.value)} rows={7}
+                      className="w-full text-sm border rounded-lg px-3 py-2 outline-none resize-none" />
+                    <div className="flex gap-2 mt-2">
+                      <button onClick={copiarMensaje}
+                        className="flex-1 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 text-gray-700 text-sm px-3 py-2 rounded-lg">
+                        <Copy size={14} /> {copiado ? "Copiado ✓" : "Copiar"}
+                      </button>
+                      <a href={`https://wa.me/?text=${encodeURIComponent(mensaje)}`} target="_blank" rel="noopener noreferrer"
+                        className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-2 rounded-lg">
+                        <MessageCircle size={14} /> WhatsApp
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-sm text-gray-400 text-center py-4">Agregá productos para ver el total.</p>

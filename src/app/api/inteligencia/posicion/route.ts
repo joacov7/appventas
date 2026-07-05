@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { estadisticasMercado } from "@/lib/services/inteligencia.service";
 
 const MARGEN_PISO_PCT = 15; // nunca sugerir un precio con margen menor a esto
 
@@ -63,10 +64,7 @@ export async function GET() {
         (SELECT MIN(v.price)::float FROM product_variants v
           WHERE v."productId" = pr.id AND v.active = TRUE)     AS mi_precio,
         pp.costo::float                                        AS costo,
-        COUNT(pc.id)::int                                      AS competidores,
-        MIN(pc.precio)::float                                  AS mercado_min,
-        AVG(pc.precio)::float                                  AS mercado_prom,
-        MAX(pc.precio)::float                                  AS mercado_max,
+        array_agg(pc.precio::float)                            AS precios,
         COUNT(CASE WHEN pc.precio_anterior IS NOT NULL
                     AND pc.precio < pc.precio_anterior THEN 1 END)::int AS bajadas_recientes
       FROM producto_competidor_links l
@@ -83,16 +81,19 @@ export async function GET() {
 
   const result = rows.map(r => {
     const miPrecio = r.mi_precio != null ? Number(r.mi_precio) : null;
-    const prom = r.mercado_prom != null ? Number(r.mercado_prom) : null;
     const costo = r.costo != null ? Number(r.costo) : null;
+
+    // Estadística robusta: mediana + filtro de precios absurdos
+    const stats = estadisticasMercado((r.precios ?? []).map((p: any) => Number(p)));
+    const prom = stats.mercado_prom;
+    const mercadoMin = stats.mercado_min;
 
     // % vs promedio de mercado (positivo = estoy más caro)
     const posicionPct = miPrecio != null && prom ? ((miPrecio - prom) / prom) * 100 : null;
     // Margen actual sobre mi precio
     const margenPct = miPrecio != null && costo != null && miPrecio > 0
       ? ((miPrecio - costo) / miPrecio) * 100 : null;
-    // Precio para igualar al mínimo de mercado, y el margen que quedaría
-    const mercadoMin = r.mercado_min != null ? Number(r.mercado_min) : null;
+    // Margen que quedaría si igualo el mínimo de mercado
     const margenSiIgualo = mercadoMin != null && costo != null && mercadoMin > 0
       ? ((mercadoMin - costo) / mercadoMin) * 100 : null;
 
@@ -102,10 +103,10 @@ export async function GET() {
       slug: r.slug,
       mi_precio: miPrecio,
       costo,
-      competidores: r.competidores,
+      competidores: stats.competidores,
       mercado_min: mercadoMin,
       mercado_prom: prom,
-      mercado_max: r.mercado_max != null ? Number(r.mercado_max) : null,
+      mercado_max: stats.mercado_max,
       posicion_pct: posicionPct,
       margen_pct: margenPct,
       margen_si_igualo_min: margenSiIgualo,

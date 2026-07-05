@@ -5,27 +5,44 @@ export interface PosicionCompetencia {
   mercado_min: number | null;
   mercado_prom: number | null;
   mercado_max: number | null;
+  descartados?: number;
+}
+
+function mediana(ordenados: number[]): number {
+  const n = ordenados.length, m = Math.floor(n / 2);
+  return n % 2 ? ordenados[m] : (ordenados[m - 1] + ordenados[m]) / 2;
+}
+
+// Estadísticas de mercado robustas: usa la mediana y descarta precios
+// absurdos (fuera de [mediana×0.2, mediana×3]) para que un dato mal
+// scrapeado (ej. $9.900.000) no distorsione el promedio ni el mínimo.
+export function estadisticasMercado(preciosRaw: number[]): PosicionCompetencia {
+  const precios = preciosRaw.filter(p => p > 0).sort((a, b) => a - b);
+  if (!precios.length) return { competidores: 0, mercado_min: null, mercado_prom: null, mercado_max: null, descartados: 0 };
+  const med = mediana(precios);
+  const filtrados = precios.filter(p => p >= med * 0.2 && p <= med * 3);
+  const usados = filtrados.length ? filtrados : precios;
+  const prom = usados.reduce((a, b) => a + b, 0) / usados.length;
+  return {
+    competidores: precios.length,
+    mercado_min: Math.min(...usados),
+    mercado_prom: prom,
+    mercado_max: Math.max(...usados),
+    descartados: precios.length - usados.length,
+  };
 }
 
 // Precios de la competencia para un producto propio (según links confirmados).
+// Usa estadística robusta: la mediana filtra los precios mal scrapeados.
 export async function consultarCompetencia(productId: string): Promise<PosicionCompetencia> {
   try {
     const rows: any[] = await (prisma as any).$queryRawUnsafe(`
-      SELECT COUNT(pc.id)::int AS competidores,
-             MIN(pc.precio)::float AS mn,
-             AVG(pc.precio)::float AS prom,
-             MAX(pc.precio)::float AS mx
+      SELECT pc.precio::float AS precio
       FROM producto_competidor_links l
       JOIN productos_competidores pc ON pc.id = l.competidor_id AND pc.disponible = TRUE
       WHERE l.product_id = $1 AND l.estado = 'confirmado'
     `, productId);
-    const r = rows[0] ?? {};
-    return {
-      competidores: r.competidores ?? 0,
-      mercado_min: r.mn ?? null,
-      mercado_prom: r.prom ?? null,
-      mercado_max: r.mx ?? null,
-    };
+    return estadisticasMercado(rows.map(r => Number(r.precio)));
   } catch {
     return { competidores: 0, mercado_min: null, mercado_prom: null, mercado_max: null };
   }

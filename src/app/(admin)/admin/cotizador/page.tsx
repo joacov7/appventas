@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Calculator, Search, Plus, Trash2, Download } from "lucide-react";
+import { Calculator, Search, Plus, Trash2, Download, Save } from "lucide-react";
 
 interface ProductoCotizable {
   id: string; nombre: string; precio: number | null; precio_mayorista: number | null;
@@ -47,6 +47,8 @@ export default function CotizadorPage() {
   const [presupuesto, setPresupuesto] = useState<Presupuesto | null>(null);
   const [empresa, setEmpresa] = useState<{ storeName: string; logoUrl: string | null }>({ storeName: "", logoUrl: null });
   const [generando, setGenerando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  const [guardadoOk, setGuardadoOk] = useState(false);
   const debounce = useRef<any>(null);
 
   // Datos de la empresa para el encabezado del PDF
@@ -94,6 +96,27 @@ export default function CotizadorPage() {
   const lineaDe = (id: string) => presupuesto?.lineas.find(l => l.productId === id);
 
   const CANAL_LABEL: Record<string, string> = { minorista: "Minorista", mayorista: "Mayorista" };
+
+  // Guarda el presupuesto actual en el historial.
+  async function guardarPresupuesto() {
+    if (!presupuesto || presupuesto.lineas.length === 0) return;
+    setGuardando(true); setGuardadoOk(false);
+    const r = await fetch("/api/cotizador/presupuestos", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        cliente_nombre: cliente.nombre, cliente_empresa: cliente.empresa,
+        canal: presupuesto.canal, medio_pago: presupuesto.medioPago,
+        items: presupuesto.lineas.map(l => ({
+          productId: l.productId, nombre: l.nombre, cantidad: l.cantidad,
+          precio_unitario: l.precio_unitario, subtotal: l.subtotal,
+        })),
+        subtotal: presupuesto.subtotal, descuento_pct: presupuesto.descuento_global_pct,
+        total: presupuesto.total,
+      }),
+    });
+    setGuardando(false);
+    if (r.ok) { setGuardadoOk(true); setTimeout(() => setGuardadoOk(false), 2500); }
+  }
 
   // Genera el PDF del presupuesto (texto nítido, sin imagen). Cliente-side.
   async function descargarPDF() {
@@ -307,6 +330,11 @@ export default function CotizadorPage() {
                   className="w-full mt-4 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2.5 rounded-xl">
                   <Download size={16} /> {generando ? "Generando..." : "Descargar PDF"}
                 </button>
+                <button onClick={guardarPresupuesto} disabled={guardando || presupuesto.lineas.length === 0}
+                  className="w-full mt-2 flex items-center justify-center gap-1.5 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-4 py-2.5 rounded-xl">
+                  <Save size={16} /> {guardando ? "Guardando..." : guardadoOk ? "Guardado ✓" : "Guardar en historial"}
+                </button>
+                <a href="/admin/cotizador/historial" className="block text-center text-xs text-indigo-600 hover:underline mt-2">Ver historial de presupuestos</a>
               </div>
             ) : (
               <p className="text-sm text-gray-400 text-center py-4">Agregá productos para ver el total.</p>

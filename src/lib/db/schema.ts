@@ -16,6 +16,7 @@ type Ambito =
   | "config"
   | "catalogo"
   | "fabricantes"
+  | "cotizador"
   | "pricing"
   | "inteligencia"
   | "captacion"
@@ -89,6 +90,25 @@ const DDL: Record<Ambito, string[]> = {
       costo_proveedor NUMERIC(12,2),
       codigo_proveedor TEXT,
       creado_en TIMESTAMPTZ DEFAULT now()
+    )`,
+  ],
+
+  // ─── Presupuestos emitidos por el Cotizador ──────────────────────────────
+  cotizador: [
+    `CREATE TABLE IF NOT EXISTS presupuestos (
+      id SERIAL PRIMARY KEY,
+      cliente_nombre TEXT,
+      cliente_empresa TEXT,
+      canal TEXT NOT NULL DEFAULT 'minorista',
+      medio_pago TEXT,
+      items JSONB NOT NULL DEFAULT '[]',
+      subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+      descuento_pct NUMERIC(6,2) NOT NULL DEFAULT 0,
+      total NUMERIC(12,2) NOT NULL DEFAULT 0,
+      estado TEXT NOT NULL DEFAULT 'borrador',
+      notas TEXT,
+      creado_en TIMESTAMPTZ DEFAULT now(),
+      actualizado_en TIMESTAMPTZ DEFAULT now()
     )`,
   ],
 

@@ -15,6 +15,7 @@ import { prisma } from "@/lib/prisma";
 type Ambito =
   | "config"
   | "catalogo"
+  | "fabricantes"
   | "pricing"
   | "inteligencia"
   | "captacion"
@@ -56,6 +57,38 @@ const DDL: Record<Ambito, string[]> = {
       product_id TEXT NOT NULL,
       variant_id TEXT,
       quantity INTEGER NOT NULL DEFAULT 1
+    )`,
+  ],
+
+  // ─── Fabricantes / proveedores (multi-fabricante configurable) ───────────
+  // Permite dar de alta proveedores y sus reglas de precio desde el admin,
+  // sin tocar código. Un producto se asocia opcionalmente a un fabricante.
+  fabricantes: [
+    `CREATE TABLE IF NOT EXISTS fabricantes (
+      id SERIAL PRIMARY KEY,
+      nombre TEXT NOT NULL,
+      contacto_nombre TEXT,
+      whatsapp TEXT,
+      email TEXT,
+      sitio_web TEXT,
+      -- Reglas de precio configurables (porcentajes)
+      margen_pct NUMERIC(6,2) NOT NULL DEFAULT 0,
+      descuento_b2b_pct NUMERIC(6,2) NOT NULL DEFAULT 0,
+      recargo_medios_pago_pct NUMERIC(6,2) NOT NULL DEFAULT 0,
+      moneda TEXT NOT NULL DEFAULT 'ARS',
+      notas TEXT,
+      activo BOOLEAN NOT NULL DEFAULT TRUE,
+      creado_en TIMESTAMPTZ DEFAULT now(),
+      actualizado_en TIMESTAMPTZ DEFAULT now()
+    )`,
+    // Asocia un producto del catálogo (id de Prisma, TEXT) a un fabricante.
+    // Tabla puente para no tocar el modelo Product de Prisma.
+    `CREATE TABLE IF NOT EXISTS producto_fabricante (
+      product_id TEXT PRIMARY KEY,
+      fabricante_id INT NOT NULL REFERENCES fabricantes(id) ON DELETE CASCADE,
+      costo_proveedor NUMERIC(12,2),
+      codigo_proveedor TEXT,
+      creado_en TIMESTAMPTZ DEFAULT now()
     )`,
   ],
 

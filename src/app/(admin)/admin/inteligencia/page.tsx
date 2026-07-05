@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { TrendingDown, TrendingUp, Store, Search, Plus, Trash2, ToggleLeft, ToggleRight, ExternalLink, RefreshCw, Bell, Package } from "lucide-react";
 import { PosicionTab } from "./PosicionTab";
 import { AlertasTab } from "./AlertasTab";
+import { GanadoresTab } from "./GanadoresTab";
 
 type Busqueda = { id: number; termino: string; plataforma: string; activa: boolean; umbral_alerta: number };
 type Tienda = { id: number; nombre: string; url: string; plataforma: string; activa: boolean; ultimo_scrape: string; total_productos: number; bajadas: number };
@@ -13,7 +14,7 @@ type Producto = {
   ultima_vez: string; tienda_nombre: string; tienda_url: string; plataforma: string;
 };
 
-const TABS = ["Búsquedas", "Tiendas", "Productos", "Mi posición", "Alertas"] as const;
+const TABS = ["Búsquedas", "Tiendas", "Productos", "Mi posición", "Alertas", "Ganadores ML"] as const;
 type Tab = typeof TABS[number];
 
 const PLATAFORMAS = ["todas", "tiendanube", "empretienda", "shopify", "woocommerce", "mercadolibre"];
@@ -468,6 +469,7 @@ export default function InteligenciaPage() {
       {/* ── Tab: Mi posición ── */}
       {tab === "Mi posición" && <PosicionTab />}
       {tab === "Alertas" && <AlertasTab />}
+      {tab === "Ganadores ML" && <GanadoresTab />}
     </div>
   );
 }

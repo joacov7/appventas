@@ -51,7 +51,7 @@ export async function prospectosParaSeguir(diasMin = 5): Promise<SeguimientoPros
     tipo: "prospecto" as const,
     id: Number(r.id), nombre: r.nombre, rubro: r.rubro, telefono: r.telefono,
     dias: Number(r.dias),
-    mensaje_sugerido: `¡Hola! 👋 Te escribí hace unos días por si te interesaba sumar mates y regionales para revender en ${r.nombre}. ¿Lo pudiste ver? Cualquier duda quedo a disposición. ¡Gracias!`,
+    mensaje_sugerido: `¡Hola! 👋 Te escribí hace unos días desde nuestra tienda de mates y artículos personalizados. ¿Lo pudiste ver? Cualquier duda quedo a disposición. ¡Gracias!`,
   }));
 }
 

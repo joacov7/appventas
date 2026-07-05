@@ -257,6 +257,47 @@ Con poco tráfico, la ventaja no está en tener 8 agentes: está en tener **1 do
 
 ---
 
+## Estado de avance (actualizado)
+
+Ya implementado y desplegado en la rama de trabajo:
+
+- ✅ **Fase 0.1 — Datos unificados:** módulo canónico `src/lib/db/schema.ts` (`ensureSchema`), sin DDL disperso.
+- ✅ **Fase 0.2 — Fabricantes configurables:** alta/reglas de precio desde admin + asociación producto↔fabricante.
+- ✅ **Fase A.1 — Cotizador:** motor determinista + PDF + historial con estados + mensaje de envío (IA solo redacta).
+- ✅ **Fase A.2 — Inteligencia Comercial:** alertas de precio (caro/barato/competidor bajó) + agente dedicado.
+- ⚠️ **Fase A.3 — Research MercadoLibre (ganadores):** implementado como *best-effort*; sujeto a la fragilidad del scraping de ML.
+- ✅ **Fase B.2 — Marketing/Calendario:** calendario comercial con anticipación + generación de campañas on-demand.
+- ⬜ **Fase B.1 — Atención omnicanal:** pendiente.
+
+---
+
+## Fase D — Marketplace de agentes (visión futura, NO ahora)
+
+**Idea:** convertir la Empresa IA en un **producto alquilable**: que otros comercios/empresas contraten los agentes (Cotizador, Inteligencia, Comercial…) ya "entrenados" con experiencia del rubro. Es un salto de "herramienta propia" a "SaaS multi-cliente" — es una fase lejana. **No se construye ahora**; solo se **siembran bases** que son casi gratis hoy y carísimas de agregar después.
+
+### Las 4 bases de diseño a respetar desde ya
+
+1. **Disciplina multi-tenant.** Ya existe `tenant_id` en varias tablas (hoy siempre `"default"`). Regla: **toda tabla y consulta nueva lleva `tenant_id`**, aunque hoy no se use. Sembrarlo ahora es gratis; agregarlo luego implica reescribir todas las queries.
+
+2. **Separar conocimiento del rubro (compartible) de datos del negocio (privado).** La memoria hoy mezcla todo. Etiquetar desde el inicio:
+   - *Compartible* (el activo alquilable): patrones del rubro, fechas fuertes, qué mensajes rinden.
+   - *Privado* (nunca sale del tenant): precios, clientes, proveedores, conversaciones.
+   Así un agente alquilado llega "sabiendo del rubro" sin filtrar datos de nadie.
+
+3. **Agentes como plantillas versionables.** Hoy son 7 fijos en código. Para alquilarlos deben ser *catálogo* instanciable por cliente con su config. Seguir empujando: **todo del agente configurable/datos, nada hardcodeado**.
+
+4. **Medir experiencia y resultados.** Ya hay telemetría (`agent_runs`) y confianza en memoria. No perder ese historial: para alquilar un agente hay que **demostrar que funciona y mejora** ("propuso X, se aprobó Y, generó Z").
+
+### Camino recomendado (orden)
+1. Que los agentes propios **se coordinen** (orquestación interna) y **acumulen experiencia real** con el negocio.
+2. Cuando un agente **demuestre resultados**, recién ahí hay algo demostrable para alquilar.
+3. El marketplace es **Fase D**, después de B y C. Antes, solo respetar las 4 bases en todo módulo nuevo.
+
+### Decisión abierta
+¿Se alquilan **agentes sueltos** (ej. "contratá el Cotizador") o la **Empresa IA completa** como paquete por rubro? Recomendación: diseñar pensando en **agentes sueltos** (más granular y vendible), que además se pueden empaquetar. No requiere decidirlo hoy.
+
+---
+
 ## Pendiente operativo abierto (no bloquea este documento)
 
 - **Verificación WhatsApp→Aprobaciones:** quedó por confirmar que la acción propuesta por el agente de WhatsApp aparezca en la pantalla de Aprobaciones tras el último fix (commit `fe274ed`: lista `FALLBACK` sincronizada + inserción en `action_queue` observable). Cuando ejecutes el agente con el código ya desplegado, avisame qué frase sale en el log ("encolado en Aprobaciones" / "no se pudo encolar…" / la vieja "propone enviar_whatsapp"), y cierro ese punto.

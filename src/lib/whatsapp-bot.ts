@@ -166,13 +166,45 @@ async function catalogMessage() {
   return `🛍️ *Nuestros productos:*\n\n${lines.join("\n\n")}\n\n🔍 Escribí el nombre de un producto para más info, o entrá a ${APP_URL} para ver todos.`;
 }
 
+// Bienvenida breve para el primer contacto (cuando no arrancan con "hola")
+function bienvenidaBreve() {
+  return `¡Hola! 👋 Gracias por escribirnos 🧉`;
+}
+
+// Fallback cálido: cuando el bot no entiende, no manda un error frío.
+// Le avisa al cliente que lo van a atender (vos respondés con el agente).
+function fallbackCalido() {
+  return `¡Gracias por tu mensaje! 🧉 Dejame chequear eso y en un ratito te respondo 😊
+
+Mientras tanto, si querés podés:
+• Escribir *catalogo* para ver nuestros productos
+• Entrar a ${APP_URL}
+• Escribir *ayuda* si preferís que te atienda una persona`;
+}
+
+// ¿Es la primera vez que este número nos escribe?
+async function esNuevoContacto(waId: string): Promise<boolean> {
+  try {
+    await ensureTable();
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT 1 FROM whatsapp_mensajes WHERE wa_id = $1 LIMIT 1`, waId
+    );
+    return rows.length === 0;
+  } catch {
+    return false;
+  }
+}
+
 async function priceQueryMessage(query?: string) {
   if (!query || query.trim().length < 2) {
     return `¿Qué producto querés consultar? Escribí el nombre y te digo el precio 👇`;
   }
   const products = await searchProducts(query);
   if (products.length === 0) {
-    return `No encontré "${query}" en nuestro catálogo 😕\n\nProbá con otro nombre o mirá todos los productos en:\n${APP_URL}`;
+    return `Mmm, no lo encontré con ese nombre exacto 🤔 Capaz lo tenemos con otro nombre.
+
+Escribí *catalogo* para ver todo, o mirá el catálogo completo en:
+${APP_URL}`;
   }
   const lines = products.map((p) => {
     const v = p.variants[0];
@@ -187,11 +219,13 @@ async function priceQueryMessage(query?: string) {
 
 export async function handleIncomingMessage(waId: string, messageText: string) {
   const text = messageText.trim();
+  const esPrimerContacto = await esNuevoContacto(waId);
   await logMessage(waId, "entrante", text);
 
   let response: string;
+  const esSaludo = GREETINGS.test(text);
 
-  if (GREETINGS.test(text)) {
+  if (esSaludo) {
     response = menuMessage();
   } else if (CATALOG_TRIGGERS.test(text)) {
     response = await catalogMessage();
@@ -209,10 +243,16 @@ export async function handleIncomingMessage(waId: string, messageText: string) {
     if (products.length > 0) {
       response = await priceQueryMessage(text);
     } else {
-      response = `No encontré "${text}" 🤔\n\nProbá con:\n• *catalogo* — para ver todos los productos\n• *precio [producto]* — para consultar un precio\n• *ayuda* — para hablar con alguien\n\nO visitá ${APP_URL}`;
+      response = fallbackCalido();
     }
   } else {
     response = menuMessage();
+  }
+
+  // Si es el primer mensaje y NO fue un saludo, anteponemos una bienvenida
+  // cálida — así el cliente se siente recibido aunque abra con una pregunta.
+  if (esPrimerContacto && !esSaludo) {
+    response = `${bienvenidaBreve()}\n\n${response}`;
   }
 
   await logMessage(waId, "saliente", response);

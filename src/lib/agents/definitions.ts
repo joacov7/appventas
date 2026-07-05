@@ -174,6 +174,48 @@ export const AGENTS: AgentDef[] = [
       };
     },
   },
+
+  // ── WhatsApp: atiende lo que el bot de reglas no pudo resolver ──
+  // Rules primero (el bot ya respondió lo fácil); la IA solo redacta lo difícil.
+  {
+    id: "whatsapp",
+    nombre: "WhatsApp",
+    rol: "Atención al cliente",
+    objetivo: "Detecta las conversaciones que el bot no pudo resolver y redacta una respuesta para tu aprobación.",
+    categoria: "Atención al cliente",
+    tools: ["conversaciones_whatsapp_pendientes", "buscar_productos", "enviar_whatsapp"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const pendientes = await ctx.tool<any[]>("conversaciones_whatsapp_pendientes", { limit: 5 });
+      if (!pendientes.length) {
+        ctx.log("sin conversaciones pendientes · 0 tokens de IA");
+        return { resumen: "No hay conversaciones de WhatsApp esperando atención. El bot resolvió todo.", recomendaciones: [] };
+      }
+
+      const recomendaciones: { titulo: string; detalle: string }[] = [];
+      for (const c of pendientes) {
+        // Contexto real: productos que matcheen la consulta del cliente
+        const productos = await ctx.tool<any[]>("buscar_productos", { q: c.ultimo_cliente.slice(0, 40), limit: 3 });
+        // IA (último recurso) solo para redactar la respuesta difícil
+        const respuesta = await ctx.ai({
+          system: "Sos atención al cliente de una tienda argentina de mates. Respondé al cliente por WhatsApp de forma breve, cordial y útil, en español argentino. Usá solo los productos que te paso. Si no hay info suficiente, ofrecé ayuda humana. Devolvé SOLO el texto del mensaje.",
+          messages: [{ role: "user", content: `Cliente escribió: "${c.ultimo_cliente}"\n\nProductos relacionados: ${JSON.stringify(productos)}` }],
+          maxTokens: 250,
+        });
+        // Propone enviar la respuesta → cae en Aprobaciones (o se envía en autónomo)
+        await ctx.tool("enviar_whatsapp", { to: c.wa_id, texto: respuesta.trim() });
+        recomendaciones.push({
+          titulo: `Respuesta propuesta para ${c.wa_id}`,
+          detalle: `Cliente: "${c.ultimo_cliente.slice(0, 60)}..." → ${respuesta.trim().slice(0, 120)}`,
+        });
+      }
+      ctx.log(`${pendientes.length} conversaciones · ${pendientes.length} respuestas redactadas`);
+      return {
+        resumen: `${pendientes.length} conversación(es) necesitaban atención. Redacté las respuestas — revisalas en Aprobaciones.`,
+        recomendaciones,
+      };
+    },
+  },
 ];
 
 export function getAgent(id: string): AgentDef | undefined {

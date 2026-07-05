@@ -8,6 +8,7 @@ import { recolectarDatos } from "@/lib/briefing";
 import { remember, recall } from "@/lib/memory";
 import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 import { resumenFinanciero, productosParaPromocionar } from "@/lib/services/finanzas.service";
+import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
 
 // Cada tool: nombre, categoría, efecto, validación zod, params documentados y handler.
 export const TOOLS: Tool[] = [
@@ -122,6 +123,27 @@ export const TOOLS: Tool[] = [
     input: z.object({ limit: z.number().int().positive().max(20).optional() }),
     params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de candidatos" }],
     run: (i) => productosParaPromocionar(i.limit),
+  },
+  {
+    name: "conversaciones_whatsapp_pendientes",
+    description: "Conversaciones de WhatsApp que necesitan atención humana: el bot no supo responder o el cliente pidió hablar con alguien.",
+    category: "Atención al cliente",
+    sideEffect: "read",
+    input: z.object({ limit: z.number().int().positive().max(20).optional() }),
+    params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de conversaciones" }],
+    run: (i) => conversacionesPendientes(i.limit),
+  },
+  {
+    name: "enviar_whatsapp",
+    description: "Envía un mensaje de WhatsApp a un contacto. Acción de escritura: requiere aprobación salvo en modo autónomo.",
+    category: "Atención al cliente",
+    sideEffect: "write",
+    input: z.object({ to: z.string(), texto: z.string().min(1) }),
+    params: [
+      { nombre: "to", tipo: "string", requerido: true, descripcion: "wa_id / número del contacto" },
+      { nombre: "texto", tipo: "string", requerido: true, descripcion: "Mensaje a enviar" },
+    ],
+    run: (i) => enviarWhatsapp(i.to, i.texto),
   },
   {
     name: "consultar_memoria",

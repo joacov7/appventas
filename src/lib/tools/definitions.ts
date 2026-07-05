@@ -6,6 +6,7 @@ import { buscarProspectos, contarProspectosPorEstado } from "@/lib/services/pros
 import { calcularPresupuesto } from "@/lib/services/presupuesto.service";
 import { recolectarDatos } from "@/lib/briefing";
 import { remember, recall } from "@/lib/memory";
+import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 
 // Cada tool: nombre, categoría, efecto, validación zod, params documentados y handler.
 export const TOOLS: Tool[] = [
@@ -121,6 +122,18 @@ export const TOOLS: Tool[] = [
       { nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de resultados" },
     ],
     run: (i) => recall(i),
+  },
+  {
+    name: "aplicar_precio",
+    description: "Cambia el precio de la variante activa más barata de un producto. Registra el cambio en el historial. Acción de escritura: requiere aprobación salvo en modo autónomo.",
+    category: "Comercial",
+    sideEffect: "write",
+    input: z.object({ productId: z.string(), precio: z.number().positive() }),
+    params: [
+      { nombre: "productId", tipo: "string", requerido: true, descripcion: "ID del producto" },
+      { nombre: "precio", tipo: "number", requerido: true, descripcion: "Nuevo precio" },
+    ],
+    run: (i) => aplicarPrecioSugerido(i.productId, i.precio, "agente"),
   },
   {
     name: "guardar_memoria",

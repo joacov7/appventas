@@ -1,4 +1,5 @@
 import type { AgentDef } from "./types";
+import { calcularSugerencia } from "@/lib/services/pricing.service";
 
 export const AGENTS: AgentDef[] = [
   // ── CEO: resumen y prioridades del día (usa IA para redactar) ──
@@ -42,37 +43,73 @@ export const AGENTS: AgentDef[] = [
     rol: "Ventas y precios",
     objetivo: "Detecta productos mal posicionados frente a la competencia. Resuelve con reglas, sin gastar tokens.",
     categoria: "Comercial",
-    tools: ["buscar_productos", "consultar_competencia"],
+    tools: ["buscar_productos", "consultar_competencia", "aplicar_precio"],
     defaultAutonomy: "manual",
     async handler(ctx) {
       const productos = await ctx.tool<any[]>("buscar_productos", { limit: 50 });
       const recomendaciones: { titulo: string; detalle: string }[] = [];
-      let revisados = 0;
+      let revisados = 0, propuestas = 0;
 
       for (const p of productos) {
         if (!p.precio) continue;
         const comp = await ctx.tool<any>("consultar_competencia", { productId: p.id });
         if (!comp?.mercado_prom || comp.competidores === 0) continue;
         revisados++;
-        const dif = ((p.precio - comp.mercado_prom) / comp.mercado_prom) * 100;
-        if (dif > 10) {
-          recomendaciones.push({
-            titulo: `${p.nombre}: ${dif.toFixed(0)}% más caro que el mercado`,
-            detalle: `Tu precio $${p.precio} vs promedio $${comp.mercado_prom.toFixed(0)}. Revisá en "Mi posición".`,
-          });
-        } else if (dif < -15) {
-          recomendaciones.push({
-            titulo: `${p.nombre}: ${Math.abs(dif).toFixed(0)}% debajo del mercado`,
-            detalle: `Podrías subir el precio: promedio $${comp.mercado_prom.toFixed(0)} vs tu $${p.precio}. Estás dejando margen.`,
-          });
-        }
+
+        // Sugerencia determinística (misma lógica que "Mi posición"), sin IA
+        const sug = calcularSugerencia(p.precio, p.costo ?? null, comp.mercado_min, comp.mercado_prom);
+        if (!sug) continue;
+
+        recomendaciones.push({
+          titulo: `${p.nombre}: ${sug.motivo}`,
+          detalle: `Precio sugerido $${sug.precio}${sug.margen_resultante != null ? ` (margen ${sug.margen_resultante.toFixed(0)}%)` : ""}. Tu precio actual: $${p.precio}.`,
+        });
+        // Propone el cambio: en manual/asistido va a Aprobaciones; en autónomo se aplica
+        await ctx.tool("aplicar_precio", { productId: p.id, precio: sug.precio });
+        propuestas++;
       }
 
-      ctx.log(`Revisados ${revisados} productos con competencia · 0 tokens de IA`);
+      ctx.log(`Revisados ${revisados} productos con competencia · ${propuestas} ajustes propuestos · 0 tokens de IA`);
+      return {
+        resumen: propuestas
+          ? `${propuestas} ajuste(s) de precio propuesto(s). Revisalos en Aprobaciones.`
+          : `Precios alineados: revisé ${revisados} productos con competencia y ninguno necesita ajuste.`,
+        recomendaciones,
+      };
+    },
+  },
+
+  // ── Compras: qué reponer, según stock bajo y rotación (sin IA) ──
+  {
+    id: "compras",
+    nombre: "Compras",
+    rol: "Abastecimiento",
+    objetivo: "Avisa qué productos reponer por stock bajo y cuáles frenar por baja rotación. Sin gastar tokens.",
+    categoria: "Compras",
+    tools: ["resumen_negocio"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const datos = await ctx.tool<any>("resumen_negocio");
+      const recomendaciones: { titulo: string; detalle: string }[] = [];
+
+      for (const s of datos?.stock_bajo ?? []) {
+        recomendaciones.push({
+          titulo: `Reponer: ${s.producto} — ${s.variante}`,
+          detalle: `Quedan ${s.stock} unidades. Conviene comprar antes de quedarte sin stock.`,
+        });
+      }
+      for (const p of (datos?.sin_rotacion_30d ?? []).slice(0, 5)) {
+        recomendaciones.push({
+          titulo: `Baja rotación: ${p.producto}`,
+          detalle: `Sin ventas en 30 días. Evaluá no reponerlo o armar un combo/oferta.`,
+        });
+      }
+
+      ctx.log(`stock bajo: ${(datos?.stock_bajo ?? []).length} · sin rotación: ${(datos?.sin_rotacion_30d ?? []).length} · 0 tokens de IA`);
       return {
         resumen: recomendaciones.length
-          ? `${recomendaciones.length} producto(s) fuera de precio respecto del mercado.`
-          : `Precios alineados: revisé ${revisados} productos con competencia y ninguno está desfasado.`,
+          ? `${recomendaciones.length} alerta(s) de abastecimiento.`
+          : `Abastecimiento en orden: sin stock crítico ni productos frenados.`,
         recomendaciones,
       };
     },

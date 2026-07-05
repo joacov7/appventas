@@ -54,6 +54,13 @@ function prioridadProspecto(p: Prospecto): number {
 
 const GRUPOS_RUBRO: { grupo: string; rubros: { key: string; label: string }[] }[] = [
   {
+    grupo: "Barrido amplio (toda la zona)",
+    rubros: [
+      { key: "todos_comercios", label: "🏬 Todos los comercios" },
+      { key: "todas_oficinas", label: "🏢 Todas las oficinas/empresas" },
+    ],
+  },
+  {
     grupo: "Comercios (revendedores)",
     rubros: [
       { key: "regaleria", label: "Regalerías" },
@@ -62,6 +69,15 @@ const GRUPOS_RUBRO: { grupo: string; rubros: { key: string; label: string }[] }[
       { key: "bazar", label: "Bazares" },
       { key: "hogar", label: "Artículos de hogar" },
       { key: "artesanias", label: "Artesanías" },
+      { key: "ropa", label: "Indumentaria" },
+      { key: "joyeria", label: "Joyería / bijou" },
+      { key: "floreria", label: "Florerías" },
+      { key: "libreria", label: "Librerías" },
+      { key: "deportes", label: "Deportes" },
+      { key: "supermercado", label: "Supermercados" },
+      { key: "ferreteria", label: "Ferreterías" },
+      { key: "mascotas", label: "Mascotas" },
+      { key: "agropecuaria", label: "Agropecuarias" },
     ],
   },
   {

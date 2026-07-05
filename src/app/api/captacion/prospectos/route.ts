@@ -10,6 +10,9 @@ import { ensureSchema } from "@/lib/db/schema";
 // `value` el valor. Así podemos buscar tanto comercios (revendedores)
 // como empresas/industrias (clientes B2B de personalizados).
 const RUBROS: Record<string, { key: string; value: string; label: string }> = {
+  // ── Barrido amplio: TODOS los comercios / oficinas de la zona ──
+  todos_comercios: { key: "shop",   value: "*", label: "Todos los comercios" },
+  todas_oficinas:  { key: "office", value: "*", label: "Todas las oficinas/empresas" },
   // ── Comercios (revendedores de mates/regionales) ──
   regaleria:    { key: "shop",     value: "gift",               label: "Regalería" },
   tabaqueria:   { key: "shop",     value: "tobacco",            label: "Tabaquería" },
@@ -17,6 +20,15 @@ const RUBROS: Record<string, { key: string; value: string; label: string }> = {
   bazar:        { key: "shop",     value: "variety_store",      label: "Bazar" },
   hogar:        { key: "shop",     value: "houseware",          label: "Artículos de hogar" },
   artesanias:   { key: "shop",     value: "craft",              label: "Artesanías" },
+  ropa:         { key: "shop",     value: "clothes",            label: "Indumentaria" },
+  joyeria:      { key: "shop",     value: "jewelry",            label: "Joyería / bijou" },
+  floreria:     { key: "shop",     value: "florist",            label: "Florería" },
+  libreria:     { key: "shop",     value: "stationery",         label: "Librería" },
+  deportes:     { key: "shop",     value: "sports",             label: "Deportes" },
+  supermercado: { key: "shop",     value: "supermarket",        label: "Supermercado" },
+  ferreteria:   { key: "shop",     value: "hardware",           label: "Ferretería" },
+  mascotas:     { key: "shop",     value: "pet",                label: "Mascotas" },
+  agropecuaria: { key: "shop",     value: "agrarian",           label: "Agropecuaria" },
   // ── B2B: clientes de personalizados / merchandising ──
   industria:    { key: "man_made", value: "works",              label: "Industrias / fábricas" },
   empresa:      { key: "office",   value: "company",            label: "Empresas / oficinas" },
@@ -78,15 +90,20 @@ function buildQuery(areaId: number, seleccionados: { key: string; value: string 
     porKey.get(r.key)!.push(r.value);
   }
   const clausulas = Array.from(porKey.entries())
-    .map(([key, vals]) => `nwr["${key}"~"^(${vals.join("|")})$"]["name"](area.z);`)
+    .map(([key, vals]) =>
+      // "*" = barrido amplio: todos los elementos con esa clave y nombre.
+      vals.includes("*")
+        ? `nwr["${key}"]["name"](area.z);`
+        : `nwr["${key}"~"^(${vals.join("|")})$"]["name"](area.z);`
+    )
     .join("\n      ");
   return `
-    [out:json][timeout:45];
+    [out:json][timeout:60];
     area(${areaId})->.z;
     (
       ${clausulas}
     );
-    out center tags 600;
+    out center tags 2500;
   `;
 }
 

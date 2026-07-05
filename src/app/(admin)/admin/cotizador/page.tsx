@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Calculator, Search, Plus, Trash2, X } from "lucide-react";
+import { Calculator, Search, Plus, Trash2, Download } from "lucide-react";
 
 interface ProductoCotizable {
   id: string; nombre: string; precio: number | null; precio_mayorista: number | null;
@@ -31,6 +31,10 @@ function money(n: number | null) {
   return "$" + Math.round(n).toLocaleString("es-AR");
 }
 
+function medioLabel(k: string) {
+  return MEDIOS.find(m => m.k === k)?.label ?? k;
+}
+
 export default function CotizadorPage() {
   const [q, setQ] = useState("");
   const [resultados, setResultados] = useState<ProductoCotizable[]>([]);
@@ -41,7 +45,16 @@ export default function CotizadorPage() {
   const [descuento, setDescuento] = useState(0);
   const [cliente, setCliente] = useState({ nombre: "", empresa: "" });
   const [presupuesto, setPresupuesto] = useState<Presupuesto | null>(null);
+  const [empresa, setEmpresa] = useState<{ storeName: string; logoUrl: string | null }>({ storeName: "", logoUrl: null });
+  const [generando, setGenerando] = useState(false);
   const debounce = useRef<any>(null);
+
+  // Datos de la empresa para el encabezado del PDF
+  useEffect(() => {
+    fetch("/api/store-config").then(r => r.json())
+      .then(d => setEmpresa({ storeName: d.storeName ?? "", logoUrl: d.logoUrl ?? null }))
+      .catch(() => {});
+  }, []);
 
   // Buscar productos
   useEffect(() => {
@@ -79,6 +92,90 @@ export default function CotizadorPage() {
   function quitar(id: string) { setItems(prev => prev.filter(i => i.productId !== id)); }
 
   const lineaDe = (id: string) => presupuesto?.lineas.find(l => l.productId === id);
+
+  const CANAL_LABEL: Record<string, string> = { minorista: "Minorista", mayorista: "Mayorista" };
+
+  // Genera el PDF del presupuesto (texto nítido, sin imagen). Cliente-side.
+  async function descargarPDF() {
+    if (!presupuesto || presupuesto.lineas.length === 0) return;
+    setGenerando(true);
+    try {
+      const { default: jsPDF } = await import("jspdf");
+      const doc = new jsPDF({ unit: "mm", format: "a4" });
+      const W = 210, mL = 16, mR = 194;
+      let y = 20;
+      const money = (n: number) => "$" + Math.round(n).toLocaleString("es-AR");
+
+      // Encabezado
+      doc.setFont("helvetica", "bold"); doc.setFontSize(18);
+      doc.text(empresa.storeName || "Presupuesto", mL, y);
+      doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.setTextColor(120);
+      doc.text("PRESUPUESTO", mR, y - 4, { align: "right" });
+      doc.text(new Date().toLocaleDateString("es-AR"), mR, y + 1, { align: "right" });
+      doc.setTextColor(0);
+      y += 8;
+      doc.setDrawColor(220); doc.line(mL, y, mR, y); y += 8;
+
+      // Cliente
+      doc.setFontSize(10);
+      if (cliente.nombre || cliente.empresa) {
+        doc.setFont("helvetica", "bold"); doc.text("Cliente", mL, y);
+        doc.setFont("helvetica", "normal");
+        doc.text([cliente.nombre, cliente.empresa].filter(Boolean).join(" · "), mL + 20, y);
+        y += 6;
+      }
+      doc.text(`Canal: ${CANAL_LABEL[presupuesto.canal]}   ·   Medio de pago: ${medioLabel(presupuesto.medioPago)}`, mL, y);
+      y += 8;
+
+      // Tabla: encabezado
+      doc.setFillColor(67, 56, 202); doc.setTextColor(255);
+      doc.rect(mL, y - 5, mR - mL, 7, "F");
+      doc.setFont("helvetica", "bold"); doc.setFontSize(9);
+      doc.text("Producto", mL + 2, y);
+      doc.text("Cant.", 118, y, { align: "right" });
+      doc.text("P. Unit.", 150, y, { align: "right" });
+      doc.text("Subtotal", mR - 2, y, { align: "right" });
+      doc.setTextColor(0); doc.setFont("helvetica", "normal");
+      y += 8;
+
+      // Filas
+      for (const l of presupuesto.lineas) {
+        if (y > 260) { doc.addPage(); y = 20; }
+        const nombre = l.nombre.length > 52 ? l.nombre.slice(0, 51) + "…" : l.nombre;
+        doc.text(nombre, mL + 2, y);
+        doc.text(String(l.cantidad), 118, y, { align: "right" });
+        doc.text(money(l.precio_unitario), 150, y, { align: "right" });
+        doc.text(money(l.subtotal), mR - 2, y, { align: "right" });
+        y += 6;
+        doc.setDrawColor(238); doc.line(mL, y - 2, mR, y - 2);
+      }
+      y += 4;
+
+      // Totales
+      const tX = 150;
+      doc.setFontSize(10);
+      doc.text("Subtotal", tX, y, { align: "right" }); doc.text(money(presupuesto.subtotal), mR - 2, y, { align: "right" }); y += 6;
+      if (presupuesto.descuento_global_pct > 0) {
+        doc.text(`Descuento ${presupuesto.descuento_global_pct}%`, tX, y, { align: "right" });
+        doc.text("- " + money(presupuesto.descuento_global_monto), mR - 2, y, { align: "right" }); y += 6;
+      }
+      doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+      doc.text("TOTAL", tX, y + 1, { align: "right" });
+      doc.setTextColor(67, 56, 202);
+      doc.text(money(presupuesto.total), mR - 2, y + 1, { align: "right" });
+      doc.setTextColor(0); doc.setFont("helvetica", "normal");
+      y += 12;
+
+      // Pie
+      doc.setFontSize(8); doc.setTextColor(140);
+      doc.text("Presupuesto válido por 7 días. Precios sujetos a modificación sin previo aviso.", mL, 285);
+
+      const nombreArch = `presupuesto-${(cliente.empresa || cliente.nombre || "cliente").replace(/\s+/g, "-").toLowerCase()}.pdf`;
+      doc.save(nombreArch);
+    } finally {
+      setGenerando(false);
+    }
+  }
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -206,6 +303,10 @@ export default function CotizadorPage() {
                     {presupuesto.avisos.map((a, i) => <p key={i}>⚠ {a}</p>)}
                   </div>
                 )}
+                <button onClick={descargarPDF} disabled={generando || presupuesto.lineas.length === 0}
+                  className="w-full mt-4 flex items-center justify-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2.5 rounded-xl">
+                  <Download size={16} /> {generando ? "Generando..." : "Descargar PDF"}
+                </button>
               </div>
             ) : (
               <p className="text-sm text-gray-400 text-center py-4">Agregá productos para ver el total.</p>

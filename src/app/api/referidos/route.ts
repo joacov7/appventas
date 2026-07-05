@@ -3,28 +3,10 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS referidos (
-      id          SERIAL PRIMARY KEY,
-      email       TEXT NOT NULL UNIQUE,
-      codigo      TEXT NOT NULL UNIQUE,
-      usos        INT NOT NULL DEFAULT 0,
-      activo      BOOLEAN NOT NULL DEFAULT true,
-      creado_en   TIMESTAMPTZ DEFAULT now()
-    )
-  `);
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS referido_usos (
-      id              SERIAL PRIMARY KEY,
-      codigo          TEXT NOT NULL,
-      email_comprador TEXT,
-      order_id        TEXT,
-      descuento_pct   NUMERIC(5,2),
-      creado_en       TIMESTAMPTZ DEFAULT now()
-    )
-  `);
+  await ensureSchema("marketing");
 }
 
 function generateCode(email: string): string {

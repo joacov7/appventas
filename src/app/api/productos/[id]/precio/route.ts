@@ -3,33 +3,10 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/admin-auth";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTables() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS product_pricing (
-      product_id TEXT PRIMARY KEY,
-      costo DECIMAL(12,2),
-      precio_minorista DECIMAL(12,2),
-      precio_mayorista DECIMAL(12,2),
-      precio_distribuidor DECIMAL(12,2),
-      minorista_manual BOOLEAN DEFAULT FALSE,
-      mayorista_manual BOOLEAN DEFAULT FALSE,
-      distribuidor_manual BOOLEAN DEFAULT FALSE,
-      precios_medios_pago JSONB DEFAULT '{}',
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS price_history (
-      id SERIAL PRIMARY KEY,
-      product_id TEXT NOT NULL,
-      campo TEXT NOT NULL,
-      valor_anterior DECIMAL(12,2),
-      valor_nuevo DECIMAL(12,2),
-      usuario TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+  await ensureSchema("pricing");
 }
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

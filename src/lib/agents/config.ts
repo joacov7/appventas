@@ -1,14 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import type { AgentConfig } from "./types";
 
 const KEY = "agents_config";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS catalog_config (
-      tipo TEXT PRIMARY KEY, config JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => {});
+  await ensureSchema("config");
 }
 
 export async function loadAgentConfigs(): Promise<Record<string, AgentConfig>> {

@@ -3,31 +3,10 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAdmin } from "@/lib/admin-auth";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTables() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS combos (
-      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      name TEXT NOT NULL,
-      slug TEXT NOT NULL UNIQUE,
-      description TEXT,
-      image_urls JSONB DEFAULT '[]',
-      active BOOLEAN DEFAULT TRUE,
-      precio_venta DECIMAL(12,2),
-      precio_manual BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMPTZ DEFAULT NOW(),
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS combo_items (
-      id SERIAL PRIMARY KEY,
-      combo_id TEXT NOT NULL REFERENCES combos(id) ON DELETE CASCADE,
-      product_id TEXT NOT NULL,
-      variant_id TEXT,
-      quantity INTEGER NOT NULL DEFAULT 1
-    )
-  `);
+  await ensureSchema("catalogo");
 }
 
 export async function GET() {

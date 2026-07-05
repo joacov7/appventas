@@ -1,19 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import { sendWelcomeEmail } from "@/lib/emails";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS suscriptores_newsletter (
-      id          SERIAL PRIMARY KEY,
-      email       TEXT NOT NULL UNIQUE,
-      nombre      TEXT,
-      estado      TEXT NOT NULL DEFAULT 'activo',
-      cupon_code  TEXT,
-      creado_en   TIMESTAMPTZ DEFAULT now(),
-      baja_en     TIMESTAMPTZ
-    )
-  `);
+  await ensureSchema("marketing");
 }
 
 async function getOrCreateWelcomeCoupon(): Promise<string> {

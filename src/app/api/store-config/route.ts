@@ -3,17 +3,12 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 const KEY = "store_config";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS catalog_config (
-      tipo TEXT PRIMARY KEY,
-      config JSONB NOT NULL DEFAULT '{}',
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
-  `);
+  await ensureSchema("config");
 }
 
 export async function GET() {

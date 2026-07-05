@@ -1,21 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS perfiles_laser (
-      id SERIAL PRIMARY KEY,
-      nombre TEXT NOT NULL,
-      material TEXT NOT NULL DEFAULT 'todos',
-      potencia INTEGER NOT NULL DEFAULT 80,
-      velocidad INTEGER NOT NULL DEFAULT 100,
-      pasadas INTEGER NOT NULL DEFAULT 1,
-      notas TEXT,
-      activo BOOLEAN NOT NULL DEFAULT true,
-      creado_en TIMESTAMPTZ DEFAULT now()
-    )
-  `);
+  await ensureSchema("ventas");
 }
 
 export async function GET() {

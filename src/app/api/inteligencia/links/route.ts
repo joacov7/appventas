@@ -3,20 +3,10 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS producto_competidor_links (
-      id            SERIAL PRIMARY KEY,
-      product_id    TEXT NOT NULL,
-      competidor_id INT NOT NULL REFERENCES productos_competidores(id) ON DELETE CASCADE,
-      estado        TEXT NOT NULL DEFAULT 'confirmado',
-      creado_en     TIMESTAMPTZ DEFAULT now(),
-      UNIQUE (product_id, competidor_id)
-    )
-  `);
-  // Similitud de texto para las sugerencias (si el rol de DB lo permite)
-  await (prisma as any).$executeRawUnsafe(`CREATE EXTENSION IF NOT EXISTS pg_trgm`).catch(() => {});
+  await ensureSchema("inteligencia");
 }
 
 // GET ?productId=xxx → { links: [...], sugerencias: [...] }

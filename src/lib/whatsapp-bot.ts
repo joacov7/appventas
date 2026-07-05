@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
@@ -8,12 +9,7 @@ const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.verce
 async function registrarError(to: string, texto: string) {
   // Deja el error visible en el Historial (direccion 'error') para diagnosticar
   try {
-    await (prisma as any).$executeRawUnsafe(`
-      CREATE TABLE IF NOT EXISTS whatsapp_mensajes (
-        id SERIAL PRIMARY KEY, wa_id TEXT NOT NULL,
-        direccion TEXT NOT NULL DEFAULT 'entrante', texto TEXT NOT NULL,
-        creado_en TIMESTAMPTZ DEFAULT now()
-      )`);
+    await ensureSchema("whatsapp");
     await (prisma as any).$executeRawUnsafe(
       `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'error', $2)`,
       to, texto.slice(0, 800)
@@ -69,18 +65,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<{ o
 // ── Log messages to DB ───────────────────────────────────────────────────────
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS whatsapp_mensajes (
-      id          SERIAL PRIMARY KEY,
-      wa_id       TEXT NOT NULL,
-      direccion   TEXT NOT NULL DEFAULT 'entrante',
-      texto       TEXT NOT NULL,
-      creado_en   TIMESTAMPTZ DEFAULT now()
-    )
-  `);
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS idx_wa_mensajes_wa_id ON whatsapp_mensajes(wa_id);
-  `);
+  await ensureSchema("whatsapp");
 }
 
 async function logMessage(waId: string, direccion: "entrante" | "saliente", texto: string) {

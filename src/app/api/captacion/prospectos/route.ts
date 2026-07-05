@@ -4,6 +4,7 @@ export const maxDuration = 60; // límite del plan Hobby de Vercel
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 // Rubros de OSM. `key` es la clave OSM (shop, office, man_made, ...) y
 // `value` el valor. Así podemos buscar tanto comercios (revendedores)
@@ -28,27 +29,7 @@ const RUBROS: Record<string, { key: string; value: string; label: string }> = {
 };
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS prospectos (
-      id        SERIAL PRIMARY KEY,
-      nombre    TEXT NOT NULL,
-      rubro     TEXT,
-      direccion TEXT,
-      telefono  TEXT,
-      website   TEXT,
-      provincia TEXT,
-      lat       DOUBLE PRECISION,
-      lon       DOUBLE PRECISION,
-      osm_id    TEXT UNIQUE,
-      estado    TEXT DEFAULT 'nuevo',
-      notas     TEXT,
-      creado_en TIMESTAMPTZ DEFAULT now()
-    )
-  `);
-  // Columnas nuevas (para tablas ya creadas antes de esta feature)
-  await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS instagram TEXT`);
-  await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS facebook TEXT`);
-  await (prisma as any).$executeRawUnsafe(`ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS mensaje_abordaje TEXT`);
+  await ensureSchema("captacion");
 }
 
 // Normaliza un handle o URL de Instagram a URL completa

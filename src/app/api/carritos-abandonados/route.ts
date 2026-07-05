@@ -1,25 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS carritos_abandonados (
-      id         SERIAL PRIMARY KEY,
-      email      TEXT NOT NULL,
-      items_json JSONB NOT NULL,
-      total      NUMERIC(12,2) NOT NULL,
-      estado     TEXT NOT NULL DEFAULT 'pendiente',
-      email_2h_en   TIMESTAMPTZ,
-      email_24h_en  TIMESTAMPTZ,
-      creado_en  TIMESTAMPTZ DEFAULT now(),
-      actualizado_en TIMESTAMPTZ DEFAULT now()
-    )
-  `);
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE INDEX IF NOT EXISTS idx_carritos_email ON carritos_abandonados(email);
-    CREATE INDEX IF NOT EXISTS idx_carritos_estado ON carritos_abandonados(estado);
-  `);
+  await ensureSchema("ventas");
 }
 
 // POST — registrar o actualizar carrito abandonado

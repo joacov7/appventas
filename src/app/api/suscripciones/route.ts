@@ -3,25 +3,10 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS suscripciones_reposicion (
-      id               SERIAL PRIMARY KEY,
-      email            TEXT NOT NULL,
-      variant_id       TEXT NOT NULL,
-      product_name     TEXT NOT NULL,
-      variant_name     TEXT NOT NULL,
-      product_slug     TEXT NOT NULL,
-      quantity         INT NOT NULL DEFAULT 1,
-      frecuencia_dias  INT NOT NULL DEFAULT 30,
-      proximo_envio    DATE NOT NULL,
-      ultimo_envio     DATE,
-      estado           TEXT NOT NULL DEFAULT 'activa',
-      creado_en        TIMESTAMPTZ DEFAULT now(),
-      UNIQUE (email, variant_id)
-    )
-  `);
+  await ensureSchema("ventas");
 }
 
 // POST — subscribe (store)

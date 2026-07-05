@@ -130,6 +130,7 @@ const DDL: Record<Ambito, string[]> = {
       creado_en     TIMESTAMPTZ DEFAULT now(),
       UNIQUE (product_id, competidor_id)
     )`,
+    `CREATE EXTENSION IF NOT EXISTS pg_trgm`,
   ],
 
   // ─── Captación / prospección B2B ─────────────────────────────────────────
@@ -213,6 +214,8 @@ const DDL: Record<Ambito, string[]> = {
       creado_en  TIMESTAMPTZ DEFAULT now(),
       actualizado_en TIMESTAMPTZ DEFAULT now()
     )`,
+    `CREATE INDEX IF NOT EXISTS idx_carritos_email ON carritos_abandonados(email)`,
+    `CREATE INDEX IF NOT EXISTS idx_carritos_estado ON carritos_abandonados(estado)`,
     `CREATE TABLE IF NOT EXISTS suscripciones_reposicion (
       id               SERIAL PRIMARY KEY,
       email            TEXT NOT NULL,
@@ -250,6 +253,7 @@ const DDL: Record<Ambito, string[]> = {
       texto TEXT NOT NULL,
       creado_en TIMESTAMPTZ DEFAULT now()
     )`,
+    `CREATE INDEX IF NOT EXISTS idx_wa_mensajes_wa_id ON whatsapp_mensajes(wa_id)`,
   ],
 
   // ─── Agentes (ejecuciones, cola de aprobaciones, briefings) ──────────────

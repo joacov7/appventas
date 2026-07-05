@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 const KEY = "whatsapp_config";
 
@@ -10,10 +11,7 @@ export interface WhatsAppConfig {
 }
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS catalog_config (
-      tipo TEXT PRIMARY KEY, config JSONB NOT NULL, updated_at TIMESTAMPTZ DEFAULT NOW()
-    )`).catch(() => {});
+  await ensureSchema("config");
 }
 
 // Config real (con secretos). Prioriza lo guardado en DB; cae a variables

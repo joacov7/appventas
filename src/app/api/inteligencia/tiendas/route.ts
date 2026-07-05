@@ -3,20 +3,10 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTables() {
-  // Ensure unique constraint on (tienda_id, url) for bulk upsert
-  await (prisma as any).$executeRawUnsafe(`
-    DO $$ BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-        WHERE conname = 'productos_competidores_tienda_url_unique'
-      ) THEN
-        ALTER TABLE productos_competidores
-          ADD CONSTRAINT productos_competidores_tienda_url_unique UNIQUE (tienda_id, url);
-      END IF;
-    END $$
-  `).catch(() => {});
+  await ensureSchema("inteligencia");
 }
 
 export async function GET() {

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import type { AIConfig, ProviderConfig } from "./types";
 
 const KEY = "ai_config";
@@ -42,13 +43,7 @@ export function defaultConfig(): AIConfig {
 }
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS catalog_config (
-      tipo TEXT PRIMARY KEY,
-      config JSONB NOT NULL,
-      updated_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `).catch(() => {});
+  await ensureSchema("config");
 }
 
 // Deep-merge de la config guardada sobre los defaults (para que claves nuevas existan)

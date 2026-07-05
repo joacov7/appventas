@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import { remember } from "@/lib/memory";
 
 export const MARGEN_PISO_PCT = 15; // nunca sugerir un precio con margen menor a esto
@@ -60,12 +61,7 @@ export async function aplicarPrecioSugerido(
 
   await prisma.productVariant.update({ where: { id: variante.id }, data: { price: nuevoPrecio.toString() } });
 
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS price_history (
-      id SERIAL PRIMARY KEY, product_id TEXT NOT NULL, campo TEXT NOT NULL,
-      valor_anterior DECIMAL(12,2), valor_nuevo DECIMAL(12,2), usuario TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )`).catch(() => {});
+  await ensureSchema("pricing");
   await (prisma as any).$executeRawUnsafe(
     `INSERT INTO price_history (product_id, campo, valor_anterior, valor_nuevo, usuario) VALUES ($1,$2,$3,$4,$5)`,
     String(productId), `variante:${variante.name}`, precioAnterior, nuevoPrecio, usuario

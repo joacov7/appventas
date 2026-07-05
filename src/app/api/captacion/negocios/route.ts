@@ -1,17 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function ensureTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS negocios_competidores (
-      id        SERIAL PRIMARY KEY,
-      nombre    TEXT NOT NULL,
-      url       TEXT UNIQUE NOT NULL,
-      activo    BOOLEAN DEFAULT TRUE,
-      creado_en TIMESTAMPTZ DEFAULT now()
-    )
-  `);
+  await ensureSchema("captacion");
 }
 
 export async function GET() {

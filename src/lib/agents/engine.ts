@@ -1,34 +1,12 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import { registry } from "@/lib/tools";
 import { getAI } from "@/lib/ai";
 import { recall as memRecall, remember as memRemember } from "@/lib/memory";
 import type { AgentDef, AgentRunContext, AgentRunResult, AgentTelemetry, AutonomyMode } from "./types";
 
 async function ensureTables() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS agent_runs (
-      id BIGSERIAL PRIMARY KEY,
-      tenant_id TEXT DEFAULT 'default',
-      agent_id TEXT NOT NULL,
-      ok BOOLEAN,
-      decision JSONB,
-      telemetry JSONB,
-      cost_usd REAL,
-      ms INT,
-      created_at TIMESTAMPTZ DEFAULT now()
-    )
-  `).catch(() => {});
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS action_queue (
-      id BIGSERIAL PRIMARY KEY,
-      tenant_id TEXT DEFAULT 'default',
-      agent_id TEXT,
-      tool TEXT,
-      input JSONB,
-      estado TEXT DEFAULT 'pendiente',
-      created_at TIMESTAMPTZ DEFAULT now()
-    )
-  `).catch(() => {});
+  await ensureSchema("agentes");
 }
 
 // Ejecuta un agente aplicando el flujo memoria→reglas→datos→IA→experiencia,

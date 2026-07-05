@@ -2,6 +2,7 @@
 // Recolecta señales de todos los módulos y genera un briefing accionable con IA.
 
 import { prisma } from "./prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import { aiComplete } from "@/lib/ai";
 import { proximasFechas } from "@/lib/services/calendario.service";
 
@@ -171,16 +172,7 @@ export async function generarBriefing(datos: DatosBriefing): Promise<Briefing> {
 }
 
 export async function ensureBriefingTable() {
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS briefings (
-      id        SERIAL PRIMARY KEY,
-      fecha     DATE UNIQUE NOT NULL,
-      datos     JSONB NOT NULL,
-      resumen   TEXT NOT NULL,
-      acciones  JSONB NOT NULL,
-      creado_en TIMESTAMPTZ DEFAULT now()
-    )
-  `);
+  await ensureSchema("agentes");
 }
 
 // Genera (o regenera) el briefing del día y lo persiste.

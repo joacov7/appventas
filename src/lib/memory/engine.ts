@@ -1,32 +1,11 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import type { MemoryEntry, RememberInput, RecallInput } from "./types";
 
 const TENANT_DEFAULT = "default";
-let tablaLista = false;
 
 async function ensureTable() {
-  if (tablaLista) return;
-  await (prisma as any).$executeRawUnsafe(`
-    CREATE TABLE IF NOT EXISTS memory_entries (
-      id          BIGSERIAL PRIMARY KEY,
-      tenant_id   TEXT NOT NULL DEFAULT 'default',
-      namespace   TEXT NOT NULL,
-      kind        TEXT,
-      mkey        TEXT NOT NULL,
-      value       JSONB NOT NULL,
-      tags        TEXT[] DEFAULT '{}',
-      source      TEXT,
-      confidence  REAL DEFAULT 0.5,
-      hits        INT DEFAULT 0,
-      created_at  TIMESTAMPTZ DEFAULT now(),
-      updated_at  TIMESTAMPTZ DEFAULT now(),
-      UNIQUE (tenant_id, namespace, mkey)
-    )
-  `);
-  await (prisma as any).$executeRawUnsafe(
-    `CREATE INDEX IF NOT EXISTS idx_memory_ns ON memory_entries (tenant_id, namespace)`
-  ).catch(() => {});
-  tablaLista = true;
+  await ensureSchema("memoria");
 }
 
 function mapRow(r: any): MemoryEntry {

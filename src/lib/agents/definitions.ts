@@ -182,7 +182,7 @@ export const AGENTS: AgentDef[] = [
     rol: "Fechas y campañas de temporada",
     objetivo: "Avisa con anticipación las fechas comerciales importantes (Día de la Madre, Navidad, etc.) y prepara el gancho de la campaña.",
     categoria: "Marketing",
-    tools: ["fechas_comerciales", "productos_para_promocionar"],
+    tools: ["fechas_comerciales", "productos_para_promocionar", "generar_campana"],
     defaultAutonomy: "manual",
     async handler(ctx) {
       const fechas = await ctx.tool<any[]>("fechas_comerciales", { ventanaDias: 45 });
@@ -196,35 +196,26 @@ export const AGENTS: AgentDef[] = [
         detalle: `${f.relevancia === "alta" ? "🔥 " : ""}${f.angulo}`,
       }));
 
-      // Para la fecha más cercana de alta relevancia: preparar el gancho con IA
+      // Fecha fuerte más cercana: si está a ≤21 días, generar la campaña
+      // completa ambientada en esa fecha (propuesta → Aprobaciones).
       const destacada = fechas.find(f => f.relevancia === "alta") ?? fechas[0];
-      let ganchoTexto = "";
-      // Anticipación ideal: preparar la campaña ~2 semanas antes
+      let campanaGenerada = false;
       if (destacada.dias_restantes <= 21) {
-        const candidatos = await ctx.tool<any[]>("productos_para_promocionar", { limit: 3 });
+        const candidatos = await ctx.tool<any[]>("productos_para_promocionar", { limit: 1 });
         const producto = candidatos[0];
         if (producto) {
-          const gancho = await ctx.ai({
-            system: "Sos redactor publicitario de una tienda argentina de mates. Escribí UN texto corto y persuasivo para una campaña de la fecha indicada, usando el producto que te paso. Español argentino, cálido. Máximo 2 oraciones. Solo el texto.",
-            messages: [{ role: "user", content: `Fecha: ${destacada.nombre} (${destacada.angulo}). Producto estrella: ${producto.nombre} ($${producto.precio}).` }],
-            maxTokens: 150,
-          });
-          ganchoTexto = gancho.trim();
+          await ctx.tool("generar_campana", { productId: producto.id, ocasion: destacada.nombre });
+          campanaGenerada = true;
           recomendaciones.unshift({
-            titulo: `📣 Preparar campaña de ${destacada.nombre} ya`,
-            detalle: `Idea: "${ganchoTexto}" — generá la campaña completa en Meta Ads (producto sugerido: ${producto.nombre}).`,
-          });
-          await ctx.remember({
-            namespace: "comercial", kind: "gancho_fecha", key: `gancho:${destacada.nombre}:${destacada.fecha}`,
-            value: { fecha: destacada.nombre, producto: producto.nombre, texto: ganchoTexto },
-            source: "agente-calendario", confidence: 0.6,
+            titulo: `📣 Campaña de ${destacada.nombre} preparada con "${producto.nombre}"`,
+            detalle: `El borrador de campaña ambientado en ${destacada.nombre} espera tu aprobación. Revisalo en Aprobaciones (o en Meta Ads si estás en modo autónomo).`,
           });
         }
       }
 
-      ctx.log(`${fechas.length} fechas próximas · destacada: ${destacada.nombre} en ${destacada.dias_restantes} días`);
+      ctx.log(`${fechas.length} fechas próximas · destacada: ${destacada.nombre} en ${destacada.dias_restantes} días${campanaGenerada ? " · campaña propuesta" : ""}`);
       return {
-        resumen: `La próxima fecha fuerte es ${destacada.nombre}, en ${destacada.dias_restantes} días.${destacada.dias_restantes <= 21 ? " Conviene preparar la campaña ya." : " Todavía hay tiempo, pero conviene ir pensándola."}`,
+        resumen: `La próxima fecha fuerte es ${destacada.nombre}, en ${destacada.dias_restantes} días.${campanaGenerada ? " Preparé el borrador de campaña — está en Aprobaciones." : " Todavía hay tiempo; cuando esté a ~3 semanas, preparo la campaña sola."}`,
         recomendaciones,
       };
     },

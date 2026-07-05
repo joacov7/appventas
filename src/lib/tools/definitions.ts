@@ -10,6 +10,7 @@ import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 import { resumenFinanciero, productosParaPromocionar } from "@/lib/services/finanzas.service";
 import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
 import { proximasFechas } from "@/lib/services/calendario.service";
+import { generarCampana } from "@/lib/services/campana.service";
 
 // Cada tool: nombre, categoría, efecto, validación zod, params documentados y handler.
 export const TOOLS: Tool[] = [
@@ -173,6 +174,19 @@ export const TOOLS: Tool[] = [
       { nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de resultados" },
     ],
     run: (i) => recall(i),
+  },
+  {
+    name: "generar_campana",
+    description: "Genera un borrador completo de campaña de Meta Ads para un producto (nombre, presupuesto, público y 2 anuncios A/B). Opcionalmente ambientada en una ocasión (ej: Día de la Madre). Acción de escritura: requiere aprobación salvo en modo autónomo.",
+    category: "Marketing",
+    sideEffect: "write",
+    input: z.object({ productId: z.string(), ocasion: z.string().optional(), estrategia: z.string().optional() }),
+    params: [
+      { nombre: "productId", tipo: "string", requerido: true, descripcion: "ID del producto a promocionar" },
+      { nombre: "ocasion", tipo: "string", requerido: false, descripcion: "Fecha/tema, ej: Día de la Madre" },
+      { nombre: "estrategia", tipo: "string", requerido: false, descripcion: "ventas | rotacion" },
+    ],
+    run: (i) => generarCampana(i.productId, { ocasion: i.ocasion, estrategia: i.estrategia }),
   },
   {
     name: "aplicar_precio",

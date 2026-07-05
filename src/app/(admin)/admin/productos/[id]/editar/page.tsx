@@ -8,6 +8,7 @@ import { MediaUpload } from "@/components/ui/MediaUpload";
 import Link from "next/link";
 import { slugify } from "@/lib/utils";
 import { PricingPanel } from "@/components/admin/PricingPanel";
+import { FabricantePanel } from "@/components/admin/FabricantePanel";
 
 interface Variant {
   id?: string;
@@ -240,6 +241,10 @@ export default function EditarProductoPage() {
           Guardar cambios
         </Button>
       </form>
+
+      <div className="mt-6">
+        <FabricantePanel productId={id} />
+      </div>
 
       <PricingPanel productId={id} />
     </div>

@@ -1,22 +1,22 @@
 import { prisma } from "@/lib/prisma";
+import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 
-const ACCESS_TOKEN = process.env.WHATSAPP_ACCESS_TOKEN ?? "";
-const PHONE_NUMBER_ID = process.env.WHATSAPP_PHONE_NUMBER_ID ?? "";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
 
 // ── Send a text message via Meta Cloud API ───────────────────────────────────
 
 export async function sendWhatsAppMessage(to: string, text: string) {
-  if (!ACCESS_TOKEN || !PHONE_NUMBER_ID) {
-    console.warn("[WA Bot] WHATSAPP_ACCESS_TOKEN or WHATSAPP_PHONE_NUMBER_ID not set");
+  const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
+  if (!accessToken || !phoneNumberId) {
+    console.warn("[WA Bot] WhatsApp no configurado (token/phoneNumberId)");
     return;
   }
   const res = await fetch(
-    `https://graph.facebook.com/v19.0/${PHONE_NUMBER_ID}/messages`,
+    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
     {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${ACCESS_TOKEN}`,
+        Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({

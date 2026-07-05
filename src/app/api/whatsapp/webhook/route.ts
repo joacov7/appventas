@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { handleIncomingMessage } from "@/lib/whatsapp-bot";
+import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 
 // ── GET — Meta webhook verification ─────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -10,9 +11,9 @@ export async function GET(req: NextRequest) {
   const token = searchParams.get("hub.verify_token");
   const challenge = searchParams.get("hub.challenge");
 
-  const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN;
+  const { verifyToken } = await loadWhatsAppConfig();
   if (!verifyToken) {
-    return new NextResponse("WHATSAPP_VERIFY_TOKEN not set", { status: 500 });
+    return new NextResponse("Verify token no configurado", { status: 500 });
   }
 
   if (mode === "subscribe" && token === verifyToken) {

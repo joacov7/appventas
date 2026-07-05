@@ -32,15 +32,15 @@ const SETUP_STEPS = [
   },
   {
     n: 3,
-    title: "Configurar env vars en Vercel",
-    desc: "Agregar en Settings → Environment Variables:",
-    code: `WHATSAPP_ACCESS_TOKEN=<tu_token>\nWHATSAPP_PHONE_NUMBER_ID=<tu_phone_id>\nWHATSAPP_VERIFY_TOKEN=<cualquier_string_secreto>`,
+    title: "Cargar los datos acá arriba",
+    desc: "Pegá el Access Token, el Phone Number ID e inventá un Token de verificación en el formulario de arriba, y guardá. (Ya no hace falta tocar Vercel.)",
+    link: null,
   },
   {
     n: 4,
-    title: "Registrar el webhook",
+    title: "Registrar el webhook en Meta",
     desc: "En Meta → WhatsApp → Configuration → Webhook:",
-    code: `URL: https://tudominio.vercel.app/api/whatsapp/webhook\nVerify Token: (el mismo que WHATSAPP_VERIFY_TOKEN)\nSuscribir a: messages`,
+    code: `URL: https://tudominio.vercel.app/api/whatsapp/webhook\nToken de verificación: (el mismo que pusiste arriba)\nSuscribir a: messages`,
   },
   {
     n: 5,
@@ -192,8 +192,14 @@ export default function WhatsAppBotPage() {
 
       {tab === "config" && (
         <div className="space-y-4 max-w-2xl">
+          <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-4 py-3 text-sm text-emerald-800">
+            Pegá acá los datos de Meta y guardá. <strong>No hace falta tocar Vercel.</strong> El webhook (paso en Meta) usa el "Token de verificación" que pongas abajo.
+          </div>
+
+          <WhatsAppConfigForm />
+
           <div className="bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 text-sm text-amber-700">
-            El bot usa <strong>Meta WhatsApp Cloud API</strong> (gratuito). Seguí los pasos para activarlo.
+            ¿De dónde saco cada dato? Seguí los pasos de referencia debajo.
           </div>
 
           <div className="bg-gray-900 rounded-xl px-4 py-3 font-mono text-xs text-emerald-400 space-y-1">
@@ -228,6 +234,59 @@ export default function WhatsAppBotPage() {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Formulario de configuración de WhatsApp (guarda en la base, no en Vercel) ─
+function WhatsAppConfigForm() {
+  const [cfg, setCfg] = useState<any>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState("");
+
+  useEffect(() => { fetch("/api/whatsapp/config").then(r => r.json()).then(setCfg); }, []);
+
+  async function guardar() {
+    setSaving(true); setMsg("");
+    try {
+      const r = await fetch("/api/whatsapp/config", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cfg),
+      });
+      const data = await r.json();
+      if (!r.ok) { setMsg(data.error ?? "Error"); return; }
+      setCfg(data);
+      setMsg("✓ Datos guardados");
+    } finally { setSaving(false); }
+  }
+
+  if (!cfg) return <p className="text-sm text-gray-400">Cargando...</p>;
+  const campo = (k: string, label: string, ph: string, help?: string, secreto = false) => (
+    <div>
+      <label className="text-sm font-medium text-gray-700">{label}</label>
+      <input
+        type={secreto ? "text" : "text"}
+        value={cfg[k] ?? ""}
+        onChange={(e) => setCfg({ ...cfg, [k]: e.target.value })}
+        placeholder={ph}
+        className="mt-1 w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 font-mono"
+      />
+      {help && <p className="text-xs text-gray-400 mt-1">{help}</p>}
+    </div>
+  );
+
+  return (
+    <div className="bg-white rounded-2xl border p-5 space-y-3 shadow-sm">
+      {campo("accessToken", "Access Token", cfg.hasToken ? "•••• (guardado — dejá así para no cambiarlo)" : "Pegá el token de Meta", "El token de acceso de la Configuración de la API en Meta.", true)}
+      {campo("phoneNumberId", "Phone Number ID", "Ej: 123456789012345", "El identificador del número de teléfono (no el número en sí).")}
+      {campo("verifyToken", "Token de verificación", "Ej: mate2026", "Inventalo vos. Después lo pegás igual en el webhook de Meta.")}
+      {campo("numeroPublico", "Número visible al cliente", "Ej: 5493444522915", "Con código de país, solo dígitos. Se muestra en la tienda.")}
+      <div className="flex items-center gap-3 pt-1">
+        <button onClick={guardar} disabled={saving}
+          className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium">
+          {saving ? "Guardando..." : "Guardar datos de WhatsApp"}
+        </button>
+        {msg && <span className={`text-sm ${msg.startsWith("✓") ? "text-emerald-600" : "text-red-600"}`}>{msg}</span>}
+      </div>
     </div>
   );
 }

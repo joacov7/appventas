@@ -9,7 +9,13 @@ type Run = {
 };
 type Agente = {
   id: string; nombre: string; rol: string; objetivo: string; categoria: string;
-  tools: string[]; enabled: boolean; autonomy: string; ultimaEjecucion: Run | null;
+  tools: string[]; enabled: boolean; autonomy: string; schedule?: string; ultimaEjecucion: Run | null;
+};
+
+const FRECUENCIA: Record<string, string> = {
+  off: "Manual (no corre solo)",
+  diario: "Diario (cada mañana)",
+  semanal: "Semanal (los lunes)",
 };
 
 const AUTONOMIA: Record<string, { label: string; desc: string; color: string }> = {
@@ -47,9 +53,14 @@ export default function AgentesPage() {
     } finally { setCorriendo(null); }
   }
 
-  async function cambiar(id: string, campo: "enabled" | "autonomy", valor: any) {
+  async function cambiar(id: string, campo: "enabled" | "autonomy" | "schedule", valor: any) {
     const a = agentes.find(x => x.id === id)!;
-    const body = { agentId: id, enabled: campo === "enabled" ? valor : a.enabled, autonomy: campo === "autonomy" ? valor : a.autonomy };
+    const body = {
+      agentId: id,
+      enabled: campo === "enabled" ? valor : a.enabled,
+      autonomy: campo === "autonomy" ? valor : a.autonomy,
+      schedule: campo === "schedule" ? valor : (a.schedule ?? "off"),
+    };
     setAgentes(prev => prev.map(x => x.id === id ? { ...x, [campo]: valor } : x));
     await fetch("/api/agentes/config", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
   }
@@ -112,6 +123,13 @@ export default function AgentesPage() {
                       <select value={a.autonomy} onChange={e => cambiar(a.id, "autonomy", e.target.value)}
                         className="text-xs border rounded-lg px-2 py-1 outline-none bg-white">
                         {Object.entries(AUTONOMIA).map(([k, v]) => <option key={k} value={k}>{v.label} — {v.desc}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-500">Frecuencia:</span>
+                      <select value={a.schedule ?? "off"} onChange={e => cambiar(a.id, "schedule", e.target.value)}
+                        className="text-xs border rounded-lg px-2 py-1 outline-none bg-white">
+                        {Object.entries(FRECUENCIA).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                       </select>
                     </div>
                   </div>

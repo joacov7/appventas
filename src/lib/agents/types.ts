@@ -56,7 +56,10 @@ export interface AgentDef {
   handler: (ctx: AgentRunContext) => Promise<AgentDecision>;
 }
 
+export type Schedule = "off" | "diario" | "semanal";
+
 export interface AgentConfig {
   enabled: boolean;
   autonomy: AutonomyMode;
+  schedule?: Schedule; // off = solo manual; semanal = los lunes
 }

@@ -11,12 +11,12 @@ export async function GET() {
   const runByAgent = new Map(runs.map((r: any) => [r.agent_id, r]));
 
   const agentes = AGENTS.map(a => {
-    const cfg = configs[a.id] ?? { enabled: true, autonomy: a.defaultAutonomy };
+    const cfg = configs[a.id] ?? { enabled: true, autonomy: a.defaultAutonomy, schedule: "off" };
     const run = runByAgent.get(a.id);
     return {
       id: a.id, nombre: a.nombre, rol: a.rol, objetivo: a.objetivo, categoria: a.categoria,
       tools: a.tools,
-      enabled: cfg.enabled, autonomy: cfg.autonomy,
+      enabled: cfg.enabled, autonomy: cfg.autonomy, schedule: cfg.schedule ?? "off",
       ultimaEjecucion: run ? {
         fecha: run.created_at, ok: run.ok, ms: run.ms, costUsd: run.cost_usd,
         decision: run.decision, telemetry: run.telemetry,

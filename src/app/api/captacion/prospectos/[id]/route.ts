@@ -1,16 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const { id } = await params;
   const { estado, notas } = await req.json();
+  await ensureSchema("captacion");
 
   const sets: string[] = [];
   const args: any[] = [];
   let idx = 1;
-  if (estado !== undefined) { sets.push(`estado = $${idx++}`); args.push(String(estado)); }
+  if (estado !== undefined) {
+    sets.push(`estado = $${idx++}`); args.push(String(estado));
+    // Marca cuándo se contactó por primera vez (para el seguimiento).
+    if (estado === "contactado" || estado === "interesado") {
+      sets.push(`contactado_en = COALESCE(contactado_en, now())`);
+    }
+  }
   if (notas !== undefined)  { sets.push(`notas = $${idx++}`);  args.push(notas === null ? null : String(notas)); }
   if (!sets.length) return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 });
 

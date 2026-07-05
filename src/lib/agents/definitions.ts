@@ -299,6 +299,48 @@ export const AGENTS: AgentDef[] = [
       };
     },
   },
+
+  // ── Seguimiento: re-contacta prospectos y presupuestos que quedaron tibios ──
+  {
+    id: "seguimiento",
+    nombre: "Seguimiento",
+    rol: "Re-contacto comercial",
+    objetivo: "Persigue lo que quedó sin cerrar: prospectos contactados sin respuesta y presupuestos enviados. Detecta con reglas; propone el recordatorio.",
+    categoria: "Comercial",
+    tools: ["seguimientos_pendientes", "enviar_whatsapp"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const pendientes = await ctx.tool<any[]>("seguimientos_pendientes", {});
+      if (!pendientes.length) {
+        ctx.log("nada para seguir · 0 tokens de IA");
+        return { resumen: "Todo al día: no hay prospectos ni presupuestos esperando seguimiento.", recomendaciones: [] };
+      }
+
+      const recomendaciones: { titulo: string; detalle: string }[] = [];
+      let propuestas = 0;
+      for (const s of pendientes) {
+        if (s.tipo === "prospecto") {
+          recomendaciones.push({
+            titulo: `${s.nombre} — contactado hace ${s.dias} día${s.dias !== 1 ? "s" : ""} sin respuesta`,
+            detalle: s.telefono ? `Propuse un recordatorio por WhatsApp (revisalo en Aprobaciones).` : `Sin teléfono cargado: seguilo por otro canal. Mensaje sugerido: "${s.mensaje_sugerido}"`,
+          });
+          // Con teléfono: propone el envío (va a Aprobaciones en manual/asistido).
+          if (s.telefono) { await ctx.tool("enviar_whatsapp", { to: s.telefono, texto: s.mensaje_sugerido }); propuestas++; }
+        } else {
+          recomendaciones.push({
+            titulo: `Presupuesto de ${s.cliente} — enviado hace ${s.dias} día${s.dias !== 1 ? "s" : ""}`,
+            detalle: `Está tibio. Mensaje sugerido: "${s.mensaje_sugerido}"`,
+          });
+        }
+      }
+
+      ctx.log(`${pendientes.length} seguimiento(s) · ${propuestas} recordatorio(s) propuesto(s) · 0 tokens de IA`);
+      return {
+        resumen: `${pendientes.length} cosa(s) para seguir.${propuestas ? ` Propuse ${propuestas} recordatorio(s) por WhatsApp — revisalos en Aprobaciones.` : ""}`,
+        recomendaciones,
+      };
+    },
+  },
 ];
 
 function etiquetaAlerta(tipo: string): string {

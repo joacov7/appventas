@@ -32,7 +32,8 @@ export default function MarketingPage() {
     ]);
     setFechas(Array.isArray(f) ? f : []);
     // El endpoint devuelve { ventas, rotacion }: los unimos sin repetir.
-    const lista = Array.isArray(c) ? c : [...(c?.ventas ?? []), ...(c?.rotacion ?? [])];
+    const cc = c as any;
+    const lista = Array.isArray(cc) ? cc : [...(cc?.ventas ?? []), ...(cc?.rotacion ?? [])];
     const vistos = new Set<string>();
     setCandidatos(lista.filter((x: Candidato) => x && !vistos.has(x.id) && vistos.add(x.id)));
     setLoading(false);

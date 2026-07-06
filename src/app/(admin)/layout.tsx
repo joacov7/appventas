@@ -6,63 +6,88 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle,
 } from "lucide-react";
 
-const NAV = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/hero", label: "Hero Slider", icon: Images },
-  { href: "/admin/productos", label: "Productos", icon: Package },
-  { href: "/admin/fabricantes", label: "Fabricantes", icon: Factory },
-  { href: "/admin/cotizador", label: "Cotizador", icon: Calculator },
-  { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingBag },
-  { href: "/admin/ventas", label: "Ventas manuales", icon: Receipt },
-  { href: "/admin/cupones", label: "Cupones", icon: Tag },
-  { href: "/admin/envios", label: "Envíos", icon: Truck },
-  { href: "/admin/captacion", label: "Captación", icon: Users },
-  { href: "/admin/captacion/meta", label: "Meta Ads", icon: Megaphone },
-  { href: "/admin/seguimiento", label: "Seguimiento", icon: Clock },
-  { href: "/admin/postventa", label: "Postventa", icon: Heart },
-  { href: "/admin/marketing", label: "Marketing", icon: CalendarDays },
-  { href: "/admin/inteligencia", label: "Inteligencia", icon: TrendingDown },
-  { href: "/admin/virolas", label: "Virolas", icon: CircleDot },
-  { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
-  { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
-  { href: "/admin/mayorista", label: "Mayorista", icon: Layers },
-  { href: "/admin/referidos", label: "Referidos", icon: Gift },
-  { href: "/admin/suscripciones", label: "Reposiciones", icon: RefreshCw },
-  { href: "/admin/bandeja", label: "Bandeja", icon: Inbox },
-  { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
-  { href: "/admin/combos", label: "Combos", icon: Gift },
-  { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
-  { href: "/admin/agentes", label: "Agentes", icon: Bot },
-  { href: "/admin/aprobaciones", label: "Aprobaciones", icon: CheckSquare },
-  { href: "/admin/ia", label: "Inteligencia Artificial", icon: Cpu },
-  { href: "/admin/memoria", label: "Memoria", icon: Brain },
-  { href: "/admin/configuracion", label: "Configuración", icon: Settings },
+const GRUPOS = [
+  { grupo: "General", items: [
+    { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/admin/ayuda", label: "Ayuda", icon: HelpCircle },
+  ] },
+  { grupo: "Catálogo", items: [
+    { href: "/admin/productos", label: "Productos", icon: Package },
+    { href: "/admin/fabricantes", label: "Fabricantes", icon: Factory },
+    { href: "/admin/combos", label: "Combos", icon: Gift },
+    { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
+    { href: "/admin/virolas", label: "Virolas", icon: CircleDot },
+    { href: "/admin/hero", label: "Hero Slider", icon: Images },
+  ] },
+  { grupo: "Ventas", items: [
+    { href: "/admin/cotizador", label: "Cotizador", icon: Calculator },
+    { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingBag },
+    { href: "/admin/ventas", label: "Ventas manuales", icon: Receipt },
+    { href: "/admin/mayorista", label: "Mayorista", icon: Layers },
+    { href: "/admin/cupones", label: "Cupones", icon: Tag },
+    { href: "/admin/envios", label: "Envíos", icon: Truck },
+  ] },
+  { grupo: "Clientes", items: [
+    { href: "/admin/bandeja", label: "Bandeja", icon: Inbox },
+    { href: "/admin/captacion", label: "Captación", icon: Users },
+    { href: "/admin/seguimiento", label: "Seguimiento", icon: Clock },
+    { href: "/admin/postventa", label: "Postventa", icon: Heart },
+    { href: "/admin/newsletter", label: "Newsletter", icon: Mail },
+    { href: "/admin/referidos", label: "Referidos", icon: Gift },
+    { href: "/admin/suscripciones", label: "Reposiciones", icon: RefreshCw },
+  ] },
+  { grupo: "Marketing e Inteligencia", items: [
+    { href: "/admin/marketing", label: "Marketing", icon: CalendarDays },
+    { href: "/admin/captacion/meta", label: "Meta Ads", icon: Megaphone },
+    { href: "/admin/inteligencia", label: "Inteligencia", icon: TrendingDown },
+    { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },
+  ] },
+  { grupo: "Empresa IA", items: [
+    { href: "/admin/agentes", label: "Agentes", icon: Bot },
+    { href: "/admin/aprobaciones", label: "Aprobaciones", icon: CheckSquare },
+    { href: "/admin/ia", label: "Inteligencia Artificial", icon: Cpu },
+    { href: "/admin/memoria", label: "Memoria", icon: Brain },
+  ] },
+  { grupo: "Sistema", items: [
+    { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
+    { href: "/admin/configuracion", label: "Configuración", icon: Settings },
+  ] },
 ];
+
+// Lista plana derivada, para resolver la página actual (encabezado móvil).
+const NAV = GRUPOS.flatMap(g => g.items);
 
 function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex-1 p-4 space-y-0.5 overflow-y-auto">
-      {NAV.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
-        return (
-          <Link
-            key={href}
-            href={href}
-            onClick={onNavigate}
-            className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
-              active
-                ? "bg-emerald-50 text-emerald-700 font-medium"
-                : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-            }`}
-          >
-            <Icon size={17} className={active ? "text-emerald-600" : ""} />
-            {label}
-          </Link>
-        );
-      })}
+    <nav className="flex-1 p-3 overflow-y-auto">
+      {GRUPOS.map(({ grupo, items }) => (
+        <div key={grupo} className="mb-3">
+          <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-1">{grupo}</p>
+          <div className="space-y-0.5">
+            {items.map(({ href, label, icon: Icon }) => {
+              const active = pathname === href || (href !== "/admin" && pathname.startsWith(href));
+              return (
+                <Link
+                  key={href}
+                  href={href}
+                  onClick={onNavigate}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
+                    active
+                      ? "bg-emerald-50 text-emerald-700 font-medium"
+                      : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  }`}
+                >
+                  <Icon size={17} className={active ? "text-emerald-600" : ""} />
+                  {label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </nav>
   );
 }

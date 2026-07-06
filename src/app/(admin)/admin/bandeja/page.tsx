@@ -108,10 +108,13 @@ export default function BandejaPage() {
           ) : (
             <>
               <div className="p-3 border-b flex items-center gap-2">
-                <button onClick={() => setSel(null)} className="md:hidden text-gray-400"><ArrowLeft size={18} /></button>
+                <button onClick={() => setSel(null)}
+                  className="flex items-center gap-1 text-gray-500 hover:text-gray-800 text-sm">
+                  <ArrowLeft size={18} /> <span className="hidden sm:inline">Volver</span>
+                </button>
                 {(() => { const Icon = CANAL_ICON[sel.canal]; return <Icon size={16} className={CANAL_COLOR[sel.canal]} />; })()}
-                <span className="text-sm font-medium text-gray-800">{sel.contacto}</span>
-                <span className="text-xs text-gray-400 ml-auto capitalize">{sel.canal}</span>
+                <span className="text-sm font-medium text-gray-800 truncate">{sel.contacto}</span>
+                <span className="text-xs text-gray-400 ml-auto capitalize shrink-0">{sel.canal}</span>
               </div>
 
               <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">

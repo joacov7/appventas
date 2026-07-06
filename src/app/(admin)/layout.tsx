@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart,
 } from "lucide-react";
 
 const NAV = [
@@ -21,6 +21,7 @@ const NAV = [
   { href: "/admin/captacion", label: "Captación", icon: Users },
   { href: "/admin/captacion/meta", label: "Meta Ads", icon: Megaphone },
   { href: "/admin/seguimiento", label: "Seguimiento", icon: Clock },
+  { href: "/admin/postventa", label: "Postventa", icon: Heart },
   { href: "/admin/marketing", label: "Marketing", icon: CalendarDays },
   { href: "/admin/inteligencia", label: "Inteligencia", icon: TrendingDown },
   { href: "/admin/virolas", label: "Virolas", icon: CircleDot },

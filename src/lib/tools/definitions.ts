@@ -4,6 +4,7 @@ import { buscarProductos, consultarStock } from "@/lib/services/productos.servic
 import { consultarCompetencia, buscarEnCompetencia } from "@/lib/services/inteligencia.service";
 import { alertasPrecio } from "@/lib/services/inteligencia-comercial.service";
 import { seguimientosPendientes } from "@/lib/services/seguimiento.service";
+import { oportunidadesPostventa } from "@/lib/services/postventa.service";
 import { buscarProspectos, contarProspectosPorEstado } from "@/lib/services/prospectos.service";
 import { calcularPresupuesto } from "@/lib/services/presupuesto.service";
 import { recolectarDatos } from "@/lib/briefing";
@@ -79,6 +80,15 @@ export const TOOLS: Tool[] = [
     input: z.object({}),
     params: [],
     run: () => seguimientosPendientes(),
+  },
+  {
+    name: "oportunidades_postventa",
+    description: "Detecta oportunidades de postventa: clientes a quienes pedir reseña (compra reciente) y a reactivar para recompra (sin comprar hace tiempo). Determinístico.",
+    category: "Comercial",
+    sideEffect: "read",
+    input: z.object({}),
+    params: [],
+    run: () => oportunidadesPostventa(),
   },
   {
     name: "buscar_prospectos",

@@ -341,6 +341,36 @@ export const AGENTS: AgentDef[] = [
       };
     },
   },
+  // ── Postventa / Fidelización: reseñas y recompra (sin IA para detectar) ──
+  {
+    id: "postventa",
+    nombre: "Postventa / Fidelización",
+    rol: "Reseñas y recompra",
+    objetivo: "Aprovecha a los que ya compraron: pide reseña tras la entrega y reactiva a los clientes que hace rato no compran.",
+    categoria: "Comercial",
+    tools: ["oportunidades_postventa"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      const ops = await ctx.tool<any[]>("oportunidades_postventa", {});
+      if (!ops.length) {
+        ctx.log("sin oportunidades de postventa · 0 tokens de IA");
+        return { resumen: "No hay oportunidades de postventa por ahora.", recomendaciones: [] };
+      }
+      const resenas = ops.filter(o => o.tipo === "resena").length;
+      const recompras = ops.filter(o => o.tipo === "recompra").length;
+
+      const recomendaciones = ops.slice(0, 15).map(o => ({
+        titulo: `${o.tipo === "resena" ? "⭐ Pedir reseña" : "🔄 Reactivar"} — ${o.nombre}`,
+        detalle: `${o.tipo === "resena" ? `Compró hace ${o.dias} días.` : `Sin comprar hace ${o.dias} días (${o.compras} compra/s, ${"$" + Math.round(o.total_gastado).toLocaleString("es-AR")}).`} Mensaje: "${o.mensaje_sugerido}"`,
+      }));
+
+      ctx.log(`${ops.length} oportunidad(es): ${resenas} reseña(s), ${recompras} recompra(s) · 0 tokens de IA`);
+      return {
+        resumen: `${ops.length} oportunidad(es) de postventa: ${resenas} para pedir reseña y ${recompras} para reactivar. Revisalas en Postventa.`,
+        recomendaciones,
+      };
+    },
+  },
 ];
 
 function etiquetaAlerta(tipo: string): string {

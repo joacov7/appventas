@@ -77,7 +77,7 @@ export default function BandejaPage() {
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden grid md:grid-cols-3 h-[70vh]">
         {/* Lista */}
-        <div className={`border-r overflow-y-auto ${sel ? "hidden md:block" : ""}`}>
+        <div className={`border-r overflow-y-auto min-h-0 ${sel ? "hidden md:block" : ""}`}>
           {loading ? (
             <p className="text-gray-400 text-sm p-4">Cargando...</p>
           ) : convs.length === 0 ? (
@@ -102,12 +102,12 @@ export default function BandejaPage() {
         </div>
 
         {/* Hilo */}
-        <div className={`md:col-span-2 flex flex-col ${!sel ? "hidden md:flex" : ""}`}>
+        <div className={`md:col-span-2 flex flex-col min-h-0 ${!sel ? "hidden md:flex" : ""}`}>
           {!sel ? (
             <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Elegí una conversación</div>
           ) : (
             <>
-              <div className="p-3 border-b flex items-center gap-2">
+              <div className="p-3 border-b flex items-center gap-2 shrink-0 bg-white">
                 <button onClick={() => setSel(null)}
                   className="flex items-center gap-1 text-gray-500 hover:text-gray-800 text-sm">
                   <ArrowLeft size={18} /> <span className="hidden sm:inline">Volver</span>
@@ -117,7 +117,7 @@ export default function BandejaPage() {
                 <span className="text-xs text-gray-400 ml-auto capitalize shrink-0">{sel.canal}</span>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50">
+              <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 bg-gray-50">
                 {cargandoHilo ? (
                   <p className="text-gray-400 text-sm">Cargando...</p>
                 ) : hilo.map((m, i) => (
@@ -134,7 +134,7 @@ export default function BandejaPage() {
                 <div ref={finRef} />
               </div>
 
-              <div className="p-3 border-t flex items-end gap-2">
+              <div className="p-3 border-t flex items-end gap-2 shrink-0 bg-white">
                 <textarea value={respuesta} onChange={e => setRespuesta(e.target.value)} rows={1}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
                   placeholder="Escribí una respuesta..."

@@ -1,37 +1,45 @@
 import { prisma } from "@/lib/prisma";
+import { totalesVentasRegistradas } from "./ventas.service";
 
 export interface ResumenFinanciero {
-  ingresos_aprobados_total: number;
+  ingresos_aprobados_total: number;   // web + ventas registradas
   ingresos_30d: number;
   ordenes_total: number;
   ordenes_pagadas: number;
   ordenes_pendientes: number;
   ticket_promedio: number | null;
   pendiente_de_cobro: number;
+  ventas_offline_total: number;       // ventas cargadas fuera de la web
+  ventas_offline_30d: number;
 }
 
-// Resumen financiero desde órdenes y transacciones. 100% determinístico.
+// Resumen financiero desde órdenes, transacciones y ventas registradas. Determinístico.
 export async function resumenFinanciero(): Promise<ResumenFinanciero> {
   const hace30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [aprobadoTotal, aprobado30d, ordenesTotal, pendientes, pagadas, pendienteMonto] = await Promise.all([
+  const [aprobadoTotal, aprobado30d, ordenesTotal, pendientes, pagadas, pendienteMonto, offline] = await Promise.all([
     prisma.transaction.aggregate({ where: { status: "APPROVED" }, _sum: { amount: true } }),
     prisma.transaction.aggregate({ where: { status: "APPROVED", createdAt: { gte: hace30d } }, _sum: { amount: true } }),
     prisma.order.count(),
     prisma.order.count({ where: { status: "PENDING" } }),
     prisma.order.count({ where: { status: { in: ["PROCESSING", "SHIPPED", "DELIVERED"] } } }),
     prisma.order.aggregate({ where: { status: "PENDING" }, _sum: { total: true } }),
+    totalesVentasRegistradas(),
   ]);
 
-  const ingresos = Number(aprobadoTotal._sum.amount ?? 0);
+  const ingresosWeb = Number(aprobadoTotal._sum.amount ?? 0);
+  const ingresos = ingresosWeb + offline.total;
+  const pagadasTotal = pagadas + offline.cantidad;
   return {
     ingresos_aprobados_total: ingresos,
-    ingresos_30d: Number(aprobado30d._sum.amount ?? 0),
-    ordenes_total: ordenesTotal,
-    ordenes_pagadas: pagadas,
+    ingresos_30d: Number(aprobado30d._sum.amount ?? 0) + offline.total_30d,
+    ordenes_total: ordenesTotal + offline.cantidad,
+    ordenes_pagadas: pagadasTotal,
     ordenes_pendientes: pendientes,
-    ticket_promedio: pagadas > 0 ? ingresos / pagadas : null,
+    ticket_promedio: pagadasTotal > 0 ? ingresos / pagadasTotal : null,
     pendiente_de_cobro: Number(pendienteMonto._sum.total ?? 0),
+    ventas_offline_total: offline.total,
+    ventas_offline_30d: offline.total_30d,
   };
 }
 

@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
+import { registrarVentaDesdePresupuesto } from "@/lib/services/ventas.service";
 
 const ESTADOS = ["borrador", "enviado", "aceptado", "rechazado"];
 
@@ -61,7 +62,15 @@ export async function PATCH(req: NextRequest) {
        WHERE id = $1 RETURNING *`,
       Number(b.id), estado ?? null, b.notas ?? null
     );
-    return NextResponse.json(rows[0] ?? null);
+    const p = rows[0];
+    // Al aceptar un presupuesto, se registra como venta (para Postventa y Finanzas).
+    if (p && estado === "aceptado") {
+      await registrarVentaDesdePresupuesto({
+        id: p.id, cliente_nombre: p.cliente_nombre, cliente_empresa: p.cliente_empresa,
+        total: Number(p.total), items: Array.isArray(p.items) ? p.items : [], canal: p.canal,
+      });
+    }
+    return NextResponse.json(p ?? null);
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 });
   }

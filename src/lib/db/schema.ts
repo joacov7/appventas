@@ -16,6 +16,7 @@ type Ambito =
   | "config"
   | "catalogo"
   | "fabricantes"
+  | "ventas_registradas"
   | "cotizador"
   | "pricing"
   | "inteligencia"
@@ -89,6 +90,26 @@ const DDL: Record<Ambito, string[]> = {
       fabricante_id INT NOT NULL REFERENCES fabricantes(id) ON DELETE CASCADE,
       costo_proveedor NUMERIC(12,2),
       codigo_proveedor TEXT,
+      creado_en TIMESTAMPTZ DEFAULT now()
+    )`,
+  ],
+
+  // ─── Ventas registradas fuera de la web (manual + presupuestos cerrados) ──
+  // La tienda web ya guarda sus ventas en `orders`. Esta tabla suma las ventas
+  // por WhatsApp/mostrador/mayorista/presupuesto para que Postventa y Finanzas
+  // las vean también.
+  ventas_registradas: [
+    `CREATE TABLE IF NOT EXISTS ventas (
+      id SERIAL PRIMARY KEY,
+      cliente_nombre TEXT,
+      cliente_email TEXT,
+      cliente_telefono TEXT,
+      canal TEXT NOT NULL DEFAULT 'manual',
+      total NUMERIC(12,2) NOT NULL DEFAULT 0,
+      detalle JSONB NOT NULL DEFAULT '[]',
+      origen TEXT NOT NULL DEFAULT 'manual',
+      presupuesto_id INT UNIQUE,
+      fecha DATE NOT NULL DEFAULT CURRENT_DATE,
       creado_en TIMESTAMPTZ DEFAULT now()
     )`,
   ],

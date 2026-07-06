@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Heart, RefreshCw, Star, RotateCcw, Copy, Mail } from "lucide-react";
+import { Heart, RefreshCw, Star, RotateCcw, Copy, Mail, MessageCircle } from "lucide-react";
 
 interface Oportunidad {
   tipo: "resena" | "recompra";
-  email: string; nombre: string; dias: number; compras: number; total_gastado: number;
+  email: string | null; telefono: string | null; nombre: string;
+  dias: number; compras: number; total_gastado: number;
   mensaje_sugerido: string;
 }
 interface Resumen { total: number; resenas: number; recompras: number; oportunidades: Oportunidad[] }
@@ -26,9 +27,10 @@ export default function PostventaPage() {
   }
   useEffect(() => { load(); }, []);
 
-  async function copiar(email: string, texto: string) {
-    try { await navigator.clipboard.writeText(texto); setCopiado(email); setTimeout(() => setCopiado(null), 2000); } catch { /* noop */ }
+  async function copiar(key: string, texto: string) {
+    try { await navigator.clipboard.writeText(texto); setCopiado(key); setTimeout(() => setCopiado(null), 2000); } catch { /* noop */ }
   }
+  const waLink = (tel: string, texto: string) => `https://wa.me/${tel.replace(/[^\d]/g, "")}?text=${encodeURIComponent(texto)}`;
 
   const lista = (data?.oportunidades ?? []).filter(o => filtro === "todos" || o.tipo === filtro);
 
@@ -66,14 +68,16 @@ export default function PostventaPage() {
         </div>
       ) : (
         <div className="space-y-3">
-          {lista.map(o => (
-            <div key={o.email + o.tipo} className="bg-white rounded-2xl border shadow-sm p-5">
+          {lista.map(o => {
+            const key = (o.email || o.telefono || o.nombre) + o.tipo;
+            return (
+            <div key={key} className="bg-white rounded-2xl border shadow-sm p-5">
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={`text-xs px-2 py-0.5 rounded-full flex items-center gap-1 ${o.tipo === "resena" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
                   {o.tipo === "resena" ? <><Star size={11} /> Reseña</> : <><RotateCcw size={11} /> Recompra</>}
                 </span>
                 <h3 className="font-semibold text-gray-900">{o.nombre}</h3>
-                <span className="text-xs text-gray-400">{o.email}</span>
+                <span className="text-xs text-gray-400">{o.email || o.telefono || ""}</span>
               </div>
               <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1.5 text-xs text-gray-400">
                 <span>{o.tipo === "resena" ? `compró hace ${o.dias} días` : `sin comprar hace ${o.dias} días`}</span>
@@ -82,17 +86,26 @@ export default function PostventaPage() {
               </div>
               <p className="text-sm text-gray-600 mt-2 bg-gray-50 rounded-lg p-3">{o.mensaje_sugerido}</p>
               <div className="flex items-center gap-2 mt-3">
-                <button onClick={() => copiar(o.email, o.mensaje_sugerido)}
+                <button onClick={() => copiar(key, o.mensaje_sugerido)}
                   className="flex items-center gap-1.5 border text-gray-600 hover:bg-gray-50 text-sm px-3 py-1.5 rounded-lg">
-                  <Copy size={13} /> {copiado === o.email ? "Copiado ✓" : "Copiar"}
+                  <Copy size={13} /> {copiado === key ? "Copiado ✓" : "Copiar"}
                 </button>
-                <a href={`mailto:${o.email}?subject=${encodeURIComponent(o.tipo === "resena" ? "¡Gracias por tu compra!" : "Te extrañamos 🧉")}&body=${encodeURIComponent(o.mensaje_sugerido)}`}
-                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1.5 rounded-lg">
-                  <Mail size={13} /> Enviar email
-                </a>
+                {o.telefono && (
+                  <a href={waLink(o.telefono, o.mensaje_sugerido)} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm px-3 py-1.5 rounded-lg">
+                    <MessageCircle size={13} /> WhatsApp
+                  </a>
+                )}
+                {o.email && (
+                  <a href={`mailto:${o.email}?subject=${encodeURIComponent(o.tipo === "resena" ? "¡Gracias por tu compra!" : "Te extrañamos 🧉")}&body=${encodeURIComponent(o.mensaje_sugerido)}`}
+                    className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm px-3 py-1.5 rounded-lg">
+                    <Mail size={13} /> Email
+                  </a>
+                )}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

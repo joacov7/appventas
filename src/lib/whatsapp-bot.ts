@@ -202,11 +202,10 @@ ${APP_URL}`;
 
 // ── Main message handler ──────────────────────────────────────────────────────
 
-export async function handleIncomingMessage(waId: string, messageText: string) {
-  const text = messageText.trim();
-  const esPrimerContacto = await esNuevoContacto(waId);
-  await logMessage(waId, "entrante", text);
-
+// Calcula la respuesta del bot para un texto (sin registrar ni enviar).
+// Reutilizable por el flujo de texto y el de voz.
+export async function computarRespuesta(waId: string, texto: string, esPrimerContacto: boolean): Promise<string> {
+  const text = texto.trim();
   let response: string;
   const esSaludo = GREETINGS.test(text);
 
@@ -223,23 +222,33 @@ export async function handleIncomingMessage(waId: string, messageText: string) {
   } else if (PRICE_TRIGGERS.test(text)) {
     response = await priceQueryMessage();
   } else if (text.length > 2) {
-    // Try it as a product search
     const products = await searchProducts(text);
-    if (products.length > 0) {
-      response = await priceQueryMessage(text);
-    } else {
-      response = fallbackCalido();
-    }
+    response = products.length > 0 ? await priceQueryMessage(text) : fallbackCalido();
   } else {
     response = menuMessage();
   }
 
-  // Si es el primer mensaje y NO fue un saludo, anteponemos una bienvenida
-  // cálida — así el cliente se siente recibido aunque abra con una pregunta.
   if (esPrimerContacto && !esSaludo) {
     response = `${bienvenidaBreve()}\n\n${response}`;
   }
+  return response;
+}
 
+export async function handleIncomingMessage(waId: string, messageText: string) {
+  const text = messageText.trim();
+  const esPrimerContacto = await esNuevoContacto(waId);
+  await logMessage(waId, "entrante", text);
+  const response = await computarRespuesta(waId, text, esPrimerContacto);
   await logMessage(waId, "saliente", response);
   await sendWhatsAppMessage(waId, response);
+}
+
+// Flujo de voz: dada la transcripción, registra el entrante y devuelve la
+// respuesta del bot (el envío como audio lo hace el módulo de voz).
+export async function responderMensajeVoz(waId: string, textoTranscripto: string): Promise<string> {
+  const esPrimerContacto = await esNuevoContacto(waId);
+  await logMessage(waId, "entrante", `🎤 ${textoTranscripto}`);
+  const response = await computarRespuesta(waId, textoTranscripto, esPrimerContacto);
+  await logMessage(waId, "saliente", response);
+  return response;
 }

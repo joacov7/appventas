@@ -1,8 +1,9 @@
 export const dynamic = "force-dynamic";
-export const maxDuration = 30;
+export const maxDuration = 60; // la respuesta por voz (transcribir+sintetizar) tarda más
 
 import { NextRequest, NextResponse } from "next/server";
-import { handleIncomingMessage } from "@/lib/whatsapp-bot";
+import { handleIncomingMessage, responderMensajeVoz, sendWhatsAppMessage } from "@/lib/whatsapp-bot";
+import { procesarAudioEntrante } from "@/lib/whatsapp-voice";
 import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 
 // ── GET — Meta webhook verification ─────────────────────────────────────────
@@ -40,8 +41,25 @@ export async function POST(req: NextRequest) {
     }
 
     for (const message of value.messages) {
-      if (message.type !== "text") continue; // only handle text for now
       const waId = message.from; // phone number
+
+      // Nota de voz → respondemos también con audio (voz→texto→bot→voz).
+      if (message.type === "audio" && message.audio?.id) {
+        try {
+          const r = await procesarAudioEntrante(waId, message.audio.id, responderMensajeVoz);
+          // Si el pipeline de voz falla, respondemos por TEXTO igual: si ya
+          // tenemos la respuesta calculada la mandamos, si no, un aviso corto.
+          if (!r.ok) {
+            const fallback = r.respuesta ?? "¡Hola! 👋 Recibí tu audio pero no lo pude escuchar bien. ¿Me lo escribís?";
+            await sendWhatsAppMessage(waId, fallback);
+          }
+        } catch (e) {
+          console.error("[WA Bot] audio error:", e);
+        }
+        continue;
+      }
+
+      if (message.type !== "text") continue; // otros tipos: ignorar por ahora
       const text = message.text?.body ?? "";
       if (!text) continue;
 

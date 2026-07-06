@@ -28,10 +28,13 @@ export default function MarketingPage() {
     setLoading(true);
     const [f, c] = await Promise.all([
       fetch("/api/marketing/calendario?ventana=150").then(r => r.ok ? r.json() : []),
-      fetch("/api/empleado/campana").then(r => r.ok ? r.json() : []),
+      fetch("/api/empleado/campana").then(r => r.ok ? r.json() : {}),
     ]);
     setFechas(Array.isArray(f) ? f : []);
-    setCandidatos(Array.isArray(c) ? c : (c?.candidatos ?? []));
+    // El endpoint devuelve { ventas, rotacion }: los unimos sin repetir.
+    const lista = Array.isArray(c) ? c : [...(c?.ventas ?? []), ...(c?.rotacion ?? [])];
+    const vistos = new Set<string>();
+    setCandidatos(lista.filter((x: Candidato) => x && !vistos.has(x.id) && vistos.add(x.id)));
     setLoading(false);
   }
   useEffect(() => { load(); }, []);

@@ -16,6 +16,7 @@ type Ambito =
   | "config"
   | "catalogo"
   | "fabricantes"
+  | "personalizados"
   | "ventas_registradas"
   | "cotizador"
   | "pricing"
@@ -90,6 +91,19 @@ const DDL: Record<Ambito, string[]> = {
       fabricante_id INT NOT NULL REFERENCES fabricantes(id) ON DELETE CASCADE,
       costo_proveedor NUMERIC(12,2),
       codigo_proveedor TEXT,
+      creado_en TIMESTAMPTZ DEFAULT now()
+    )`,
+  ],
+
+  // ─── Modelos base para mockups de personalizados ─────────────────────────
+  personalizados: [
+    `CREATE TABLE IF NOT EXISTS modelos_personalizados (
+      id SERIAL PRIMARY KEY,
+      nombre TEXT NOT NULL,
+      categoria TEXT NOT NULL DEFAULT 'mate',
+      imagen_url TEXT NOT NULL,
+      activo BOOLEAN NOT NULL DEFAULT TRUE,
+      orden INT NOT NULL DEFAULT 0,
       creado_en TIMESTAMPTZ DEFAULT now()
     )`,
   ],

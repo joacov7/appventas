@@ -1,9 +1,12 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Wand2, Upload, Download, RotateCw, Sun, Type } from "lucide-react";
+import { Wand2, Upload, Download, RotateCw, Sun, Type, Images, Trash2, Plus } from "lucide-react";
+import { MediaUpload } from "@/components/ui/MediaUpload";
 
 type Modo = "grabado" | "color";
+interface Modelo { id: number; nombre: string; categoria: string; imagen_url: string }
+const CATEGORIAS = ["mate", "matera", "termo", "cuchillo", "tabla", "llavero", "otro"];
 
 // Estudio de mockup: subís la foto del producto y el logo del cliente, lo
 // posicionás/escalás, y descargás la vista previa para enviarla. Sin IA.
@@ -18,6 +21,36 @@ export default function PersonalizadosPage() {
   const [rot, setRot] = useState(0);
   const [opacidad, setOpacidad] = useState(1);
   const [modo, setModo] = useState<Modo>("grabado");
+  const [tab, setTab] = useState<"mockup" | "modelos">("mockup");
+  const [modelos, setModelos] = useState<Modelo[]>([]);
+  const [nuevoModelo, setNuevoModelo] = useState<{ nombre: string; categoria: string; imagen_url: string }>({ nombre: "", categoria: "mate", imagen_url: "" });
+
+  async function cargarModelos() {
+    const r = await fetch("/api/personalizados/modelos");
+    if (r.ok) setModelos(await r.json());
+  }
+  useEffect(() => { cargarModelos(); }, []);
+
+  // Carga una imagen base desde una URL (Cloudinary permite CORS para el canvas).
+  function cargarBaseDesdeUrl(url: string) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => setBaseImg(img);
+    img.src = url;
+  }
+
+  async function guardarModelo() {
+    if (!nuevoModelo.nombre.trim() || !nuevoModelo.imagen_url) return;
+    const r = await fetch("/api/personalizados/modelos", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(nuevoModelo),
+    });
+    if (r.ok) { setNuevoModelo({ nombre: "", categoria: "mate", imagen_url: "" }); await cargarModelos(); }
+  }
+  async function eliminarModelo(id: number) {
+    if (!confirm("¿Eliminar este modelo?")) return;
+    await fetch(`/api/personalizados/modelos?id=${id}`, { method: "DELETE" });
+    await cargarModelos();
+  }
   const [tono, setTono] = useState("#3b2a1a"); // color del grabado (tono quemado)
 
   const drag = useRef<{ activo: boolean }>({ activo: false });
@@ -102,11 +135,75 @@ export default function PersonalizadosPage() {
       <div className="flex items-center gap-3">
         <Wand2 className="text-indigo-600" size={24} />
         <div>
-          <h1 className="text-xl font-bold text-gray-900">Mockup de personalizados</h1>
+          <h1 className="text-xl font-bold text-gray-900">Personalizados</h1>
           <p className="text-sm text-gray-500">Mostrale a la empresa su logo sobre el producto. Ideal para cerrar ventas B2B.</p>
         </div>
       </div>
 
+      <div className="flex gap-2 bg-gray-100 p-1 rounded-xl w-fit">
+        {([["mockup", "Mockup"], ["modelos", "Modelos"]] as [typeof tab, string][]).map(([t, l]) => (
+          <button key={t} onClick={() => setTab(t)}
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium ${tab === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
+            {l}
+          </button>
+        ))}
+      </div>
+
+      {tab === "modelos" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-3">
+            <p className="font-medium text-gray-900 text-sm">Cargar un modelo nuevo</p>
+            <p className="text-xs text-gray-500">Subí una foto del producto (fondo blanco, mostrando la cara donde va el logo). Después queda disponible para elegir en el Mockup.</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-gray-500">Nombre del modelo</label>
+                <input value={nuevoModelo.nombre} onChange={e => setNuevoModelo({ ...nuevoModelo, nombre: e.target.value })}
+                  placeholder="Ej: Mate imperial forrado" className="w-full mt-1 text-sm border rounded-lg px-3 py-2 outline-none" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Categoría</label>
+                <select value={nuevoModelo.categoria} onChange={e => setNuevoModelo({ ...nuevoModelo, categoria: e.target.value })}
+                  className="w-full mt-1 text-sm border rounded-lg px-3 py-2 outline-none bg-white capitalize">
+                  {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+            <MediaUpload urls={nuevoModelo.imagen_url ? [nuevoModelo.imagen_url] : []}
+              onChange={(urls) => setNuevoModelo({ ...nuevoModelo, imagen_url: urls[urls.length - 1] ?? "" })} />
+            <div className="flex justify-end">
+              <button onClick={guardarModelo} disabled={!nuevoModelo.nombre.trim() || !nuevoModelo.imagen_url}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-xl">
+                <Plus size={16} /> Guardar modelo
+              </button>
+            </div>
+          </div>
+
+          {modelos.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+              <Images className="mx-auto text-gray-300 mb-3" size={32} />
+              <p className="text-gray-500 text-sm">Todavía no cargaste modelos. Subí las fotos de tus mates, materas, termos, cuchillos y tablas.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {modelos.map(m => (
+                <div key={m.id} className="bg-white rounded-xl border overflow-hidden group relative">
+                  <img src={m.imagen_url} alt={m.nombre} className="w-full h-32 object-cover" />
+                  <div className="p-2">
+                    <p className="text-xs font-medium text-gray-800 truncate">{m.nombre}</p>
+                    <p className="text-[10px] text-gray-400 capitalize">{m.categoria}</p>
+                  </div>
+                  <button onClick={() => eliminarModelo(m.id)}
+                    className="absolute top-1.5 right-1.5 bg-white/90 rounded-lg p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === "mockup" && (
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Lienzo */}
         <div className="lg:col-span-2">
@@ -120,9 +217,22 @@ export default function PersonalizadosPage() {
 
         {/* Controles */}
         <div className="space-y-4">
+          {modelos.length > 0 && (
+            <div className="bg-white rounded-2xl border border-gray-100 p-4">
+              <label className="text-xs text-gray-500">Elegí un modelo</label>
+              <div className="flex gap-2 overflow-x-auto mt-2 pb-1">
+                {modelos.map(m => (
+                  <button key={m.id} onClick={() => cargarBaseDesdeUrl(m.imagen_url)} title={m.nombre}
+                    className="shrink-0 w-16 h-16 rounded-lg border overflow-hidden hover:ring-2 hover:ring-indigo-500">
+                    <img src={m.imagen_url} alt={m.nombre} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
-            <FileBtn label="1. Foto del producto" onFile={f => cargarImagen(f, setBaseImg)} listo={!!baseImg} />
-            <FileBtn label="2. Logo del cliente (PNG)" onFile={f => cargarImagen(f, setLogoImg)} listo={!!logoImg} />
+            <FileBtn label={modelos.length ? "…o subí otra foto" : "1. Foto del producto"} onFile={f => cargarImagen(f, setBaseImg)} listo={!!baseImg} />
+            <FileBtn label="Logo del cliente (PNG)" onFile={f => cargarImagen(f, setLogoImg)} listo={!!logoImg} />
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4">
@@ -158,6 +268,7 @@ export default function PersonalizadosPage() {
           <p className="text-xs text-gray-400 text-center">Descargalo y mandáselo al cliente por WhatsApp o email.</p>
         </div>
       </div>
+      )}
     </div>
   );
 }

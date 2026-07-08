@@ -123,24 +123,24 @@ export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   await ensureTable();
 
-  const body = await req.json();
+  const payload = await req.json();
 
   // ── Alta manual de un contacto (no pasa por el mapa) ──
-  if (body?.manual) {
-    const nombre = String(body.nombre ?? "").trim();
+  if (payload?.manual) {
+    const nombre = String(payload.nombre ?? "").trim();
     if (!nombre) return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
     const rows = await (prisma as any).$queryRawUnsafe(
       `INSERT INTO prospectos
          (nombre, rubro, direccion, telefono, website, instagram, facebook, provincia, notas, osm_id, estado)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'nuevo') RETURNING *`,
-      nombre, body.rubro?.trim() || null, body.direccion?.trim() || null, body.telefono?.trim() || null,
-      body.website?.trim() || null, normInstagram(body.instagram), normFacebook(body.facebook),
-      body.provincia?.trim() || null, body.notas?.trim() || null, `manual/${Date.now()}`
+      nombre, payload.rubro?.trim() || null, payload.direccion?.trim() || null, payload.telefono?.trim() || null,
+      payload.website?.trim() || null, normInstagram(payload.instagram), normFacebook(payload.facebook),
+      payload.provincia?.trim() || null, payload.notas?.trim() || null, `manual/${Date.now()}`
     );
     return NextResponse.json({ ok: true, manual: true, prospecto: rows[0] }, { status: 201 });
   }
 
-  const { zona, rubros, pais } = body;
+  const { zona, rubros, pais } = payload;
   if (!zona?.trim()) return NextResponse.json({ error: "Zona (provincia o ciudad) requerida" }, { status: 400 });
   const paisFinal = (pais?.trim() || "Argentina");
 

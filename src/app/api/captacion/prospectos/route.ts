@@ -131,10 +131,10 @@ export async function POST(req: NextRequest) {
     if (!nombre) return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
     const rows = await (prisma as any).$queryRawUnsafe(
       `INSERT INTO prospectos
-         (nombre, rubro, direccion, telefono, website, instagram, facebook, provincia, notas, osm_id, estado)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'nuevo') RETURNING *`,
+         (nombre, rubro, direccion, telefono, email, website, instagram, facebook, provincia, notas, osm_id, estado)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'nuevo') RETURNING *`,
       nombre, payload.rubro?.trim() || null, payload.direccion?.trim() || null, payload.telefono?.trim() || null,
-      payload.website?.trim() || null, normInstagram(payload.instagram), normFacebook(payload.facebook),
+      payload.email?.trim() || null, payload.website?.trim() || null, normInstagram(payload.instagram), normFacebook(payload.facebook),
       payload.provincia?.trim() || null, payload.notas?.trim() || null, `manual/${Date.now()}`
     );
     return NextResponse.json({ ok: true, manual: true, prospecto: rows[0] }, { status: 201 });

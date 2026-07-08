@@ -229,6 +229,7 @@ const DDL: Record<Ambito, string[]> = {
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS mensaje_abordaje TEXT`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS contactado_en TIMESTAMPTZ`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS ultimo_seguimiento_en TIMESTAMPTZ`,
+    `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS email TEXT`,
     `CREATE TABLE IF NOT EXISTS negocios_competidores (
       id        SERIAL PRIMARY KEY,
       nombre    TEXT NOT NULL,

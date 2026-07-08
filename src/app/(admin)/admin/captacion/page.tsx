@@ -118,7 +118,7 @@ export default function CaptacionPage() {
   const [pMsg, setPMsg] = useState("");
   // Alta manual de contacto
   const [manualOpen, setManualOpen] = useState(false);
-  const [manualForm, setManualForm] = useState<any>({ nombre: "", rubro: "", telefono: "", instagram: "", facebook: "", website: "", provincia: "", notas: "" });
+  const [manualForm, setManualForm] = useState<any>({ nombre: "", rubro: "", telefono: "", email: "", instagram: "", facebook: "", website: "", provincia: "", notas: "" });
   const [manualSaving, setManualSaving] = useState(false);
   const [manualError, setManualError] = useState("");
   // Filtros de la lista de resultados
@@ -196,7 +196,7 @@ export default function CaptacionPage() {
       });
       if (res.ok) {
         setManualOpen(false);
-        setManualForm({ nombre: "", rubro: "", telefono: "", instagram: "", facebook: "", website: "", provincia: "", notas: "" });
+        setManualForm({ nombre: "", rubro: "", telefono: "", email: "", instagram: "", facebook: "", website: "", provincia: "", notas: "" });
         fetchProspectos(pFiltro || undefined);
       } else setManualError((await res.json()).error ?? "Error al guardar");
     } catch { setManualError("Error de conexión"); }
@@ -404,6 +404,7 @@ export default function CaptacionPage() {
                     ["rubro", "Rubro", ""],
                     ["provincia", "Zona / provincia", ""],
                     ["telefono", "Teléfono", ""],
+                    ["email", "Email", ""],
                     ["website", "Sitio web", ""],
                     ["instagram", "Instagram", ""],
                     ["facebook", "Facebook", ""],

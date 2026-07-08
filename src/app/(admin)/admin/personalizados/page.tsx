@@ -86,25 +86,42 @@ export default function PersonalizadosPage() {
       const logoH = (logoImg.height / logoImg.width) * logoW;
       const cx = pos.x * W, cy = pos.y * H;
 
+      // Procesamos el logo en un lienzo aparte: quitamos el fondo blanco y,
+      // en modo grabado, lo convertimos en "quemado" según su luminancia.
+      const off = document.createElement("canvas");
+      off.width = Math.max(1, Math.round(logoW));
+      off.height = Math.max(1, Math.round(logoH));
+      const octx = off.getContext("2d")!;
+      octx.drawImage(logoImg, 0, 0, off.width, off.height);
+
+      try {
+        const data = octx.getImageData(0, 0, off.width, off.height);
+        const px = data.data;
+        const [tr, tg, tb] = hexToRgb(tono);
+        for (let i = 0; i < px.length; i += 4) {
+          const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+          if (a === 0) continue;
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b; // 0=negro, 255=blanco
+          if (modo === "grabado") {
+            // El blanco no se graba; cuanto más oscuro el logo, más quema.
+            const burn = (1 - lum / 255) * (a / 255);
+            px[i] = tr; px[i + 1] = tg; px[i + 2] = tb;
+            px[i + 3] = Math.round(burn * 255);
+          } else {
+            // Vinilo a color: sólo quitamos el fondo casi-blanco.
+            if (lum > 240) px[i + 3] = 0;
+          }
+        }
+        octx.putImageData(data, 0, 0);
+      } catch { /* si el logo es de otro dominio sin CORS, se dibuja tal cual */ }
+
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate((rot * Math.PI) / 180);
       ctx.globalAlpha = opacidad;
-
-      if (modo === "grabado") {
-        // Look grabado: silueta del logo teñida en un solo tono quemado.
-        const off = document.createElement("canvas");
-        off.width = Math.max(1, Math.round(logoW));
-        off.height = Math.max(1, Math.round(logoH));
-        const octx = off.getContext("2d")!;
-        octx.drawImage(logoImg, 0, 0, off.width, off.height);
-        octx.globalCompositeOperation = "source-atop";
-        octx.fillStyle = tono;
-        octx.fillRect(0, 0, off.width, off.height);
-        ctx.drawImage(off, -logoW / 2, -logoH / 2, logoW, logoH);
-      } else {
-        ctx.drawImage(logoImg, -logoW / 2, -logoH / 2, logoW, logoH);
-      }
+      // Multiply integra el grabado con la veta de la madera (look realista).
+      if (modo === "grabado") ctx.globalCompositeOperation = "multiply";
+      ctx.drawImage(off, -logoW / 2, -logoH / 2, logoW, logoH);
       ctx.restore();
     }
   }, [baseImg, logoImg, pos, escala, rot, opacidad, modo, tono]);
@@ -271,6 +288,12 @@ export default function PersonalizadosPage() {
       )}
     </div>
   );
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const m = hex.replace("#", "");
+  const n = parseInt(m.length === 3 ? m.split("").map(c => c + c).join("") : m, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 
 function FileBtn({ label, onFile, listo }: { label: string; onFile: (f: File) => void; listo: boolean }) {

@@ -6,7 +6,7 @@ import { useState } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2,
 } from "lucide-react";
 
 const GRUPOS = [
@@ -17,6 +17,7 @@ const GRUPOS = [
   { grupo: "Catálogo", items: [
     { href: "/admin/productos", label: "Productos", icon: Package },
     { href: "/admin/fabricantes", label: "Fabricantes", icon: Factory },
+    { href: "/admin/personalizados", label: "Personalizados (mockup)", icon: Wand2 },
     { href: "/admin/combos", label: "Combos", icon: Gift },
     { href: "/admin/catalogos", label: "Catálogos", icon: BookOpen },
     { href: "/admin/virolas", label: "Virolas", icon: CircleDot },

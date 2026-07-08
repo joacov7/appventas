@@ -4,6 +4,7 @@ export const maxDuration = 60; // la respuesta por voz (transcribir+sintetizar) 
 import { NextRequest, NextResponse } from "next/server";
 import { handleIncomingMessage, responderMensajeVoz, sendWhatsAppMessage } from "@/lib/whatsapp-bot";
 import { procesarAudioEntrante } from "@/lib/whatsapp-voice";
+import { alertaNuevoWhatsapp } from "@/lib/telegram";
 import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 
 // ── GET — Meta webhook verification ─────────────────────────────────────────
@@ -47,12 +48,11 @@ export async function POST(req: NextRequest) {
       if (message.type === "audio" && message.audio?.id) {
         try {
           const r = await procesarAudioEntrante(waId, message.audio.id, responderMensajeVoz);
-          // Si el pipeline de voz falla, respondemos por TEXTO igual: si ya
-          // tenemos la respuesta calculada la mandamos, si no, un aviso corto.
           if (!r.ok) {
             const fallback = r.respuesta ?? "¡Hola! 👋 Recibí tu audio pero no lo pude escuchar bien. ¿Me lo escribís?";
             await sendWhatsAppMessage(waId, fallback);
           }
+          await alertaNuevoWhatsapp(waId, r.transcripcion ?? "(no se pudo transcribir)", true);
         } catch (e) {
           console.error("[WA Bot] audio error:", e);
         }
@@ -70,6 +70,8 @@ export async function POST(req: NextRequest) {
       } catch (e) {
         console.error("[WA Bot] handleIncomingMessage error:", e);
       }
+      // Aviso al dueño por Telegram (no bloquea si falla).
+      await alertaNuevoWhatsapp(waId, text).catch(() => {});
     }
 
     return NextResponse.json({ status: "ok" });

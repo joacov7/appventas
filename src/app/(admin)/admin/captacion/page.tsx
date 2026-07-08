@@ -116,6 +116,11 @@ export default function CaptacionPage() {
   const [pRubros, setPRubros] = useState<string[]>(["regaleria", "tabaqueria", "bazar"]);
   const [pBuscando, setPBuscando] = useState(false);
   const [pMsg, setPMsg] = useState("");
+  // Alta manual de contacto
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualForm, setManualForm] = useState<any>({ nombre: "", rubro: "", telefono: "", instagram: "", facebook: "", website: "", provincia: "", notas: "" });
+  const [manualSaving, setManualSaving] = useState(false);
+  const [manualError, setManualError] = useState("");
   // Filtros de la lista de resultados
   const [pTexto, setPTexto] = useState("");
   const [pRubroFiltro, setPRubroFiltro] = useState("");
@@ -179,6 +184,23 @@ export default function CaptacionPage() {
     } catch {
       setPMsg("Error de conexión");
     } finally { setPBuscando(false); }
+  }
+
+  async function guardarManual() {
+    if (!manualForm.nombre.trim()) { setManualError("El nombre es obligatorio"); return; }
+    setManualSaving(true); setManualError("");
+    try {
+      const res = await fetch("/api/captacion/prospectos", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ manual: true, ...manualForm }),
+      });
+      if (res.ok) {
+        setManualOpen(false);
+        setManualForm({ nombre: "", rubro: "", telefono: "", instagram: "", facebook: "", website: "", provincia: "", notas: "" });
+        fetchProspectos(pFiltro || undefined);
+      } else setManualError((await res.json()).error ?? "Error al guardar");
+    } catch { setManualError("Error de conexión"); }
+    finally { setManualSaving(false); }
   }
 
   async function cambiarEstadoProspecto(id: number, estado: string) {
@@ -363,7 +385,52 @@ export default function CaptacionPage() {
                 </button>
               ))}
             </div>
+            <button onClick={() => { setManualOpen(true); setManualError(""); }}
+              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg shrink-0">
+              <Plus size={15} /> Cargar contacto
+            </button>
           </div>
+
+          {manualOpen && (
+            <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setManualOpen(false)}>
+              <div className="bg-white rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between p-5 border-b sticky top-0 bg-white">
+                  <h2 className="font-semibold text-gray-900">Cargar contacto manual</h2>
+                  <button onClick={() => setManualOpen(false)} className="text-gray-400 hover:text-gray-600"><X size={18} /></button>
+                </div>
+                <div className="p-5 grid grid-cols-2 gap-3">
+                  {([
+                    ["nombre", "Nombre *", "col-span-2"],
+                    ["rubro", "Rubro", ""],
+                    ["provincia", "Zona / provincia", ""],
+                    ["telefono", "Teléfono", ""],
+                    ["website", "Sitio web", ""],
+                    ["instagram", "Instagram", ""],
+                    ["facebook", "Facebook", ""],
+                  ] as [string, string, string][]).map(([k, label, cls]) => (
+                    <div key={k} className={cls}>
+                      <label className="text-xs text-gray-500">{label}</label>
+                      <input value={manualForm[k]} onChange={e => setManualForm({ ...manualForm, [k]: e.target.value })}
+                        className="w-full mt-1 text-sm border rounded-lg px-3 py-2 outline-none" />
+                    </div>
+                  ))}
+                  <div className="col-span-2">
+                    <label className="text-xs text-gray-500">Notas</label>
+                    <textarea value={manualForm.notas} onChange={e => setManualForm({ ...manualForm, notas: e.target.value })} rows={2}
+                      className="w-full mt-1 text-sm border rounded-lg px-3 py-2 outline-none resize-none" />
+                  </div>
+                  {manualError && <p className="col-span-2 text-sm text-red-500">{manualError}</p>}
+                </div>
+                <div className="flex justify-end gap-2 p-5 border-t sticky bottom-0 bg-white">
+                  <button onClick={() => setManualOpen(false)} className="text-sm text-gray-500 px-4 py-2">Cancelar</button>
+                  <button onClick={guardarManual} disabled={manualSaving}
+                    className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-xl">
+                    {manualSaving ? "Guardando..." : "Guardar contacto"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Filtros de la lista: buscador + rubro + zona + solo con contacto */}
           {prospectos.length > 0 && (() => {

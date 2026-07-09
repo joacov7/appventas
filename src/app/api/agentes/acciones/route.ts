@@ -37,10 +37,11 @@ export async function GET(req: NextRequest) {
         ? `SELECT * FROM action_queue ORDER BY created_at DESC LIMIT 50`
         : `SELECT * FROM action_queue WHERE estado = 'pendiente' ORDER BY created_at DESC LIMIT 50`
     );
-    // Enriquecer con la descripción de la tool
+    // Enriquecer con la descripción de la tool. El id viene como BigInt
+    // (BIGSERIAL) y hay que convertirlo o JSON.stringify falla.
     const acciones = rows.map(r => {
       const t = registry.get(r.tool);
-      return { ...r, tool_desc: t?.description ?? null, tool_categoria: t?.category ?? null };
+      return { ...r, id: Number(r.id), tool_desc: t?.description ?? null, tool_categoria: t?.category ?? null };
     });
     return NextResponse.json({ acciones });
   } catch (e: any) {

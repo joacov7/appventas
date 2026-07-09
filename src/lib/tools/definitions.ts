@@ -5,7 +5,7 @@ import { consultarCompetencia, buscarEnCompetencia } from "@/lib/services/inteli
 import { alertasPrecio } from "@/lib/services/inteligencia-comercial.service";
 import { seguimientosPendientes } from "@/lib/services/seguimiento.service";
 import { oportunidadesPostventa } from "@/lib/services/postventa.service";
-import { buscarProspectos, contarProspectosPorEstado } from "@/lib/services/prospectos.service";
+import { buscarProspectos, contarProspectosPorEstado, buscarProspectoPorNombre, agregarProspecto } from "@/lib/services/prospectos.service";
 import { calcularPresupuesto } from "@/lib/services/presupuesto.service";
 import { recolectarDatos } from "@/lib/briefing";
 import { remember, recall } from "@/lib/memory";
@@ -89,6 +89,37 @@ export const TOOLS: Tool[] = [
     input: z.object({}),
     params: [],
     run: () => oportunidadesPostventa(),
+  },
+  {
+    name: "buscar_prospecto_por_nombre",
+    description: "Busca un prospecto por su nombre (parcial) y devuelve su teléfono/email. Útil para ubicar a quién contactar.",
+    category: "Comercial",
+    sideEffect: "read",
+    input: z.object({ nombre: z.string() }),
+    params: [{ nombre: "nombre", tipo: "string", requerido: true, descripcion: "Nombre (o parte) del prospecto" }],
+    run: (i) => buscarProspectoPorNombre(i.nombre),
+  },
+  {
+    name: "agregar_prospecto",
+    description: "Da de alta un prospecto/contacto nuevo (nombre y opcionalmente teléfono, email, rubro, zona).",
+    category: "Comercial",
+    sideEffect: "write",
+    input: z.object({
+      nombre: z.string(),
+      telefono: z.string().optional(),
+      email: z.string().optional(),
+      rubro: z.string().optional(),
+      provincia: z.string().optional(),
+      notas: z.string().optional(),
+    }),
+    params: [
+      { nombre: "nombre", tipo: "string", requerido: true, descripcion: "Nombre del contacto/empresa" },
+      { nombre: "telefono", tipo: "string", requerido: false, descripcion: "Teléfono" },
+      { nombre: "email", tipo: "string", requerido: false, descripcion: "Email" },
+      { nombre: "rubro", tipo: "string", requerido: false, descripcion: "Rubro" },
+      { nombre: "provincia", tipo: "string", requerido: false, descripcion: "Zona/provincia" },
+    ],
+    run: (i) => agregarProspecto(i),
   },
   {
     name: "buscar_prospectos",

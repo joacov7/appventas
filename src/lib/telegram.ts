@@ -73,6 +73,32 @@ export function waIdDesdeTextoAlerta(texto: string | undefined): string | null {
   return m ? m[1] : null;
 }
 
+// ─── Acción pendiente de confirmación (por chat de Telegram) ─────────────────
+// El Jefe de Gabinete propone una acción que cambia datos (ej. enviar WhatsApp)
+// y queda "pendiente" hasta que respondas SÍ. Se guarda en catalog_config.
+export interface AccionPendiente { tool: string; input: any; resumen: string }
+
+export async function guardarPendiente(chatId: string, p: AccionPendiente): Promise<void> {
+  await ensureSchema("config");
+  await (prisma as any).$executeRawUnsafe(
+    `INSERT INTO catalog_config (tipo, config) VALUES ($1, $2::jsonb)
+     ON CONFLICT (tipo) DO UPDATE SET config = $2::jsonb, updated_at = NOW()`,
+    `tg_pend:${chatId}`, JSON.stringify(p)
+  ).catch(() => {});
+}
+export async function cargarPendiente(chatId: string): Promise<AccionPendiente | null> {
+  try {
+    await ensureSchema("config");
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT config FROM catalog_config WHERE tipo = $1`, `tg_pend:${chatId}`
+    );
+    return rows[0]?.config ?? null;
+  } catch { return null; }
+}
+export async function limpiarPendiente(chatId: string): Promise<void> {
+  await (prisma as any).$executeRawUnsafe(`DELETE FROM catalog_config WHERE tipo = $1`, `tg_pend:${chatId}`).catch(() => {});
+}
+
 // Envía un aviso. Devuelve true si se pudo. Nunca lanza (no debe romper el flujo).
 export async function enviarAlertaTelegram(texto: string): Promise<boolean> {
   const { botToken, chatId } = await loadTelegramConfig();

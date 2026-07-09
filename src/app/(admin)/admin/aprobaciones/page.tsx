@@ -25,11 +25,19 @@ export default function AprobacionesPage() {
   const [loading, setLoading] = useState(true);
   const [procesando, setProcesando] = useState<number | null>(null);
   const [verHistorial, setVerHistorial] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
+    setErrorMsg(null);
     const r = await fetch(`/api/agentes/acciones${verHistorial ? "?historial=1" : ""}`);
-    if (r.ok) setAcciones((await r.json()).acciones ?? []);
+    if (r.ok) {
+      const data = await r.json();
+      setAcciones(data.acciones ?? []);
+      if (data.error) setErrorMsg(data.error);
+    } else {
+      setErrorMsg(`HTTP ${r.status}`);
+    }
     setLoading(false);
   }
   useEffect(() => { load(); }, [verHistorial]);
@@ -69,6 +77,12 @@ export default function AprobacionesPage() {
         </div>
         <button onClick={load} className="p-2 text-gray-400 hover:text-gray-700"><RefreshCw size={15} /></button>
       </div>
+
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl p-3 mb-4 break-words">
+          <b>Error leyendo acciones:</b> {errorMsg}
+        </div>
+      )}
 
       {loading ? (
         <p className="text-gray-400 text-sm">Cargando...</p>

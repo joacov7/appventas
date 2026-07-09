@@ -42,11 +42,19 @@ export default function AprobacionesPage() {
   }
   useEffect(() => { load(); }, [verHistorial]);
 
-  async function resolver(id: number, decision: "aprobar" | "rechazar") {
+  // Ediciones locales del texto propuesto, por id de acción.
+  const [editado, setEditado] = useState<Record<number, string>>({});
+
+  async function resolver(id: number, decision: "aprobar" | "rechazar", inputBase?: any) {
     setProcesando(id);
     try {
+      // Si el usuario editó el texto, mandamos el input con ese texto.
+      let input: any = undefined;
+      if (decision === "aprobar" && inputBase && editado[id] !== undefined) {
+        input = { ...inputBase, texto: editado[id] };
+      }
       await fetch("/api/agentes/acciones", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, decision, input }),
       });
       await load();
     } finally { setProcesando(null); }
@@ -104,14 +112,29 @@ export default function AprobacionesPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${ESTADO_COLOR[a.estado] ?? ""}`}>{a.estado}</span>
                   </div>
                   {a.tool_desc && <p className="text-xs text-gray-500 mt-1">{a.tool_desc}</p>}
-                  <pre className="text-xs text-gray-600 mt-2 bg-gray-50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-words font-mono">
+
+                  {/* Si la acción tiene un texto (ej. mensaje), es editable antes de aprobar */}
+                  {a.estado === "pendiente" && typeof a.input?.texto === "string" ? (
+                    <div className="mt-2">
+                      {a.input?.to && <p className="text-xs text-gray-400 mb-1">Para: {a.input.to}</p>}
+                      <textarea
+                        value={editado[a.id] ?? a.input.texto}
+                        onChange={e => setEditado(p => ({ ...p, [a.id]: e.target.value }))}
+                        rows={5}
+                        className="w-full text-sm border rounded-lg px-3 py-2 outline-none resize-y"
+                      />
+                      <p className="text-[11px] text-gray-400 mt-0.5">Podés editar el mensaje antes de aprobarlo. Se envía lo que quede acá.</p>
+                    </div>
+                  ) : (
+                    <pre className="text-xs text-gray-600 mt-2 bg-gray-50 rounded-lg p-2 overflow-x-auto whitespace-pre-wrap break-words font-mono">
 {JSON.stringify(a.input, null, 2).slice(0, 400)}
-                  </pre>
+                    </pre>
+                  )}
                   <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><Clock size={10} /> {fmt(a.created_at)}</p>
                 </div>
                 {a.estado === "pendiente" && (
                   <div className="flex flex-col gap-2 shrink-0">
-                    <button onClick={() => resolver(a.id, "aprobar")} disabled={procesando !== null}
+                    <button onClick={() => resolver(a.id, "aprobar", a.input)} disabled={procesando !== null}
                       className="flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-medium px-3 py-1.5 rounded-full">
                       <Check size={12} /> Aprobar
                     </button>

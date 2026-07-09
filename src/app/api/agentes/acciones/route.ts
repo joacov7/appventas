@@ -54,7 +54,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   await ensureCols();
-  const { id, decision } = await req.json();
+  const { id, decision, input: inputEditado } = await req.json();
   if (!id || !["aprobar", "rechazar"].includes(decision)) {
     return NextResponse.json({ error: "id y decision (aprobar|rechazar) requeridos" }, { status: 400 });
   }
@@ -78,16 +78,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, estado: "rechazada" });
   }
 
-  // Aprobar → ejecutar la tool realmente
-  const result = await registry.execute(accion.tool, accion.input ?? {});
+  // Aprobar → ejecutar la tool con el input (editado por el usuario si lo mandó).
+  const inputFinal = (inputEditado && typeof inputEditado === "object") ? inputEditado : (accion.input ?? {});
+  const result = await registry.execute(accion.tool, inputFinal);
   await (prisma as any).$executeRawUnsafe(
-    `UPDATE action_queue SET estado = $2, resultado = $3::jsonb, resuelto_en = now() WHERE id = $1`,
-    Number(id), result.ok ? "ejecutada" : "error", JSON.stringify(result)
+    `UPDATE action_queue SET estado = $2, resultado = $3::jsonb, input = $4::jsonb, resuelto_en = now() WHERE id = $1`,
+    Number(id), result.ok ? "ejecutada" : "error", JSON.stringify(result), JSON.stringify(inputFinal)
   );
   if (result.ok) {
     remember({
       namespace: "decisiones", kind: "accion_aprobada",
-      key: `accion:${id}`, value: { agente: accion.agent_id, tool: accion.tool, input: accion.input },
+      key: `accion:${id}`, value: { agente: accion.agent_id, tool: accion.tool, input: inputFinal },
       source: "aprobaciones", tags: ["aprobada", accion.tool], confidence: 0.8,
     }).catch(() => {});
   }

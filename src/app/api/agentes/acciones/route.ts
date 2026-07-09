@@ -4,12 +4,26 @@ export const maxDuration = 30;
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import { registry } from "@/lib/tools";
 import { remember } from "@/lib/memory";
 
 async function ensureCols() {
-  await (prisma as any).$executeRawUnsafe(`ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS resultado JSONB`).catch(() => {});
-  await (prisma as any).$executeRawUnsafe(`ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS resuelto_en TIMESTAMPTZ`).catch(() => {});
+  // Asegura que la tabla y TODAS sus columnas existan. Tablas viejas de prod
+  // podían no tener created_at/estado, y eso hacía fallar el SELECT ... ORDER BY
+  // created_at (devolvía vacío en silencio, tanto Pendientes como Historial).
+  await ensureSchema("agentes");
+  const alters = [
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS tenant_id TEXT DEFAULT 'default'`,
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS agent_id TEXT`,
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS tool TEXT`,
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS input JSONB`,
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'pendiente'`,
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now()`,
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS resultado JSONB`,
+    `ALTER TABLE action_queue ADD COLUMN IF NOT EXISTS resuelto_en TIMESTAMPTZ`,
+  ];
+  for (const a of alters) await (prisma as any).$executeRawUnsafe(a).catch(() => {});
 }
 
 // GET → acciones pendientes de aprobación (y opcionalmente el historial).
@@ -29,8 +43,9 @@ export async function GET(req: NextRequest) {
       return { ...r, tool_desc: t?.description ?? null, tool_categoria: t?.category ?? null };
     });
     return NextResponse.json({ acciones });
-  } catch {
-    return NextResponse.json({ acciones: [] });
+  } catch (e: any) {
+    // Surfaceamos el error para diagnóstico (antes se tragaba y quedaba vacío).
+    return NextResponse.json({ acciones: [], error: e?.message ?? "error leyendo acciones" });
   }
 }
 

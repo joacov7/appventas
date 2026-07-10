@@ -34,7 +34,12 @@ export async function jefeDeGabinete(pregunta: string): Promise<JefeResultado> {
     ].join("\n") };
   }
 
-  const catalogo = registry.info().map(t => ({ name: t.name, desc: t.description, escribe: t.sideEffect === "write" }));
+  // Herramientas que el jefe puede ELEGIR. Ocultamos helpers internos
+  // (buscar_prospecto_por_nombre se usa por dentro al resolver un contacto).
+  const OCULTAS = new Set(["buscar_prospecto_por_nombre"]);
+  const catalogo = registry.info()
+    .filter(t => !OCULTAS.has(t.name))
+    .map(t => ({ name: t.name, desc: t.description, escribe: t.sideEffect === "write" }));
 
   // Paso 1 — Rutear.
   let ruta: any = null;
@@ -43,8 +48,9 @@ export async function jefeDeGabinete(pregunta: string): Promise<JefeResultado> {
       system:
         "Sos el jefe de gabinete de una PyME argentina de mates y personalizados. " +
         "Elegí UNA herramienta para cumplir el pedido del dueño y armá su input. " +
-        "Para enviar mensajes (enviar_whatsapp), poné en 'to' el NOMBRE del contacto si no sabés el número, " +
-        "y redactá vos un buen 'texto'. " +
+        "REGLA IMPORTANTE: si el dueño pide CONTACTAR / escribirle / ofrecerle / mandarle / avisarle algo a una persona o empresa, " +
+        "usá SIEMPRE la herramienta 'enviar_whatsapp' — poné en 'to' el NOMBRE del contacto (aunque no sepas el número) y redactá vos un buen 'texto' con lo que hay que decirle. " +
+        "Para agregar/cargar un contacto o prospecto nuevo, usá 'agregar_prospecto'. " +
         'Devolvé SOLO JSON: {"tool":"nombre","input":{...}} o {"responder":"texto"} si es un saludo o no necesita datos.',
       json: true, maxTokens: 400,
       messages: [{ role: "user", content: `Herramientas:\n${JSON.stringify(catalogo)}\n\nPedido: "${q}"` }],

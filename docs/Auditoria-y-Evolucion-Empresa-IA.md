@@ -296,6 +296,16 @@ Ya implementado y desplegado en la rama de trabajo:
 ### Decisión abierta
 ¿Se alquilan **agentes sueltos** (ej. "contratá el Cotizador") o la **Empresa IA completa** como paquete por rubro? Recomendación: diseñar pensando en **agentes sueltos** (más granular y vendible), que además se pueden empaquetar. No requiere decidirlo hoy.
 
+### Caso concreto de vertical: estudio jurídico (agente de intake/triage)
+Ejemplo de cómo el marketplace se aplica a un rubro distinto a mates, reutilizando ~70% de la plataforma:
+
+- **Qué hace el agente:** atiende consultas 24/7 (WhatsApp/web), **orienta en general** (NO da asesoramiento legal), **califica el caso** (área: laboral/familia/penal/sucesiones, urgencia, si es cliente real), toma los datos y **deriva al abogado correcto**, avisándole al estudio con el caso ya resumido y clasificado. Valor: el estudio deja de perder consultas y le llega el caso filtrado.
+- **Qué se reutiliza (la plataforma):** multi-tenant (`tenant_id` por estudio), motor de agentes + herramientas + memoria, omnicanal, jefe, aprobaciones, config sin código.
+- **La capa vertical (lo nuevo, ~30%):** base de conocimiento legal (áreas, FAQs, criterios de triage), reglas de derivación (qué caso → qué abogado), formulario de intake, integración con agenda/CRM del estudio.
+- **Caveats (críticos en legal):** (1) nunca "asesoramiento legal", solo **orientación general + derivación**, con aclaración explícita — es tema de **responsabilidad**; (2) **confidencialidad y datos sensibles** → separación total entre tenants; (3) el agente **no es abogado**: filtra y deriva, no ejerce.
+- **Prerrequisitos:** **multi-tenant real** (hoy sembrado, no activo) + la capa vertical.
+- **Lectura estratégica:** los mates validan y financian la plataforma; el alquiler de agentes por rubro (legal, salud, inmobiliaria, contable…) es el negocio grande de atrás, y probablemente **más escalable** que el producto físico. Un paso a la vez: primero el negocio propio funcionando, después empaquetar.
+
 ---
 
 ## Pendiente operativo abierto (no bloquea este documento)

@@ -1,6 +1,7 @@
 import { registry } from "@/lib/tools";
 import { aiComplete } from "@/lib/ai";
 import { buscarProspectoPorNombre } from "@/lib/services/prospectos.service";
+import { armarBriefingProactivo } from "./jefe-proactivo";
 
 // ─── Jefe de Gabinete ─────────────────────────────────────────────────────────
 // El agente con el que hablás (por Telegram) en lenguaje natural. Interpreta el
@@ -23,6 +24,12 @@ function parseJSON(txt: string): any {
 export async function jefeDeGabinete(pregunta: string): Promise<JefeResultado> {
   const q = pregunta.trim();
   if (!q) return { tipo: "texto", texto: "Decime qué necesitás. Ej: “¿cómo venimos este mes?”, “contactá a Juan”, “agregá a Pérez tel 3444...”." };
+
+  // Atajo: reporte proactivo del día (lo mismo que manda el jefe cada mañana).
+  if (/^\/?(reporte|resumen del d[ií]a|briefing|c[oó]mo va todo|c[oó]mo venimos)/i.test(q)) {
+    const b = await armarBriefingProactivo();
+    return { tipo: "texto", texto: b ?? "Por ahora no tengo novedades para reportar. Todo tranquilo. 👌" };
+  }
 
   if (/^\/?(ayuda|help|comandos|start)/i.test(q)) {
     return { tipo: "texto", texto: [

@@ -14,6 +14,7 @@ import { resumenFinanciero, productosParaPromocionar } from "@/lib/services/fina
 import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
 import { proximasFechas } from "@/lib/services/calendario.service";
 import { generarCampana } from "@/lib/services/campana.service";
+import { ejecutarAgentePorNombre } from "@/lib/services/agentes.service";
 
 // Cada tool: nombre, categoría, efecto, validación zod, params documentados y handler.
 export const TOOLS: Tool[] = [
@@ -283,5 +284,14 @@ export const TOOLS: Tool[] = [
       { nombre: "source", tipo: "string", requerido: false, descripcion: "Origen del dato" },
     ],
     run: (i) => remember(i),
+  },
+  {
+    name: "ejecutar_agente",
+    description: "Corre un agente ahora mismo, sin depender de su frecuencia (ej: 'seguimiento', 'comercial', 'postventa', 'inteligencia'). Cada agente propone sus acciones a Aprobaciones según su modo. Acción de escritura: requiere confirmación.",
+    category: "Dirección",
+    sideEffect: "write",
+    input: z.object({ agente: z.string() }),
+    params: [{ nombre: "agente", tipo: "string", requerido: true, descripcion: "Nombre o id del agente a ejecutar" }],
+    run: (i) => ejecutarAgentePorNombre(i.agente).then(texto => ({ texto })),
   },
 ];

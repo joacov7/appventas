@@ -54,7 +54,14 @@ export async function POST(req: NextRequest) {
       const input = AFIRMATIVO.test(texto) ? pendiente.input : { ...pendiente.input, texto };
       const res = await registry.execute(pendiente.tool, input);
       await limpiarPendiente(chatId);
-      await enviarAlertaTelegram(res.ok ? "✅ Enviado." : `⚠️ No se pudo enviar: ${res.error}`);
+      if (!res.ok) {
+        await enviarAlertaTelegram(`⚠️ No se pudo ejecutar: ${res.error}`);
+      } else if (res.output && typeof (res.output as any).texto === "string") {
+        // Algunas acciones (ej. ejecutar_agente) devuelven su propio informe.
+        await enviarAlertaTelegram((res.output as any).texto);
+      } else {
+        await enviarAlertaTelegram("✅ Hecho.");
+      }
       return NextResponse.json({ ok: true });
     }
 

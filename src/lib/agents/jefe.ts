@@ -1,6 +1,7 @@
 import { registry } from "@/lib/tools";
 import { aiComplete } from "@/lib/ai";
 import { buscarProspectoPorNombre } from "@/lib/services/prospectos.service";
+import { resolverAgente, listaAgentes } from "@/lib/services/agentes.service";
 import { armarBriefingProactivo } from "./jefe-proactivo";
 import { checkupTexto } from "./checkup";
 
@@ -41,7 +42,7 @@ export async function jefeDeGabinete(pregunta: string): Promise<JefeResultado> {
     return { tipo: "texto", texto: [
       "🧑‍💼 <b>Jefe de Gabinete</b>. Escribime en criollo:",
       "<b>Consultas:</b> ¿cómo venimos este mes? · ¿a quién sigo? · ¿dónde estoy caro? · conversaciones pendientes · fechas que se vienen",
-      "<b>Acciones:</b> contactá a [nombre] · agregá prospecto [nombre] tel [número]",
+      "<b>Acciones:</b> contactá a [nombre] · agregá prospecto [nombre] tel [número] · corré el agente de [seguimiento/precios/postventa…]",
       "",
       "Lo que cambia algo (mandar un mensaje) te lo propongo y lo confirmás con <b>SÍ</b>.",
     ].join("\n") };
@@ -64,6 +65,7 @@ export async function jefeDeGabinete(pregunta: string): Promise<JefeResultado> {
         "REGLA IMPORTANTE: si el dueño pide CONTACTAR / escribirle / ofrecerle / mandarle / avisarle algo a una persona o empresa, " +
         "usá SIEMPRE la herramienta 'enviar_whatsapp' — poné en 'to' el NOMBRE del contacto (aunque no sepas el número) y redactá vos un buen 'texto' con lo que hay que decirle. " +
         "Para agregar/cargar un contacto o prospecto nuevo, usá 'agregar_prospecto'. " +
+        "Si el dueño pide CORRER / EJECUTAR / que trabaje un agente (ej: 'corré el agente de seguimiento', 'que revise los precios', 'pasá el de postventa'), usá 'ejecutar_agente' con {agente:'<nombre>'}. " +
         'Devolvé SOLO JSON: {"tool":"nombre","input":{...}} o {"responder":"texto"} si es un saludo o no necesita datos.',
       json: true, maxTokens: 400,
       messages: [{ role: "user", content: `Herramientas:\n${JSON.stringify(catalogo)}\n\nPedido: "${q}"` }],
@@ -121,6 +123,20 @@ export async function jefeDeGabinete(pregunta: string): Promise<JefeResultado> {
       tipo: "confirmar",
       texto: `${resumen}\n\n¿Lo mando? Respondé <b>SÍ</b> para enviar, <b>NO</b> para cancelar, o escribí el texto corregido.`,
       accion: { tool: "enviar_whatsapp", input: { to: destino, texto }, resumen },
+    };
+  }
+
+  // ── Ejecutar un agente ahora (independiente de su frecuencia) → confirmar ──
+  if (tool.name === "ejecutar_agente") {
+    const def = resolverAgente(String(input.agente ?? ""));
+    if (!def) {
+      return { tipo: "texto", texto: `No encontré ese agente. Tengo estos:\n${listaAgentes()}` };
+    }
+    const resumen = `🤖 Ejecutaría ahora el agente <b>${def.nombre}</b> (${def.rol}).`;
+    return {
+      tipo: "confirmar",
+      texto: `${resumen}\n\nRevisa datos y propone acciones (que quedan en Aprobaciones). ¿Lo corro? Respondé <b>SÍ</b> o <b>NO</b>.`,
+      accion: { tool: "ejecutar_agente", input: { agente: def.id }, resumen },
     };
   }
 

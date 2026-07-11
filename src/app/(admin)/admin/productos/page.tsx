@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Plus, Pencil, Upload } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { DeleteButton } from "./DeleteButton";
+import { HerramientasCatalogo } from "./HerramientasCatalogo";
 
 async function getProducts() {
   try {
@@ -43,6 +44,8 @@ export default async function ProductosAdminPage() {
           </Link>
         </div>
       </div>
+
+      <HerramientasCatalogo />
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">

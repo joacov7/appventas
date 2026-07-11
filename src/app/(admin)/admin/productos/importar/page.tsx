@@ -38,12 +38,24 @@ export default function ImportarProductosPage() {
   const [error, setError] = useState<string | null>(null);
   const [clasificando, setClasificando] = useState(false);
   const [clasifResult, setClasifResult] = useState<Record<string, number> | null>(null);
+  const [markup, setMarkup] = useState(50);
+  const [recalculando, setRecalculando] = useState(false);
+  const [recalcResult, setRecalcResult] = useState<number | null>(null);
 
   async function clasificar() {
     setClasificando(true); setClasifResult(null);
     const r = await fetch("/api/productos/clasificar", { method: "POST" });
     setClasificando(false);
     if (r.ok) setClasifResult((await r.json()).resultado ?? {});
+  }
+
+  async function recalcular() {
+    setRecalculando(true); setRecalcResult(null);
+    const r = await fetch("/api/productos/recalcular-minorista", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ markup }),
+    });
+    setRecalculando(false);
+    if (r.ok) setRecalcResult((await r.json()).actualizados ?? 0);
   }
 
   function procesarTexto(texto: string) {
@@ -196,6 +208,21 @@ export default function ImportarProductosPage() {
               </p>
             )}
           </div>
+          <div className="border-t pt-3 mt-3">
+            <p className="text-sm text-gray-700 mb-2">Calculá el precio <b>minorista</b> a partir del mayorista importado.</p>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Mayorista +</span>
+              <input type="number" value={markup} onChange={e => setMarkup(Number(e.target.value))}
+                className="w-20 text-sm border rounded-lg px-2 py-1.5 text-center" />
+              <span className="text-sm text-gray-500">%</span>
+              <button onClick={recalcular} disabled={recalculando}
+                className="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-4 py-1.5 rounded-xl">
+                {recalculando ? "Calculando..." : "Recalcular minoristas"}
+              </button>
+            </div>
+            {recalcResult != null && <p className="text-xs text-emerald-600 mt-2">✅ {recalcResult} producto(s) con precio minorista actualizado (mayorista +{markup}%).</p>}
+          </div>
+
           <Link href="/admin/productos" className="inline-block text-sm text-indigo-600 hover:underline mt-2">Ver productos →</Link>
         </div>
       )}

@@ -23,29 +23,33 @@ const RUBROS: { nombre: string; slug: string; patrones: string[] }[] = [
 
 export async function POST() {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  try {
-    const resultado: Record<string, number> = {};
-    for (const r of RUBROS) {
-      // Asegura la categoría (idempotente por slug).
+  const resultado: Record<string, number> = {};
+  const errores: string[] = [];
+  let categoriasOk = 0;
+
+  for (const r of RUBROS) {
+    try {
+      // Asegura la categoría (idempotente por slug). createdAt por si la tabla no tiene default.
       await (prisma as any).$executeRawUnsafe(
-        `INSERT INTO categories (id, name, slug, active)
-         VALUES (gen_random_uuid()::text, $1, $2, true)
+        `INSERT INTO categories (id, name, slug, active, "createdAt")
+         VALUES (gen_random_uuid()::text, $1, $2, true, now())
          ON CONFLICT (slug) DO NOTHING`, r.nombre, r.slug
-      ).catch(() => {});
+      );
       const cat: any[] = await (prisma as any).$queryRawUnsafe(`SELECT id FROM categories WHERE slug = $1`, r.slug);
       const catId = cat[0]?.id;
-      if (!catId) continue;
+      if (!catId) { errores.push(`${r.nombre}: no se pudo crear/ubicar la categoría`); continue; }
+      categoriasOk++;
 
-      // Asigna a los productos SIN categoría cuyo nombre matchea (uno solo gana).
-      const like = r.patrones.map((_, i) => `name ILIKE $${i + 2}`).join(" OR ");
+      const like = r.patrones.map((_, i) => `"name" ILIKE $${i + 2}`).join(" OR ");
       const args = [catId, ...r.patrones.map(p => `%${p}%`)];
       const upd: any = await (prisma as any).$executeRawUnsafe(
         `UPDATE products SET "categoryId" = $1 WHERE "categoryId" IS NULL AND (${like})`, ...args
       );
       resultado[r.nombre] = Number(upd ?? 0);
+    } catch (e: any) {
+      errores.push(`${r.nombre}: ${e?.message ?? "error"}`);
     }
-    return NextResponse.json({ ok: true, resultado });
-  } catch (e: any) {
-    return NextResponse.json({ error: e?.message }, { status: 500 });
   }
+
+  return NextResponse.json({ ok: errores.length === 0, resultado, categoriasOk, errores });
 }

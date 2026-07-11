@@ -42,11 +42,15 @@ export default function ImportarProductosPage() {
   const [recalculando, setRecalculando] = useState(false);
   const [recalcResult, setRecalcResult] = useState<number | null>(null);
 
+  const [clasifError, setClasifError] = useState<string | null>(null);
   async function clasificar() {
-    setClasificando(true); setClasifResult(null);
+    setClasificando(true); setClasifResult(null); setClasifError(null);
     const r = await fetch("/api/productos/clasificar", { method: "POST" });
     setClasificando(false);
-    if (r.ok) setClasifResult((await r.json()).resultado ?? {});
+    const d = await r.json().catch(() => ({}));
+    setClasifResult(d.resultado ?? {});
+    if (d.errores?.length) setClasifError(d.errores.join(" · "));
+    else if (!r.ok) setClasifError(d.error ?? `HTTP ${r.status}`);
   }
 
   async function recalcular() {
@@ -202,11 +206,12 @@ export default function ImportarProductosPage() {
               className="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-4 py-2 rounded-xl">
               {clasificando ? "Clasificando..." : "Clasificar por rubro"}
             </button>
-            {clasifResult && (
+            {clasifResult && !clasifError && (
               <p className="text-xs text-gray-500 mt-2">
-                {Object.entries(clasifResult).filter(([, n]) => n > 0).map(([k, n]) => `${k}: ${n}`).join(" · ") || "Sin cambios (ya estaban clasificados)."}
+                {Object.entries(clasifResult).filter(([, n]) => n > 0).map(([k, n]) => `${k}: ${n}`).join(" · ") || "Sin cambios (ya estaban clasificados o ninguno matcheó)."}
               </p>
             )}
+            {clasifError && <p className="text-xs text-red-500 mt-2 break-words">Error: {clasifError}</p>}
           </div>
           <div className="border-t pt-3 mt-3">
             <p className="text-sm text-gray-700 mb-2">Calculá el precio <b>minorista</b> a partir del mayorista importado.</p>

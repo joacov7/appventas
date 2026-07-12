@@ -157,6 +157,22 @@ export default function CaptacionPage() {
     } finally { setGBuscando(false); }
   }
 
+  // Depuración de duplicados (OSM ↔ Google) + normalización de teléfonos.
+  const [depurando, setDepurando] = useState(false);
+  const [dedupMsg, setDedupMsg] = useState("");
+  async function depurarDuplicados() {
+    setDepurando(true); setDedupMsg("");
+    try {
+      const res = await fetch("/api/captacion/dedup", { method: "POST" });
+      const d = await res.json();
+      if (!res.ok) { setDedupMsg(d.error ?? "Error al depurar"); return; }
+      setDedupMsg(`✅ ${d.total_fusionados} duplicado(s) fusionado(s) (${d.fusionados_por_telefono} por teléfono, ${d.fusionados_por_nombre_geo} por nombre+ubicación). ${d.telefonos_normalizados} teléfono(s) normalizado(s).`);
+      fetchProspectos(pFiltro || undefined);
+    } catch {
+      setDedupMsg("Error de conexión");
+    } finally { setDepurando(false); }
+  }
+
   async function guardarManual() {
     if (!manualForm.nombre.trim()) { setManualError("El nombre es obligatorio"); return; }
     setManualSaving(true); setManualError("");
@@ -307,11 +323,19 @@ export default function CaptacionPage() {
                 </button>
               ))}
             </div>
-            <button onClick={() => { setManualOpen(true); setManualError(""); }}
-              className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg shrink-0">
-              <Plus size={15} /> Cargar contacto
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={depurarDuplicados} disabled={depurando}
+                className="flex items-center gap-1.5 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-lg"
+                title="Fusiona el mismo negocio que entró por OSM y por Google, y normaliza teléfonos">
+                <RefreshCw size={15} className={depurando ? "animate-spin" : ""} /> {depurando ? "Depurando..." : "Depurar duplicados"}
+              </button>
+              <button onClick={() => { setManualOpen(true); setManualError(""); }}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
+                <Plus size={15} /> Cargar contacto
+              </button>
+            </div>
           </div>
+          {dedupMsg && <p className="text-sm text-emerald-600 mb-3">{dedupMsg}</p>}
 
           {manualOpen && (
             <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50" onClick={() => setManualOpen(false)}>

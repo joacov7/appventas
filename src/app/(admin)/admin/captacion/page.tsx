@@ -135,6 +135,28 @@ export default function CaptacionPage() {
     } finally { setPBuscando(false); }
   }
 
+  // Búsqueda con Google Places (trae teléfono/web que OSM no siempre tiene).
+  const [gBuscando, setGBuscando] = useState(false);
+  async function buscarPlaces() {
+    if (!pZona.trim()) { setPMsg("Escribí una provincia o ciudad"); return; }
+    if (!pRubros.length) { setPMsg("Elegí al menos un rubro"); return; }
+    setGBuscando(true); setPMsg("");
+    try {
+      const res = await fetch("/api/captacion/places", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zona: pZona.trim(), pais: pPais.trim() || "Argentina", rubros: pRubros }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setPMsg(data.error ?? "Error en la búsqueda"); return; }
+      if (data.total === 0) { setPMsg(data.error ?? "Sin resultados"); return; }
+      setPMsg(`Google: ${data.total} negocios (${data.con_telefono} con teléfono) en ${pZona.trim()}.`);
+      fetchProspectos(pFiltro || undefined);
+    } catch {
+      setPMsg("Error de conexión");
+    } finally { setGBuscando(false); }
+  }
+
   async function guardarManual() {
     if (!manualForm.nombre.trim()) { setManualError("El nombre es obligatorio"); return; }
     setManualSaving(true); setManualError("");
@@ -234,11 +256,18 @@ export default function CaptacionPage() {
                   placeholder="Argentina"
                 />
               </div>
-              <div className="flex items-end">
-                <button onClick={buscarProspectos} disabled={pBuscando}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium">
+              <div className="flex items-end gap-2">
+                <button onClick={buscarProspectos} disabled={pBuscando || gBuscando}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium"
+                  title="Fuente OpenStreetMap (gratis)">
                   {pBuscando ? <RefreshCw size={16} className="animate-spin" /> : <Search size={16} />}
-                  {pBuscando ? "Buscando..." : "Buscar"}
+                  {pBuscando ? "Buscando..." : "Buscar (OSM)"}
+                </button>
+                <button onClick={buscarPlaces} disabled={pBuscando || gBuscando}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium"
+                  title="Google Places: trae teléfono y web (tiene costo por búsqueda)">
+                  {gBuscando ? <RefreshCw size={16} className="animate-spin" /> : <MapPin size={16} />}
+                  {gBuscando ? "Buscando..." : "Google"}
                 </button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { enviarWhatsapp } from "./whatsapp.service";
+import { type Segmento, setSegmento } from "@/lib/whatsapp-segmento";
 
 // ─── Bandeja de entrada omnicanal ─────────────────────────────────────────────
 // Unifica las conversaciones de todos los canales detrás de una interfaz común.
@@ -19,6 +20,7 @@ export interface ConversacionResumen {
   ultima_direccion: "entrante" | "saliente" | "error";
   total: number;
   espera_respuesta: boolean;   // el último mensaje es del cliente
+  segmento?: Segmento | null;  // minorista | mayorista | empresarial (solo WhatsApp por ahora)
 }
 
 export interface MensajeHilo {
@@ -43,6 +45,16 @@ async function conversacionesWhatsapp(): Promise<ConversacionResumen[]> {
     porContacto.get(m.wa_id)!.push(m);
   }
 
+  // Segmento de cada contacto (para pintar la etiqueta en la lista).
+  const segPorContacto = new Map<string, Segmento | null>();
+  try {
+    const segs: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT wa_id, segmento FROM whatsapp_contactos WHERE wa_id = ANY($1)`,
+      Array.from(porContacto.keys())
+    );
+    for (const s of segs) segPorContacto.set(s.wa_id, (s.segmento ?? null) as Segmento | null);
+  } catch { /* la tabla puede no existir aún */ }
+
   const out: ConversacionResumen[] = [];
   for (const [wa_id, msgs] of porContacto) {
     const ultimo = msgs[0]; // ya vienen del más nuevo al más viejo
@@ -54,9 +66,17 @@ async function conversacionesWhatsapp(): Promise<ConversacionResumen[]> {
       ultima_direccion: ultimo.direccion,
       total: msgs.length,
       espera_respuesta: ultimo.direccion === "entrante",
+      segmento: segPorContacto.get(wa_id) ?? null,
     });
   }
   return out;
+}
+
+// Cambia manualmente el segmento de un contacto (desde la Bandeja).
+export async function cambiarSegmento(canal: Canal, contacto: string, segmento: Segmento): Promise<{ ok: boolean; error?: string }> {
+  if (canal !== "whatsapp") return { ok: false, error: "Solo disponible para WhatsApp por ahora." };
+  await setSegmento(contacto, segmento);
+  return { ok: true };
 }
 
 // Lista todas las conversaciones de todos los canales, más nuevas primero.

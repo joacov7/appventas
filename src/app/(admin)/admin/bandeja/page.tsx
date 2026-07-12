@@ -4,14 +4,23 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { Inbox, RefreshCw, Send, MessageCircle, Instagram, Facebook, ArrowLeft } from "lucide-react";
 
 type Canal = "whatsapp" | "instagram" | "facebook";
+type Segmento = "minorista" | "mayorista" | "empresarial";
 interface Conversacion {
   canal: Canal; contacto: string; ultimo_texto: string; ultima_fecha: string;
   ultima_direccion: "entrante" | "saliente" | "error"; total: number; espera_respuesta: boolean;
+  segmento?: Segmento | null;
 }
 interface Mensaje { direccion: "entrante" | "saliente" | "error"; texto: string; fecha: string }
 
 const CANAL_ICON: Record<Canal, any> = { whatsapp: MessageCircle, instagram: Instagram, facebook: Facebook };
 const CANAL_COLOR: Record<Canal, string> = { whatsapp: "text-emerald-600", instagram: "text-pink-600", facebook: "text-blue-600" };
+
+const SEG_LABEL: Record<Segmento, string> = { minorista: "🛍️ Minorista", mayorista: "📦 Mayorista", empresarial: "🏢 Empresa" };
+const SEG_STYLE: Record<Segmento, string> = {
+  minorista: "bg-gray-100 text-gray-600",
+  mayorista: "bg-amber-100 text-amber-700",
+  empresarial: "bg-indigo-100 text-indigo-700",
+};
 
 function hora(s: string) {
   return new Date(s).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
@@ -60,6 +69,23 @@ export default function BandejaPage() {
     }
   }
 
+  async function cambiarSegmento(seg: Segmento) {
+    if (!sel) return;
+    const prev = sel.segmento;
+    // Optimista: actualiza selección y lista al toque.
+    setSel({ ...sel, segmento: seg });
+    setConvs(cs => cs.map(c => c.contacto === sel.contacto && c.canal === sel.canal ? { ...c, segmento: seg } : c));
+    const r = await fetch("/api/bandeja", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ canal: sel.canal, contacto: sel.contacto, segmento: seg }),
+    });
+    if (!r.ok) {
+      setSel({ ...sel, segmento: prev });
+      setConvs(cs => cs.map(c => c.contacto === sel.contacto && c.canal === sel.canal ? { ...c, segmento: prev } : c));
+      alert("No se pudo cambiar el segmento");
+    }
+  }
+
   const pendientes = convs.filter(c => c.espera_respuesta).length;
 
   return (
@@ -95,7 +121,12 @@ export default function BandejaPage() {
                 <p className="text-xs text-gray-500 truncate mt-1">
                   {c.ultima_direccion === "saliente" ? "Vos: " : ""}{c.ultimo_texto}
                 </p>
-                <p className="text-[10px] text-gray-400 mt-0.5">{hora(c.ultima_fecha)}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <p className="text-[10px] text-gray-400">{hora(c.ultima_fecha)}</p>
+                  {c.segmento && (
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${SEG_STYLE[c.segmento]}`}>{SEG_LABEL[c.segmento]}</span>
+                  )}
+                </div>
               </button>
             );
           })}
@@ -114,7 +145,19 @@ export default function BandejaPage() {
                 </button>
                 {(() => { const Icon = CANAL_ICON[sel.canal]; return <Icon size={16} className={CANAL_COLOR[sel.canal]} />; })()}
                 <span className="text-sm font-medium text-gray-800 truncate">{sel.contacto}</span>
-                <span className="text-xs text-gray-400 ml-auto capitalize shrink-0">{sel.canal}</span>
+                {sel.canal === "whatsapp" && (
+                  <select
+                    value={sel.segmento ?? ""}
+                    onChange={e => e.target.value && cambiarSegmento(e.target.value as Segmento)}
+                    className="ml-auto shrink-0 text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white text-gray-600"
+                    title="Segmento del cliente"
+                  >
+                    <option value="" disabled>Segmento…</option>
+                    <option value="minorista">🛍️ Minorista</option>
+                    <option value="mayorista">📦 Mayorista</option>
+                    <option value="empresarial">🏢 Empresa</option>
+                  </select>
+                )}
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 bg-gray-50">

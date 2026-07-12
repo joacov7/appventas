@@ -345,6 +345,14 @@ const DDL: Record<Ambito, string[]> = {
       creado_en TIMESTAMPTZ DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_wa_mensajes_wa_id ON whatsapp_mensajes(wa_id)`,
+    // Perfil del contacto: recordamos su segmento para responder con el precio correcto.
+    `CREATE TABLE IF NOT EXISTS whatsapp_contactos (
+      wa_id TEXT PRIMARY KEY,
+      segmento TEXT,
+      nombre TEXT,
+      esperando_segmento BOOLEAN DEFAULT FALSE,
+      updated_at TIMESTAMPTZ DEFAULT now()
+    )`,
   ],
 
   // ─── Agentes (ejecuciones, cola de aprobaciones, briefings) ──────────────

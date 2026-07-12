@@ -1,6 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
 import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
+import {
+  type Segmento, detectarSegmento, interpretarRespuestaSegmento, preguntaSegmento,
+  getContacto, setSegmento, marcarEsperandoSegmento,
+} from "@/lib/whatsapp-segmento";
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
 
@@ -107,6 +111,31 @@ function formatARS(n: number) {
   return new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(n);
 }
 
+// Precio mayorista por producto (desde product_pricing). Para minorista usamos
+// directamente el price de la variante (lo mismo que muestra la tienda).
+async function preciosMayoristas(productIds: string[]): Promise<Record<string, number>> {
+  if (!productIds.length) return {};
+  try {
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT product_id, precio_mayorista FROM product_pricing
+       WHERE product_id = ANY($1) AND precio_mayorista IS NOT NULL AND precio_mayorista > 0`,
+      productIds
+    );
+    const map: Record<string, number> = {};
+    for (const r of rows) map[r.product_id] = Number(r.precio_mayorista);
+    return map;
+  } catch { return {}; }
+}
+
+// Devuelve el precio "desde" a mostrar según el segmento del contacto.
+function precioDesde(
+  variantPrice: number, productId: string, seg: Segmento, may: Record<string, number>
+): { precio: number; esMayorista: boolean } {
+  if (seg === "minorista") return { precio: variantPrice, esMayorista: false };
+  const m = may[productId];
+  return m ? { precio: m, esMayorista: true } : { precio: variantPrice, esMayorista: false };
+}
+
 // ── Bot responses ─────────────────────────────────────────────────────────────
 
 const GREETINGS = /^(hola|hi|hey|buenas|buen[ao]s?\s*(días?|tardes?|noches?)|saludos?|ola|hello)/i;
@@ -138,17 +167,43 @@ function helpMessage() {
 ¡En breve te responden!`;
 }
 
-async function catalogMessage() {
+async function catalogMessage(seg: Segmento = "minorista") {
   const products = await getFeaturedProducts();
   if (products.length === 0) {
     return `Pronto tendremos productos disponibles. Visitá ${APP_URL} para ver el catálogo completo.`;
   }
+  const may = seg === "minorista" ? {} : await preciosMayoristas(products.map(p => p.id));
   const lines = products.map((p) => {
     const v = p.variants[0];
-    const price = v ? formatARS(Number(v.price)) : "Consultar";
-    return `• *${p.name}* — ${price}\n  ${APP_URL}/producto/${p.slug}`;
+    if (!v) return `• *${p.name}* — Consultar`;
+    const { precio, esMayorista } = precioDesde(Number(v.price), p.id, seg, may);
+    return `• *${p.name}* — ${formatARS(precio)}${esMayorista ? " (mayorista)" : ""}\n  ${APP_URL}/producto/${p.slug}`;
   });
-  return `🛍️ *Nuestros productos:*\n\n${lines.join("\n\n")}\n\n🔍 Escribí el nombre de un producto para más info, o entrá a ${APP_URL} para ver todos.`;
+  const encabezado = seg === "mayorista"
+    ? `🛍️ *Productos (precios mayoristas):*`
+    : seg === "empresarial"
+      ? `🎁 *Ideas para regalos de empresa* (precios por cantidad):`
+      : `🛍️ *Nuestros productos:*`;
+  const cierre = seg === "empresarial"
+    ? `\n\n✨ Todos se pueden *personalizar con el logo de tu empresa* (grabado láser o vinilo). Decime cantidad aproximada y te armo una cotización 📄`
+    : seg === "mayorista"
+      ? `\n\n📦 Precios por cantidad. Escribí el nombre de un producto para el detalle, o pedime la *lista completa*.`
+      : `\n\n🔍 Escribí el nombre de un producto para más info, o entrá a ${APP_URL} para ver todos.`;
+  return `${encabezado}\n\n${lines.join("\n\n")}${cierre}`;
+}
+
+// Pitch empresarial: no es una lista de precios unitarios, es una propuesta.
+function empresarialPitch() {
+  return `¡Buenísimo! 🙌 Trabajamos *regalos empresariales personalizados*: mates, termos, sets materos y más, *grabados con el logo de tu empresa* (láser o vinilo).
+
+Ideal para clientes, empleados o eventos. Manejamos *precios por cantidad* y armamos el pack a medida.
+
+Para cotizarte, contame:
+• ¿Qué producto/s te interesan? (o te sugiero opciones)
+• ¿Cantidad aproximada?
+• ¿Tenés el logo en imagen?
+
+Con eso te preparo un presupuesto 📄`;
 }
 
 // Bienvenida breve para el primer contacto (cuando no arrancan con "hola")
@@ -180,7 +235,7 @@ async function esNuevoContacto(waId: string): Promise<boolean> {
   }
 }
 
-async function priceQueryMessage(query?: string) {
+async function priceQueryMessage(query?: string, seg: Segmento = "minorista") {
   if (!query || query.trim().length < 2) {
     return `¿Qué producto querés consultar? Escribí el nombre y te digo el precio 👇`;
   }
@@ -191,13 +246,19 @@ async function priceQueryMessage(query?: string) {
 Escribí *catalogo* para ver todo, o mirá el catálogo completo en:
 ${APP_URL}`;
   }
+  const may = seg === "minorista" ? {} : await preciosMayoristas(products.map(p => p.id));
   const lines = products.map((p) => {
     const v = p.variants[0];
     if (!v) return `• *${p.name}* — sin stock`;
-    const price = formatARS(Number(v.price));
-    return `• *${p.name}*\n  Desde ${price}\n  ${APP_URL}/producto/${p.slug}`;
+    const { precio, esMayorista } = precioDesde(Number(v.price), p.id, seg, may);
+    return `• *${p.name}*\n  Desde ${formatARS(precio)}${esMayorista ? " (mayorista)" : ""}\n  ${APP_URL}/producto/${p.slug}`;
   });
-  return `🔍 Resultado para "${query}":\n\n${lines.join("\n\n")}`;
+  const nota = seg === "empresarial"
+    ? `\n\n✨ Se pueden personalizar con tu logo. Decime cantidad y te cotizo 📄`
+    : seg === "mayorista"
+      ? `\n\n📦 Precios mayoristas por cantidad.`
+      : "";
+  return `🔍 Resultado para "${query}":\n\n${lines.join("\n\n")}${nota}`;
 }
 
 // ── Main message handler ──────────────────────────────────────────────────────
@@ -206,13 +267,49 @@ ${APP_URL}`;
 // Reutilizable por el flujo de texto y el de voz.
 export async function computarRespuesta(waId: string, texto: string, esPrimerContacto: boolean): Promise<string> {
   const text = texto.trim();
-  let response: string;
   const esSaludo = GREETINGS.test(text);
+
+  // ── Segmentación ──────────────────────────────────────────────────────────
+  const contacto = await getContacto(waId);
+
+  // (a) Si estábamos esperando que dijera 1/2/3, interpretamos su respuesta.
+  if (contacto.esperandoSegmento) {
+    const elegido = interpretarRespuestaSegmento(text);
+    if (elegido) {
+      await setSegmento(waId, elegido);
+      return elegido === "empresarial" ? empresarialPitch() : await catalogMessage(elegido);
+    }
+    // No entendió la pregunta: la limpiamos y seguimos como minorista (no lo trabamos).
+    await marcarEsperandoSegmento(waId, false);
+  }
+
+  // (b) El propio mensaje puede delatar el segmento ("mayorista", "con logo", …).
+  const detectado = detectarSegmento(text);
+  if (detectado && detectado !== contacto.segmento) {
+    await setSegmento(waId, detectado);
+  }
+  const seg: Segmento | null = detectado ?? contacto.segmento;
+
+  // ¿El mensaje es una consulta comercial (catálogo / precio / nombre de producto)?
+  const esConsultaComercial =
+    CATALOG_TRIGGERS.test(text) || PRICE_TRIGGERS.test(text) ||
+    (text.length > 2 && !esSaludo && !HELP_TRIGGERS.test(text) &&
+     !HOURS_TRIGGERS.test(text) && !ORDER_TRIGGERS.test(text));
+
+  // (c) Consulta comercial sin segmento conocido → preguntamos una vez.
+  if (esConsultaComercial && !seg) {
+    await marcarEsperandoSegmento(waId, true);
+    const pref = esPrimerContacto ? `${bienvenidaBreve()}\n\n` : "";
+    return `${pref}${preguntaSegmento()}`;
+  }
+
+  const segEfectivo: Segmento = seg ?? "minorista";
+  let response: string;
 
   if (esSaludo) {
     response = menuMessage();
   } else if (CATALOG_TRIGGERS.test(text)) {
-    response = await catalogMessage();
+    response = segEfectivo === "empresarial" ? empresarialPitch() : await catalogMessage(segEfectivo);
   } else if (ORDER_TRIGGERS.test(text)) {
     response = `¡Perfecto! Podés hacer tu pedido directo desde nuestra tienda 🛒\n\n👉 ${APP_URL}\n\nTenemos múltiples medios de pago y envío a todo el país.`;
   } else if (HELP_TRIGGERS.test(text)) {
@@ -220,10 +317,12 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
   } else if (HOURS_TRIGGERS.test(text)) {
     response = `🕐 Atendemos consultas por este medio de lunes a viernes de 9 a 18hs.\n\nPara comprar podés hacerlo en cualquier momento desde ${APP_URL} 🛍️`;
   } else if (PRICE_TRIGGERS.test(text)) {
-    response = await priceQueryMessage();
+    response = segEfectivo === "empresarial" ? empresarialPitch() : await priceQueryMessage(undefined, segEfectivo);
   } else if (text.length > 2) {
     const products = await searchProducts(text);
-    response = products.length > 0 ? await priceQueryMessage(text) : fallbackCalido();
+    response = products.length > 0
+      ? await priceQueryMessage(text, segEfectivo)
+      : (segEfectivo === "empresarial" ? empresarialPitch() : fallbackCalido());
   } else {
     response = menuMessage();
   }

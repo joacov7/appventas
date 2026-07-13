@@ -72,22 +72,26 @@ export async function POST(req: NextRequest) {
   // Busca cada término dentro de la zona y junta todo, deduplicando por placeId.
   const porId = new Map<string, LugarPlaces>();
   let errores = 0;
+  let ultimoError = "";
   for (const term of termsUsados) {
     try {
       const query = `${term} en ${zona.trim()}, ${paisFinal}`;
       const lugares = await buscarLugares(query, { regionCode, maxPaginas: 2 });
       for (const l of lugares) if (!porId.has(l.placeId)) porId.set(l.placeId, l);
-    } catch {
+    } catch (e: any) {
       errores++;
+      ultimoError = e?.message ?? "error";
     }
   }
 
   const unicos = Array.from(porId.values());
   if (!unicos.length) {
-    const msg = errores === termsUsados.length
-      ? "No se pudo consultar Google Places (¿la API key es válida y tiene la Places API New habilitada?)."
-      : `No se encontraron resultados en "${zona}".`;
-    return NextResponse.json({ error: msg, total: 0 }, { status: 200 });
+    // Si TODAS las consultas fallaron, mostramos el motivo real de Google
+    // (suele decir exactamente qué habilitar/arreglar).
+    if (errores === termsUsados.length && ultimoError) {
+      return NextResponse.json({ error: `Google rechazó la consulta: ${ultimoError}`, total: 0 }, { status: 200 });
+    }
+    return NextResponse.json({ error: `No se encontraron resultados en "${zona}".`, total: 0 }, { status: 200 });
   }
 
   const zonaLabel = paisFinal.toLowerCase() === "argentina" ? zona.trim() : `${zona.trim()}, ${paisFinal}`;

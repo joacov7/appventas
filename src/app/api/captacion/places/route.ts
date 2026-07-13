@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
-import { buscarLugares, placesConfigurado, type LugarPlaces } from "@/lib/services/places.service";
+import { buscarLugares, placesConfigurado, presupuestoPlaces, type LugarPlaces } from "@/lib/services/places.service";
 
 // Rubro (mismas claves que el buscador OSM) → término de búsqueda en criollo
 // para Google Places. Places entiende lenguaje natural, así que apuntamos al
@@ -45,6 +45,15 @@ export async function POST(req: NextRequest) {
   if (!placesConfigurado()) {
     return NextResponse.json({ error: "Falta configurar GOOGLE_PLACES_API_KEY en las variables de entorno." }, { status: 400 });
   }
+
+  // Control de gastos: si se llegó al límite mensual, no se consulta más.
+  const presu = await presupuestoPlaces();
+  if (!presu.disponible) {
+    return NextResponse.json({
+      error: `Límite de gasto de Google alcanzado: ~US$${presu.gasto_usd} de US$${presu.limite_usd} este mes. Subí el límite en Captación si querés seguir.`,
+    }, { status: 402 });
+  }
+
   await ensureSchema("captacion");
 
   const { zona, pais, rubros } = await req.json();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Users, RefreshCw, Plus, Trash2, X, MessageCircle, Search, Store, Phone, Globe, Instagram, Facebook, ExternalLink, MapPin } from "lucide-react";
 
 type Prospecto = {
@@ -164,7 +164,63 @@ export default function CaptacionPage() {
       fetchProspectos(pFiltro || undefined);
     } catch {
       setPMsg("Error de conexión");
-    } finally { setGBuscando(false); }
+    } finally { setGBuscando(false); cargarPresupuesto(); }
+  }
+
+  // Presupuesto de Google Places (gasto del mes y límite).
+  const [presu, setPresu] = useState<{ limite_usd: number; gasto_usd: number; requests: number } | null>(null);
+  async function cargarPresupuesto() {
+    try {
+      const r = await fetch("/api/captacion/places/presupuesto");
+      if (r.ok) setPresu(await r.json());
+    } catch { /* sin red: se oculta la línea */ }
+  }
+  useEffect(() => { cargarPresupuesto(); }, []);
+
+  async function cambiarLimite() {
+    const v = prompt("Límite mensual de gasto en Google Places (USD):", String(presu?.limite_usd ?? 10));
+    if (v === null) return;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) { alert("Poné un número válido"); return; }
+    const r = await fetch("/api/captacion/places/presupuesto", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limite_usd: n }),
+    });
+    if (r.ok) setPresu(await r.json());
+  }
+
+  // Barrido por provincia: recorre ciudad por ciudad con la fuente OSM (gratis).
+  const [barrido, setBarrido] = useState<{ total: number; hecho: number; encontrados: number; ciudad: string } | null>(null);
+  const barridoCancelado = useRef(false);
+
+  async function barrerProvincia() {
+    if (!pZona.trim()) { setPMsg("Escribí una provincia para barrer"); return; }
+    if (!pRubros.length) { setPMsg("Elegí al menos un rubro"); return; }
+    setPMsg("");
+    const r = await fetch(`/api/captacion/ciudades?zona=${encodeURIComponent(pZona.trim())}&pais=${encodeURIComponent(pPais.trim() || "Argentina")}`);
+    const d = await r.json();
+    if (!r.ok || !d.ok || !d.ciudades?.length) { setPMsg(d.error ?? "No encontré ciudades en esa zona."); return; }
+    if (!confirm(`Voy a recorrer ${d.total} ciudades/pueblos de ${pZona.trim()} con OpenStreetMap (gratis). Puede tardar varios minutos y podés cancelar cuando quieras. ¿Arranco?`)) return;
+
+    barridoCancelado.current = false;
+    let encontrados = 0, hecho = 0;
+    for (const c of d.ciudades) {
+      if (barridoCancelado.current) break;
+      setBarrido({ total: d.total, hecho, encontrados, ciudad: c.nombre });
+      try {
+        const res = await fetch("/api/captacion/prospectos", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ zona: c.nombre, pais: pPais.trim() || "Argentina", rubros: pRubros }),
+        });
+        const data = await res.json();
+        if (res.ok && data.total) encontrados += Number(data.total) || 0;
+      } catch { /* ciudad que falla no corta el barrido */ }
+      hecho++;
+    }
+    setBarrido(null);
+    setPMsg(barridoCancelado.current
+      ? `Barrido cancelado: ${encontrados} comercios guardados de ${hecho} ciudades recorridas.`
+      : `Barrido completo: ${encontrados} comercios guardados recorriendo ${hecho} ciudades de ${pZona.trim()}.`);
+    fetchProspectos(pFiltro || undefined);
   }
 
   // Depuración de duplicados (OSM ↔ Google) + normalización de teléfonos.
@@ -289,14 +345,40 @@ export default function CaptacionPage() {
                   {pBuscando ? <RefreshCw size={16} className="animate-spin" /> : <Search size={16} />}
                   {pBuscando ? "Buscando..." : "Buscar (OSM)"}
                 </button>
-                <button onClick={buscarPlaces} disabled={pBuscando || gBuscando}
+                <button onClick={buscarPlaces} disabled={pBuscando || gBuscando || !!barrido}
                   className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white px-5 py-2.5 rounded-xl text-sm font-medium"
                   title="Google Places: trae teléfono y web (tiene costo por búsqueda)">
                   {gBuscando ? <RefreshCw size={16} className="animate-spin" /> : <MapPin size={16} />}
                   {gBuscando ? "Buscando..." : "Google"}
                 </button>
+                <button onClick={barrerProvincia} disabled={pBuscando || gBuscando || !!barrido}
+                  className="flex items-center gap-2 border border-emerald-600 text-emerald-700 hover:bg-emerald-50 disabled:opacity-50 px-4 py-2.5 rounded-xl text-sm font-medium"
+                  title="Recorre todas las ciudades de la provincia con OSM (gratis)">
+                  <Store size={16} /> Barrer provincia
+                </button>
               </div>
             </div>
+
+            {/* Progreso del barrido */}
+            {barrido && (
+              <div className="mb-3">
+                <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+                  <span>Barriendo <b>{barrido.ciudad}</b> ({barrido.hecho + 1}/{barrido.total}) · {barrido.encontrados} comercios guardados</span>
+                  <button onClick={() => { barridoCancelado.current = true; }} className="text-red-500 hover:underline">Cancelar</button>
+                </div>
+                <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full bg-emerald-500 transition-all" style={{ width: `${(barrido.hecho / barrido.total) * 100}%` }} />
+                </div>
+              </div>
+            )}
+
+            {/* Gasto de Google Places del mes */}
+            {presu && (
+              <p className="text-xs text-gray-400 mb-1">
+                Google Places este mes: <b className={presu.gasto_usd >= presu.limite_usd ? "text-red-500" : "text-gray-600"}>~US${presu.gasto_usd}</b> de US${presu.limite_usd} ({presu.requests} búsquedas) ·{" "}
+                <button onClick={cambiarLimite} className="text-indigo-500 hover:underline">cambiar límite</button>
+              </p>
+            )}
             <div className="space-y-2.5">
               {GRUPOS_RUBRO.map((g) => (
                 <div key={g.grupo}>

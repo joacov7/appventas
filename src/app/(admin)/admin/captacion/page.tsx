@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Users, RefreshCw, Plus, Trash2, X, MessageCircle, Search, Store, Phone, Globe, Instagram, Facebook, ExternalLink, MapPin, Clock } from "lucide-react";
+import Link from "next/link";
+import { Users, RefreshCw, Plus, Trash2, X, MessageCircle, Search, Store, Phone, Globe, Instagram, Facebook, ExternalLink, MapPin, Clock, BarChart2 } from "lucide-react";
 
 type Prospecto = {
   id: number;
@@ -387,6 +388,10 @@ export default function CaptacionPage() {
       <div className="flex items-center gap-3 mb-6">
         <Users className="text-emerald-600" size={22} />
         <h1 className="text-xl font-bold text-gray-900">Captación de Leads</h1>
+        <Link href="/admin/captacion/metricas"
+          className="ml-auto flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 font-medium">
+          <BarChart2 size={15} /> Métricas
+        </Link>
       </div>
 
       {/* ── Prospectos ───────────────────────────────────────────────────────── */}

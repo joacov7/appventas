@@ -105,12 +105,22 @@ export default function CaptacionPage() {
   const [pZonaFiltro, setPZonaFiltro] = useState("");
   const [pSoloContacto, setPSoloContacto] = useState(false);
 
-  async function fetchProspectos(estado?: string) {
-    setPLoading(true);
-    const url = estado ? `/api/captacion/prospectos?estado=${estado}` : "/api/captacion/prospectos";
-    const res = await fetch(url);
-    if (res.ok) setProspectos(await res.json());
-    setPLoading(false);
+  // Paginado: trae de a PAGINA filas; "Cargar más" apila la siguiente tanda.
+  const PAGINA = 200;
+  const [pHayMas, setPHayMas] = useState(false);
+  const [pCargandoMas, setPCargandoMas] = useState(false);
+
+  async function fetchProspectos(estado?: string, offset = 0) {
+    if (offset === 0) setPLoading(true); else setPCargandoMas(true);
+    const params = new URLSearchParams({ limit: String(PAGINA), offset: String(offset) });
+    if (estado) params.set("estado", estado);
+    const res = await fetch(`/api/captacion/prospectos?${params}`);
+    if (res.ok) {
+      const data: Prospecto[] = await res.json();
+      setProspectos(prev => offset === 0 ? data : [...prev, ...data]);
+      setPHayMas(data.length === PAGINA);
+    }
+    if (offset === 0) setPLoading(false); else setPCargandoMas(false);
   }
 
   useEffect(() => { fetchProspectos(); }, []);
@@ -529,6 +539,14 @@ export default function CaptacionPage() {
                   </div>
                 </div>
               ))}
+              {pHayMas && (
+                <div className="text-center pt-2">
+                  <button onClick={() => fetchProspectos(pFiltro || undefined, prospectos.length)} disabled={pCargandoMas}
+                    className="border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-600 text-sm font-medium px-5 py-2 rounded-xl">
+                    {pCargandoMas ? "Cargando..." : `Cargar más (mostrando ${prospectos.length})`}
+                  </button>
+                </div>
+              )}
             </div>
           );
           })()}

@@ -110,12 +110,18 @@ function buildQuery(areaId: number, seleccionados: { key: string; value: string 
 export async function GET(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   await ensureTable();
-  const estado = req.nextUrl.searchParams.get("estado");
-  const rows = estado
-    ? await (prisma as any).$queryRawUnsafe(
-        `SELECT * FROM prospectos WHERE estado = $1 ORDER BY creado_en DESC`, estado)
-    : await (prisma as any).$queryRawUnsafe(
-        `SELECT * FROM prospectos ORDER BY creado_en DESC`);
+  const sp = req.nextUrl.searchParams;
+  const estado = sp.get("estado");
+  // Paginado: sin límite el navegador no aguanta una cartera de miles.
+  const limit = Math.min(Math.max(Number(sp.get("limit")) || 200, 1), 500);
+  const offset = Math.max(Number(sp.get("offset")) || 0, 0);
+
+  const where = estado ? `WHERE estado = $1` : "";
+  const args: any[] = estado ? [estado] : [];
+  const rows = await (prisma as any).$queryRawUnsafe(
+    `SELECT * FROM prospectos ${where} ORDER BY creado_en DESC LIMIT ${limit} OFFSET ${offset}`,
+    ...args
+  );
   return NextResponse.json(rows);
 }
 

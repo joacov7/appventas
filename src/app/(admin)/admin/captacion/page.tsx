@@ -221,9 +221,12 @@ export default function CaptacionPage() {
       if (barridoCancelado.current) break;
       setBarrido({ total: d.total, hecho, encontrados, ciudad: c.nombre });
       try {
+        // Incluimos la provincia como contexto para desambiguar ciudades
+        // homónimas (ej: "Colón" hay en varias provincias).
+        const zonaCiudad = `${c.nombre}, ${pZona.trim()}`;
         const res = await fetch("/api/captacion/prospectos", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ zona: c.nombre, pais: pPais.trim() || "Argentina", rubros: pRubros }),
+          body: JSON.stringify({ zona: zonaCiudad, pais: pPais.trim() || "Argentina", rubros: pRubros }),
         });
         const data = await res.json();
         if (res.ok && data.total) encontrados += Number(data.total) || 0;

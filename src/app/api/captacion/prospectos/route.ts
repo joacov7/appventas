@@ -58,9 +58,14 @@ function normFacebook(v?: string): string | null {
   return `https://facebook.com/${s.replace(/^@/, "").replace(/\/$/, "")}`;
 }
 
-// Geocodifica "zona, país" a un area id de Overpass usando Nominatim.
-// Devuelve null si no encuentra un área (relación/way) para esa zona.
-async function geocodeArea(zona: string, pais: string): Promise<{ areaId: number; displayName: string } | null> {
+// Ámbito geográfico para Overpass: un área (relación/way) o un bounding box
+// (para ciudades/pueblos mapeados solo como nodo, que no definen un área).
+type Ambito =
+  | { kind: "area"; areaId: number; displayName: string }
+  | { kind: "bbox"; bbox: [number, number, number, number]; displayName: string }; // south,west,north,east
+
+// Geocodifica "zona, país" a un ámbito de Overpass usando Nominatim.
+async function geocodeArea(zona: string, pais: string): Promise<Ambito | null> {
   const q = `${zona}, ${pais}`;
   const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&addressdetails=0`;
   const res = await fetch(url, {
@@ -77,29 +82,43 @@ async function geocodeArea(zona: string, pais: string): Promise<{ areaId: number
   if (!hit) return null;
   // Overpass area id: relation -> 3600000000 + id ; way -> 2400000000 + id
   const osmId = Number(hit.osm_id);
-  if (hit.osm_type === "relation") return { areaId: 3600000000 + osmId, displayName: hit.display_name };
-  if (hit.osm_type === "way")      return { areaId: 2400000000 + osmId, displayName: hit.display_name };
-  return null; // un nodo no define un área
+  if (hit.osm_type === "relation") return { kind: "area", areaId: 3600000000 + osmId, displayName: hit.display_name };
+  if (hit.osm_type === "way")      return { kind: "area", areaId: 2400000000 + osmId, displayName: hit.display_name };
+  // Nodo (pueblo chico): usamos su bounding box. Nominatim lo da como
+  // [south, north, west, east] en strings.
+  const bb = hit.boundingbox;
+  if (Array.isArray(bb) && bb.length === 4) {
+    const [south, north, west, east] = bb.map(Number);
+    if ([south, north, west, east].every(Number.isFinite)) {
+      return { kind: "bbox", bbox: [south, west, north, east], displayName: hit.display_name };
+    }
+  }
+  return null;
 }
 
-function buildQuery(areaId: number, seleccionados: { key: string; value: string }[]): string {
+function buildQuery(ambito: Ambito, seleccionados: { key: string; value: string }[]): string {
   // Agrupar por clave OSM: una cláusula nwr por cada key (shop, office, ...)
   const porKey = new Map<string, string[]>();
   for (const r of seleccionados) {
     if (!porKey.has(r.key)) porKey.set(r.key, []);
     porKey.get(r.key)!.push(r.value);
   }
+  // Filtro de ámbito que se pega a cada cláusula nwr.
+  const filtro = ambito.kind === "area"
+    ? "(area.z)"
+    : `(${ambito.bbox.join(",")})`;
   const clausulas = Array.from(porKey.entries())
     .map(([key, vals]) =>
       // "*" = barrido amplio: todos los elementos con esa clave y nombre.
       vals.includes("*")
-        ? `nwr["${key}"]["name"](area.z);`
-        : `nwr["${key}"~"^(${vals.join("|")})$"]["name"](area.z);`
+        ? `nwr["${key}"]["name"]${filtro};`
+        : `nwr["${key}"~"^(${vals.join("|")})$"]["name"]${filtro};`
     )
     .join("\n      ");
+  const encabezado = ambito.kind === "area" ? `area(${ambito.areaId})->.z;` : "";
   return `
     [out:json][timeout:60];
-    area(${areaId})->.z;
+    ${encabezado}
     (
       ${clausulas}
     );
@@ -156,8 +175,8 @@ export async function POST(req: NextRequest) {
   const seleccionados = claves.map(k => RUBROS[k]).filter(Boolean);
   if (!seleccionados.length) return NextResponse.json({ error: "Rubros inválidos" }, { status: 400 });
 
-  // Geocodificar la zona dentro del país para acotar bien el área
-  let area: { areaId: number; displayName: string } | null = null;
+  // Geocodificar la zona dentro del país para acotar bien el ámbito
+  let area: Ambito | null = null;
   try {
     area = await geocodeArea(zona.trim(), paisFinal);
   } catch {
@@ -183,7 +202,7 @@ export async function POST(req: NextRequest) {
     "https://overpass.kumi.systems/api/interpreter",
     "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
   ];
-  const body = "data=" + encodeURIComponent(buildQuery(area.areaId, seleccionados));
+  const body = "data=" + encodeURIComponent(buildQuery(area, seleccionados));
 
   let data: any = null;
   let lastStatus = 0;

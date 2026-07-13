@@ -123,11 +123,15 @@ export default function CaptacionPage() {
   const PAGINA = 200;
   const [pHayMas, setPHayMas] = useState(false);
   const [pCargandoMas, setPCargandoMas] = useState(false);
+  // Zona que estás viendo (filtro server-side). Vacío = toda la cartera.
+  const [zonaVista, setZonaVista] = useState("");
+  const zonaVistaRef = useRef("");
 
   async function fetchProspectos(estado?: string, offset = 0) {
     if (offset === 0) setPLoading(true); else setPCargandoMas(true);
     const params = new URLSearchParams({ limit: String(PAGINA), offset: String(offset) });
     if (estado) params.set("estado", estado);
+    if (zonaVistaRef.current) params.set("zona", zonaVistaRef.current);
     const res = await fetch(`/api/captacion/prospectos?${params}`);
     if (res.ok) {
       const data: Prospecto[] = await res.json();
@@ -135,6 +139,13 @@ export default function CaptacionPage() {
       setPHayMas(data.length === PAGINA);
     }
     if (offset === 0) setPLoading(false); else setPCargandoMas(false);
+  }
+
+  // Muestra en la lista solo la zona indicada (o toda si es vacío).
+  function verZona(z: string) {
+    zonaVistaRef.current = z;
+    setZonaVista(z);
+    fetchProspectos(pFiltro || undefined);
   }
 
   useEffect(() => { fetchProspectos(); }, []);
@@ -153,7 +164,8 @@ export default function CaptacionPage() {
       if (!res.ok) { setPMsg(data.error ?? "Error en la búsqueda"); return; }
       if (data.total === 0) { setPMsg(data.error ?? "Sin resultados"); return; }
       setPMsg(`Se encontraron y guardaron ${data.total} comercios en ${pZona.trim()}.`);
-      fetchProspectos(pFiltro || undefined);
+      await fetch("/api/captacion/puntuar", { method: "POST" }).catch(() => {});
+      verZona(pZona.trim()); // muestra justo lo que encontró
     } catch {
       setPMsg("Error de conexión");
     } finally { setPBuscando(false); }
@@ -175,7 +187,8 @@ export default function CaptacionPage() {
       if (!res.ok) { setPMsg(data.error ?? "Error en la búsqueda"); return; }
       if (data.total === 0) { setPMsg(data.error ?? "Sin resultados"); return; }
       setPMsg(`Google: ${data.total} negocios (${data.con_telefono} con teléfono) en ${pZona.trim()}.`);
-      fetchProspectos(pFiltro || undefined);
+      await fetch("/api/captacion/puntuar", { method: "POST" }).catch(() => {});
+      verZona(pZona.trim()); // muestra justo lo que encontró
     } catch {
       setPMsg("Error de conexión");
     } finally { setGBuscando(false); cargarPresupuesto(); }
@@ -704,7 +717,15 @@ export default function CaptacionPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              <p className="text-xs text-gray-400 mb-1">{filtrados.length} de {prospectos.length} prospectos</p>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <p className="text-xs text-gray-400">{filtrados.length} de {prospectos.length} prospectos</p>
+                {zonaVista && (
+                  <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    Viendo: {zonaVista}
+                    <button onClick={() => verZona("")} className="hover:text-emerald-900 font-bold">✕</button>
+                  </span>
+                )}
+              </div>
               {[...filtrados].sort((a, b) => (b.puntos ?? prioridadProspecto(b)) - (a.puntos ?? prioridadProspecto(a))).map((p) => (
                 <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-4">

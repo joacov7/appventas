@@ -39,11 +39,13 @@ export async function GET(req: NextRequest) {
   const areaId = await geocodeArea(zona, pais).catch(() => null);
   if (!areaId) return NextResponse.json({ error: `No se encontró "${zona}" en ${pais}.` }, { status: 200 });
 
+  // Incluimos village y hamlet: muchas localidades chicas/turísticas (ej. Las
+  // Grutas) no están taggeadas como city/town y quedaban afuera del barrido.
   const query = `
-    [out:json][timeout:45];
+    [out:json][timeout:60];
     area(${areaId})->.z;
-    node[place~"^(city|town)$"]["name"](area.z);
-    out tags 400;
+    node[place~"^(city|town|village|hamlet)$"]["name"](area.z);
+    out tags 1200;
   `;
   const body = "data=" + encodeURIComponent(query);
 
@@ -61,12 +63,16 @@ export async function GET(req: NextRequest) {
   }
   if (!data) return NextResponse.json({ error: "No se pudo consultar el mapa. Probá de nuevo en un momento." }, { status: 502 });
 
-  // Ordena: ciudades primero, después pueblos; alfabético dentro de cada grupo.
+  // Ordena por tamaño (city > town > village > hamlet), alfabético dentro.
+  const ORDEN_PLACE: Record<string, number> = { city: 0, town: 1, village: 2, hamlet: 3 };
   const vistos = new Set<string>();
   const ciudades = (data.elements ?? [])
     .map((el: any) => ({ nombre: String(el.tags?.name ?? "").trim(), tipo: el.tags?.place ?? "town" }))
     .filter((c: any) => c.nombre && !vistos.has(c.nombre.toLowerCase()) && (vistos.add(c.nombre.toLowerCase()), true))
-    .sort((a: any, b: any) => (a.tipo === b.tipo ? a.nombre.localeCompare(b.nombre) : a.tipo === "city" ? -1 : 1));
+    .sort((a: any, b: any) => {
+      const d = (ORDEN_PLACE[a.tipo] ?? 9) - (ORDEN_PLACE[b.tipo] ?? 9);
+      return d !== 0 ? d : a.nombre.localeCompare(b.nombre);
+    });
 
   return NextResponse.json({ ok: true, zona, total: ciudades.length, ciudades });
 }

@@ -131,12 +131,16 @@ export async function GET(req: NextRequest) {
   await ensureTable();
   const sp = req.nextUrl.searchParams;
   const estado = sp.get("estado");
+  const zona = sp.get("zona")?.trim();
   // Paginado: sin límite el navegador no aguanta una cartera de miles.
   const limit = Math.min(Math.max(Number(sp.get("limit")) || 200, 1), 500);
   const offset = Math.max(Number(sp.get("offset")) || 0, 0);
 
-  const where = estado ? `WHERE estado = $1` : "";
-  const args: any[] = estado ? [estado] : [];
+  const cond: string[] = [];
+  const args: any[] = [];
+  if (estado) { args.push(estado); cond.push(`estado = $${args.length}`); }
+  if (zona)   { args.push(`%${zona}%`); cond.push(`provincia ILIKE $${args.length}`); }
+  const where = cond.length ? `WHERE ${cond.join(" AND ")}` : "";
   // Mejor puntuados primero (los A arriba de todo); lo sin puntuar, al final por fecha.
   const rows = await (prisma as any).$queryRawUnsafe(
     `SELECT * FROM prospectos ${where}

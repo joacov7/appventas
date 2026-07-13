@@ -7,7 +7,7 @@ import { registrarInteraccion } from "@/lib/services/prospectos.service";
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const { id } = await params;
-  const { estado, notas } = await req.json();
+  const { estado, notas, mensaje_abordaje } = await req.json();
   await ensureSchema("captacion");
 
   const sets: string[] = [];
@@ -21,6 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
   if (notas !== undefined)  { sets.push(`notas = $${idx++}`);  args.push(notas === null ? null : String(notas)); }
+  if (mensaje_abordaje !== undefined) { sets.push(`mensaje_abordaje = $${idx++}`); args.push(mensaje_abordaje === null ? null : String(mensaje_abordaje)); }
   if (!sets.length) return NextResponse.json({ error: "Nada para actualizar" }, { status: 400 });
 
   args.push(Number(id));
@@ -29,6 +30,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   );
   if (estado !== undefined) {
     await registrarInteraccion(Number(id), { tipo: "estado", detalle: `Pasó a "${estado}"` });
+  }
+  if (mensaje_abordaje !== undefined && mensaje_abordaje) {
+    await registrarInteraccion(Number(id), { tipo: "abordaje", detalle: `Mensaje escrito a mano` });
   }
   return NextResponse.json(rows[0]);
 }

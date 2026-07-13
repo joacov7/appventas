@@ -365,6 +365,9 @@ export default function CaptacionPage() {
 
   const [generandoMsg, setGenerandoMsg] = useState<number | null>(null);
   const [msgAbierto, setMsgAbierto] = useState<number | null>(null);
+  // Edición manual del mensaje.
+  const [editandoMsg, setEditandoMsg] = useState<number | null>(null);
+  const [borradorMsg, setBorradorMsg] = useState("");
 
   async function generarAbordaje(p: Prospecto) {
     setGenerandoMsg(p.id);
@@ -384,6 +387,54 @@ export default function CaptacionPage() {
     } catch {
       alert("Error de conexión");
     } finally { setGenerandoMsg(null); }
+  }
+
+  // Abordaje manual: abre el editor (con el texto actual si existe).
+  function editarAbordaje(p: Prospecto) {
+    setEditandoMsg(p.id);
+    setBorradorMsg(p.mensaje_abordaje ?? "");
+    setMsgAbierto(p.id);
+  }
+
+  async function guardarAbordajeManual(id: number) {
+    const texto = borradorMsg.trim();
+    await fetch(`/api/captacion/prospectos/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mensaje_abordaje: texto || null }),
+    });
+    setProspectos(prev => prev.map(x => x.id === id ? { ...x, mensaje_abordaje: texto || null } : x));
+    setEditandoMsg(null);
+  }
+
+  // Genera abordajes con IA en lote para los prospectos A visibles sin mensaje.
+  const [loteAbordaje, setLoteAbordaje] = useState<{ hechos: number; total: number } | null>(null);
+  const loteCancelado = useRef(false);
+
+  async function generarAbordajesA(candidatos: Prospecto[]) {
+    const pendientes = candidatos.filter(p => p.puntaje === "A" && !p.mensaje_abordaje);
+    if (!pendientes.length) { setDedupMsg("No hay prospectos A sin mensaje en la vista actual."); return; }
+    if (!confirm(`Voy a generar el mensaje de abordaje con IA para ${pendientes.length} prospecto(s) A. Consume tokens de OpenAI (unos centavos c/u). ¿Sigo?`)) return;
+    loteCancelado.current = false;
+    let hechos = 0;
+    for (const p of pendientes) {
+      if (loteCancelado.current) break;
+      setLoteAbordaje({ hechos, total: pendientes.length });
+      try {
+        const r = await fetch("/api/empleado/abordaje", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prospectoId: p.id }),
+        });
+        const data = await r.json();
+        if (r.ok) setProspectos(prev => prev.map(x => x.id === p.id ? { ...x, mensaje_abordaje: data.mensaje } : x));
+      } catch { /* uno que falle no corta el lote */ }
+      hechos++;
+    }
+    setLoteAbordaje(null);
+    setDedupMsg(loteCancelado.current ? `Lote cancelado: ${hechos} mensaje(s) generados.` : `✅ ${hechos} mensaje(s) de abordaje generados.`);
+  }
+
+  function copiar(texto: string) {
+    navigator.clipboard?.writeText(texto).catch(() => {});
   }
 
   return (
@@ -524,6 +575,18 @@ export default function CaptacionPage() {
                 title="Fusiona el mismo negocio que entró por OSM y por Google, y normaliza teléfonos">
                 <RefreshCw size={15} className={depurando ? "animate-spin" : ""} /> {depurando ? "Depurando..." : "Depurar duplicados"}
               </button>
+              {loteAbordaje ? (
+                <span className="text-xs text-gray-500 flex items-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" /> Generando abordajes... {loteAbordaje.hechos}/{loteAbordaje.total}
+                  <button onClick={() => { loteCancelado.current = true; }} className="text-red-500 hover:underline">Cancelar</button>
+                </span>
+              ) : (
+                <button onClick={() => generarAbordajesA(prospectos)} disabled={depurando || !!enriq}
+                  className="flex items-center gap-1.5 border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50 text-sm font-medium px-3 py-1.5 rounded-lg"
+                  title="Genera con IA el mensaje de abordaje de los prospectos A que aún no tienen (los de la vista actual)">
+                  ✨ Abordajes para los A
+                </button>
+              )}
               <button onClick={() => { setManualOpen(true); setManualError(""); }}
                 className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-3 py-1.5 rounded-lg">
                 <Plus size={15} /> Cargar contacto
@@ -667,6 +730,8 @@ export default function CaptacionPage() {
                               className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1 rounded-full transition-colors">
                               <MessageCircle size={12} fill="white" strokeWidth={0} /> WhatsApp
                             </a>
+                            <button onClick={() => copiar(p.telefono!)}
+                              className="text-xs text-gray-400 hover:text-gray-700" title="Copiar el número">Copiar Nº</button>
                           </>
                         )}
                         {p.instagram && (
@@ -703,10 +768,27 @@ export default function CaptacionPage() {
                             className="inline-flex items-center gap-1.5 text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50">
                             {generandoMsg === p.id
                               ? <><RefreshCw size={11} className="animate-spin" /> Generando...</>
-                              : <>✨ Generar mensaje de abordaje</>}
+                              : <>✨ Generar con IA</>}
                           </button>
                         )}
-                        {msgAbierto === p.id && p.mensaje_abordaje && (
+                        <button onClick={() => editarAbordaje(p)}
+                          className="text-xs text-gray-400 hover:text-gray-700 font-medium">
+                          ✍️ {p.mensaje_abordaje ? "Editar a mano" : "Escribir a mano"}
+                        </button>
+                        {/* Editor manual */}
+                        {editandoMsg === p.id && (
+                          <div className="w-full mt-1">
+                            <textarea value={borradorMsg} onChange={e => setBorradorMsg(e.target.value)} rows={4}
+                              placeholder="Escribí tu mensaje de abordaje para este negocio..."
+                              className="w-full text-sm border rounded-xl px-3 py-2 outline-none resize-none focus:ring-2 focus:ring-purple-300" />
+                            <div className="flex items-center gap-2 mt-2">
+                              <button onClick={() => guardarAbordajeManual(p.id)}
+                                className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg font-medium">Guardar</button>
+                              <button onClick={() => setEditandoMsg(null)} className="text-xs text-gray-400 hover:text-gray-600 px-2">Cancelar</button>
+                            </div>
+                          </div>
+                        )}
+                        {msgAbierto === p.id && p.mensaje_abordaje && editandoMsg !== p.id && (
                           <div className="w-full mt-1 bg-purple-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed">
                             {p.mensaje_abordaje}
                             <div className="flex items-center gap-3 mt-3 flex-wrap">

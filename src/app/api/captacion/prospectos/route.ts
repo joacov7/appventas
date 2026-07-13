@@ -118,8 +118,10 @@ export async function GET(req: NextRequest) {
 
   const where = estado ? `WHERE estado = $1` : "";
   const args: any[] = estado ? [estado] : [];
+  // Mejor puntuados primero (los A arriba de todo); lo sin puntuar, al final por fecha.
   const rows = await (prisma as any).$queryRawUnsafe(
-    `SELECT * FROM prospectos ${where} ORDER BY creado_en DESC LIMIT ${limit} OFFSET ${offset}`,
+    `SELECT * FROM prospectos ${where}
+     ORDER BY puntos DESC NULLS LAST, creado_en DESC LIMIT ${limit} OFFSET ${offset}`,
     ...args
   );
   return NextResponse.json(rows);

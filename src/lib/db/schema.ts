@@ -245,6 +245,9 @@ const DDL: Record<Ambito, string[]> = {
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS ultimo_seguimiento_en TIMESTAMPTZ`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS email TEXT`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS telefono_norm TEXT`,
+    `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntaje TEXT`,
+    `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntos INT`,
+    `CREATE INDEX IF NOT EXISTS idx_prospectos_puntos ON prospectos(puntos DESC NULLS LAST)`,
     // Índices para filtrar la cartera a escala (estado/rubro/provincia) y priorizar contactables.
     `CREATE INDEX IF NOT EXISTS idx_prospectos_estado ON prospectos(estado)`,
     `CREATE INDEX IF NOT EXISTS idx_prospectos_telnorm ON prospectos(telefono_norm)`,

@@ -18,7 +18,15 @@ type Prospecto = {
   estado: string;
   notas: string | null;
   mensaje_abordaje: string | null;
+  puntaje: string | null;
+  puntos: number | null;
   creado_en: string;
+};
+
+const PUNTAJE_STYLE: Record<string, string> = {
+  A: "bg-emerald-600 text-white",
+  B: "bg-amber-400 text-amber-950",
+  C: "bg-gray-200 text-gray-500",
 };
 
 // Prioridad de contacto: nuevos y contactables primero
@@ -104,6 +112,7 @@ export default function CaptacionPage() {
   const [pRubroFiltro, setPRubroFiltro] = useState("");
   const [pZonaFiltro, setPZonaFiltro] = useState("");
   const [pSoloContacto, setPSoloContacto] = useState(false);
+  const [pPuntajeFiltro, setPPuntajeFiltro] = useState("");
 
   // Paginado: trae de a PAGINA filas; "Cargar más" apila la siguiente tanda.
   const PAGINA = 200;
@@ -217,6 +226,8 @@ export default function CaptacionPage() {
       hecho++;
     }
     setBarrido(null);
+    // Puntuar lo nuevo antes de refrescar, para que los A queden arriba.
+    await fetch("/api/captacion/puntuar", { method: "POST" }).catch(() => {});
     setPMsg(barridoCancelado.current
       ? `Barrido cancelado: ${encontrados} comercios guardados de ${hecho} ciudades recorridas.`
       : `Barrido completo: ${encontrados} comercios guardados recorriendo ${hecho} ciudades de ${pZona.trim()}.`);
@@ -232,7 +243,8 @@ export default function CaptacionPage() {
       const res = await fetch("/api/captacion/dedup", { method: "POST" });
       const d = await res.json();
       if (!res.ok) { setDedupMsg(d.error ?? "Error al depurar"); return; }
-      setDedupMsg(`✅ ${d.total_fusionados} duplicado(s) fusionado(s) (${d.fusionados_por_telefono} por teléfono, ${d.fusionados_por_nombre_geo} por nombre+ubicación). ${d.telefonos_normalizados} teléfono(s) normalizado(s).`);
+      const pj = d.puntajes ? ` · Puntajes: ${d.puntajes.A} A, ${d.puntajes.B} B, ${d.puntajes.C} C.` : "";
+      setDedupMsg(`✅ ${d.total_fusionados} duplicado(s) fusionado(s) (${d.fusionados_por_telefono} por teléfono, ${d.fusionados_por_nombre_geo} por nombre+ubicación). ${d.telefonos_normalizados} teléfono(s) normalizado(s).${pj}`);
       fetchProspectos(pFiltro || undefined);
     } catch {
       setDedupMsg("Error de conexión");
@@ -501,6 +513,13 @@ export default function CaptacionPage() {
                   className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${pSoloContacto ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
                   Con teléfono
                 </button>
+                {["A", "B", "C"].map(l => (
+                  <button key={l} onClick={() => setPPuntajeFiltro(v => v === l ? "" : l)}
+                    title={l === "A" ? "Los mejores: rubro afín y contactables" : l === "B" ? "Valen la pena" : "Baja prioridad"}
+                    className={`px-3 py-2 rounded-xl text-sm font-bold transition-colors ${pPuntajeFiltro === l ? PUNTAJE_STYLE[l] : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                    {l}
+                  </button>
+                ))}
               </div>
             );
           })()}
@@ -511,7 +530,8 @@ export default function CaptacionPage() {
               (!q || p.nombre.toLowerCase().includes(q)) &&
               (!pRubroFiltro || p.rubro === pRubroFiltro) &&
               (!pZonaFiltro || p.provincia === pZonaFiltro) &&
-              (!pSoloContacto || !!p.telefono)
+              (!pSoloContacto || !!p.telefono) &&
+              (!pPuntajeFiltro || p.puntaje === pPuntajeFiltro)
             );
 
           return pLoading ? (
@@ -531,11 +551,17 @@ export default function CaptacionPage() {
           ) : (
             <div className="space-y-3">
               <p className="text-xs text-gray-400 mb-1">{filtrados.length} de {prospectos.length} prospectos</p>
-              {[...filtrados].sort((a, b) => prioridadProspecto(b) - prioridadProspecto(a)).map((p) => (
+              {[...filtrados].sort((a, b) => (b.puntos ?? prioridadProspecto(b)) - (a.puntos ?? prioridadProspecto(a))).map((p) => (
                 <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
+                        {p.puntaje && (
+                          <span title={`${p.puntos ?? 0} puntos`}
+                            className={`text-[11px] font-bold w-5 h-5 rounded-full flex items-center justify-center shrink-0 ${PUNTAJE_STYLE[p.puntaje] ?? "bg-gray-100 text-gray-400"}`}>
+                            {p.puntaje}
+                          </span>
+                        )}
                         <span className="font-semibold text-gray-900 text-sm">{p.nombre}</span>
                         {p.rubro && <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{p.rubro}</span>}
                         {p.provincia && <span className="text-xs text-gray-400">{p.provincia}</span>}

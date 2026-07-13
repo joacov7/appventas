@@ -246,6 +246,7 @@ const DDL: Record<Ambito, string[]> = {
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS email TEXT`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS telefono_norm TEXT`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntaje TEXT`,
+    `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS enriquecido_en TIMESTAMPTZ`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntos INT`,
     `CREATE INDEX IF NOT EXISTS idx_prospectos_puntos ON prospectos(puntos DESC NULLS LAST)`,
     // Historial de interacciones por prospecto (quién/cuándo/qué se le dijo).

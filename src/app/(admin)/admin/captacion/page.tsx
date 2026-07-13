@@ -272,6 +272,31 @@ export default function CaptacionPage() {
     finally { setManualSaving(false); }
   }
 
+  // Enriquecimiento: buscar email/redes en el sitio web de cada prospecto.
+  const [enriq, setEnriq] = useState<{ hechos: number; emails: number; restantes: number } | null>(null);
+  const enriqCancelado = useRef(false);
+
+  async function buscarEmails() {
+    enriqCancelado.current = false;
+    let hechos = 0, emails = 0;
+    setEnriq({ hechos, emails, restantes: -1 });
+    try {
+      while (!enriqCancelado.current) {
+        const r = await fetch("/api/captacion/enriquecer", {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limit: 10 }),
+        });
+        const d = await r.json();
+        if (!r.ok) { setDedupMsg(d.error ?? "Error buscando emails"); break; }
+        hechos += d.procesados; emails += d.con_email;
+        setEnriq({ hechos, emails, restantes: d.restantes });
+        if (!d.restantes || !d.procesados) break;
+      }
+      setDedupMsg(`📧 Revisé ${hechos} sitio(s): ${emails} email(es) encontrados.`);
+      fetchProspectos(pFiltro || undefined);
+      fetch("/api/captacion/puntuar", { method: "POST" }).catch(() => {});
+    } finally { setEnriq(null); }
+  }
+
   // ── Historial de interacciones ──
   type Interaccion = { id: number; tipo: string; canal: string | null; detalle: string | null; creado_en: string };
   const [histAbierto, setHistAbierto] = useState<number | null>(null);
@@ -472,8 +497,21 @@ export default function CaptacionPage() {
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button onClick={depurarDuplicados} disabled={depurando}
+            <div className="flex items-center gap-2 shrink-0 flex-wrap">
+              {enriq ? (
+                <span className="text-xs text-gray-500 flex items-center gap-2">
+                  <RefreshCw size={13} className="animate-spin" />
+                  Buscando emails... {enriq.hechos} sitios, {enriq.emails} emails{enriq.restantes >= 0 ? ` · faltan ${enriq.restantes}` : ""}
+                  <button onClick={() => { enriqCancelado.current = true; }} className="text-red-500 hover:underline">Cancelar</button>
+                </span>
+              ) : (
+                <button onClick={buscarEmails} disabled={depurando}
+                  className="flex items-center gap-1.5 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-lg"
+                  title="Visita el sitio web de cada prospecto y extrae el email y las redes">
+                  📧 Buscar emails
+                </button>
+              )}
+              <button onClick={depurarDuplicados} disabled={depurando || !!enriq}
                 className="flex items-center gap-1.5 border border-gray-200 hover:bg-gray-50 disabled:opacity-50 text-gray-700 text-sm font-medium px-3 py-1.5 rounded-lg"
                 title="Fusiona el mismo negocio que entró por OSM y por Google, y normaliza teléfonos">
                 <RefreshCw size={15} className={depurando ? "animate-spin" : ""} /> {depurando ? "Depurando..." : "Depurar duplicados"}

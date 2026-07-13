@@ -248,6 +248,16 @@ const DDL: Record<Ambito, string[]> = {
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntaje TEXT`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntos INT`,
     `CREATE INDEX IF NOT EXISTS idx_prospectos_puntos ON prospectos(puntos DESC NULLS LAST)`,
+    // Historial de interacciones por prospecto (quién/cuándo/qué se le dijo).
+    `CREATE TABLE IF NOT EXISTS prospecto_interacciones (
+      id BIGSERIAL PRIMARY KEY,
+      prospecto_id INT NOT NULL,
+      tipo TEXT NOT NULL,
+      canal TEXT,
+      detalle TEXT,
+      creado_en TIMESTAMPTZ DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_interacciones_prospecto ON prospecto_interacciones(prospecto_id, creado_en DESC)`,
     // Índices para filtrar la cartera a escala (estado/rubro/provincia) y priorizar contactables.
     `CREATE INDEX IF NOT EXISTS idx_prospectos_estado ON prospectos(estado)`,
     `CREATE INDEX IF NOT EXISTS idx_prospectos_telnorm ON prospectos(telefono_norm)`,

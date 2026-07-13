@@ -69,6 +69,43 @@ export async function buscarProspectos(opts: {
   }
 }
 
+// ─── Historial de interacciones ───────────────────────────────────────────────
+// Registro de cada toque con el prospecto: mensajes, cambios de estado, notas.
+// tipo: contacto | seguimiento | estado | abordaje | nota · canal: whatsapp | email | telefono | otro
+
+export interface Interaccion {
+  id: number;
+  tipo: string;
+  canal: string | null;
+  detalle: string | null;
+  creado_en: string;
+}
+
+export async function registrarInteraccion(
+  prospectoId: number,
+  i: { tipo: string; canal?: string; detalle?: string }
+): Promise<void> {
+  try {
+    await ensureSchema("captacion");
+    await (prisma as any).$executeRawUnsafe(
+      `INSERT INTO prospecto_interacciones (prospecto_id, tipo, canal, detalle) VALUES ($1,$2,$3,$4)`,
+      prospectoId, i.tipo, i.canal ?? null, (i.detalle ?? "").slice(0, 600) || null
+    );
+  } catch { /* el historial nunca debe romper la acción principal */ }
+}
+
+export async function listarInteracciones(prospectoId: number, limit = 50): Promise<Interaccion[]> {
+  try {
+    await ensureSchema("captacion");
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT id, tipo, canal, detalle, creado_en FROM prospecto_interacciones
+       WHERE prospecto_id = $1 ORDER BY creado_en DESC LIMIT ${Math.min(limit, 200)}`,
+      prospectoId
+    );
+    return rows.map(r => ({ ...r, id: Number(r.id) }));
+  } catch { return []; }
+}
+
 export async function contarProspectosPorEstado(): Promise<Record<string, number>> {
   try {
     const rows: any[] = await (prisma as any).$queryRawUnsafe(

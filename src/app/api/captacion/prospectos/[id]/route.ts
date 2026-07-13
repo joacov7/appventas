@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
+import { registrarInteraccion } from "@/lib/services/prospectos.service";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
@@ -26,6 +27,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const rows = await (prisma as any).$queryRawUnsafe(
     `UPDATE prospectos SET ${sets.join(", ")} WHERE id = $${idx} RETURNING *`, ...args
   );
+  if (estado !== undefined) {
+    await registrarInteraccion(Number(id), { tipo: "estado", detalle: `Pasó a "${estado}"` });
+  }
   return NextResponse.json(rows[0]);
 }
 

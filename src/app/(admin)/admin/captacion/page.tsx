@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { Users, RefreshCw, Plus, Trash2, X, MessageCircle, Search, Store, Phone, Globe, Instagram, Facebook, ExternalLink, MapPin } from "lucide-react";
+import { Users, RefreshCw, Plus, Trash2, X, MessageCircle, Search, Store, Phone, Globe, Instagram, Facebook, ExternalLink, MapPin, Clock } from "lucide-react";
 
 type Prospecto = {
   id: number;
@@ -22,6 +22,10 @@ type Prospecto = {
   puntos: number | null;
   creado_en: string;
 };
+
+function hora(s: string) {
+  return new Date(s).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+}
 
 const PUNTAJE_STYLE: Record<string, string> = {
   A: "bg-emerald-600 text-white",
@@ -266,6 +270,47 @@ export default function CaptacionPage() {
       } else setManualError((await res.json()).error ?? "Error al guardar");
     } catch { setManualError("Error de conexión"); }
     finally { setManualSaving(false); }
+  }
+
+  // ── Historial de interacciones ──
+  type Interaccion = { id: number; tipo: string; canal: string | null; detalle: string | null; creado_en: string };
+  const [histAbierto, setHistAbierto] = useState<number | null>(null);
+  const [histItems, setHistItems] = useState<Interaccion[]>([]);
+  const [histCargando, setHistCargando] = useState(false);
+  const [notaNueva, setNotaNueva] = useState("");
+
+  async function abrirHistorial(id: number) {
+    if (histAbierto === id) { setHistAbierto(null); return; }
+    setHistAbierto(id); setHistItems([]); setHistCargando(true); setNotaNueva("");
+    const r = await fetch(`/api/captacion/prospectos/${id}/interacciones`);
+    if (r.ok) setHistItems(await r.json());
+    setHistCargando(false);
+  }
+
+  // Registra una interacción sin bloquear la acción principal.
+  function logInteraccion(id: number, tipo: string, canal?: string, detalle?: string) {
+    fetch(`/api/captacion/prospectos/${id}/interacciones`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo, canal, detalle }),
+    }).catch(() => {});
+  }
+
+  // Al abrir WhatsApp con un mensaje: queda registrado y el prospecto pasa a "contactado".
+  function registrarEnvioWhatsapp(p: Prospecto, mensaje?: string | null) {
+    logInteraccion(p.id, "contacto", "whatsapp", mensaje ?? undefined);
+    if (p.estado === "nuevo") cambiarEstadoProspecto(p.id, "contactado");
+  }
+
+  async function agregarNota(id: number) {
+    const detalle = notaNueva.trim();
+    if (!detalle) return;
+    setNotaNueva("");
+    await fetch(`/api/captacion/prospectos/${id}/interacciones`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo: "nota", detalle }),
+    });
+    const r = await fetch(`/api/captacion/prospectos/${id}/interacciones`);
+    if (r.ok) setHistItems(await r.json());
   }
 
   async function cambiarEstadoProspecto(id: number, estado: string) {
@@ -572,6 +617,7 @@ export default function CaptacionPage() {
                           <>
                             <span className="text-xs text-gray-500 flex items-center gap-1"><Phone size={11} /> {p.telefono}</span>
                             <a href={waLink(p.telefono)} target="_blank" rel="noopener noreferrer"
+                              onClick={() => registrarEnvioWhatsapp(p)}
                               className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1 rounded-full transition-colors">
                               <MessageCircle size={12} fill="white" strokeWidth={0} /> WhatsApp
                             </a>
@@ -595,8 +641,12 @@ export default function CaptacionPage() {
                         )}
                       </div>
 
-                      {/* Mensaje de abordaje IA */}
-                      <div className="mt-3">
+                      {/* Mensaje de abordaje IA + historial */}
+                      <div className="mt-3 flex items-center gap-4 flex-wrap">
+                        <button onClick={() => abrirHistorial(p.id)}
+                          className="inline-flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 font-medium">
+                          <Clock size={11} /> {histAbierto === p.id ? "Ocultar historial" : "Historial"}
+                        </button>
                         {p.mensaje_abordaje ? (
                           <button onClick={() => setMsgAbierto(msgAbierto === p.id ? null : p.id)}
                             className="text-xs text-purple-600 hover:text-purple-800 font-medium">
@@ -611,7 +661,7 @@ export default function CaptacionPage() {
                           </button>
                         )}
                         {msgAbierto === p.id && p.mensaje_abordaje && (
-                          <div className="mt-2 bg-purple-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed">
+                          <div className="w-full mt-1 bg-purple-50 rounded-xl p-3 text-sm text-gray-700 leading-relaxed">
                             {p.mensaje_abordaje}
                             <div className="flex items-center gap-3 mt-3 flex-wrap">
                               <button onClick={() => navigator.clipboard.writeText(p.mensaje_abordaje!)}
@@ -622,10 +672,40 @@ export default function CaptacionPage() {
                               </button>
                               {p.telefono && (
                                 <a href={waLink(p.telefono, p.mensaje_abordaje)} target="_blank" rel="noopener noreferrer"
+                                  onClick={() => registrarEnvioWhatsapp(p, p.mensaje_abordaje)}
                                   className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1.5 rounded-full transition-colors">
                                   <MessageCircle size={12} fill="white" strokeWidth={0} /> Enviar por WhatsApp
                                 </a>
                               )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Panel de historial */}
+                        {histAbierto === p.id && (
+                          <div className="w-full mt-1 bg-gray-50 rounded-xl p-3">
+                            {histCargando ? (
+                              <p className="text-xs text-gray-400">Cargando historial...</p>
+                            ) : histItems.length === 0 ? (
+                              <p className="text-xs text-gray-400">Sin interacciones todavía. Cuando le mandes un WhatsApp o cambies su estado, queda registrado acá.</p>
+                            ) : (
+                              <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                                {histItems.map(h => (
+                                  <div key={h.id} className="text-xs text-gray-600 flex items-start gap-2">
+                                    <span className="text-gray-400 shrink-0 w-24">{hora(h.creado_en)}</span>
+                                    <span className="font-medium shrink-0 capitalize">{h.tipo}{h.canal ? ` · ${h.canal}` : ""}</span>
+                                    <span className="text-gray-500 break-words min-w-0">{h.detalle ?? ""}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 mt-2">
+                              <input value={notaNueva} onChange={e => setNotaNueva(e.target.value)}
+                                onKeyDown={e => e.key === "Enter" && agregarNota(p.id)}
+                                placeholder="Agregar una nota..."
+                                className="flex-1 text-xs border rounded-lg px-2 py-1.5 outline-none bg-white" />
+                              <button onClick={() => agregarNota(p.id)} disabled={!notaNueva.trim()}
+                                className="text-xs bg-gray-800 hover:bg-gray-900 disabled:opacity-40 text-white px-3 py-1.5 rounded-lg">Guardar</button>
                             </div>
                           </div>
                         )}

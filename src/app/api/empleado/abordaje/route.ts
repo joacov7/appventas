@@ -93,5 +93,9 @@ export async function POST(req: NextRequest) {
     `UPDATE prospectos SET mensaje_abordaje = $1 WHERE id = $2`, mensaje, Number(prospectoId)
   );
 
+  // Deja constancia en el historial del prospecto.
+  const { registrarInteraccion } = await import("@/lib/services/prospectos.service");
+  await registrarInteraccion(Number(prospectoId), { tipo: "abordaje", detalle: mensaje.slice(0, 200) });
+
   return NextResponse.json({ ok: true, mensaje });
 }

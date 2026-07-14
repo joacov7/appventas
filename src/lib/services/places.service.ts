@@ -112,7 +112,9 @@ function mapPlace(p: any): LugarPlaces | null {
     placeId: String(p.id),
     nombre,
     direccion: p.formattedAddress ?? null,
-    telefono: p.nationalPhoneNumber ?? p.internationalPhoneNumber ?? null,
+    // Preferimos el internacional: para celulares AR trae el "9" (marcador de
+    // móvil), que después nos deja distinguir fijo vs. celular.
+    telefono: p.internationalPhoneNumber ?? p.nationalPhoneNumber ?? null,
     website: p.websiteUri ?? null,
     rubro: p?.primaryTypeDisplayName?.text ?? null,
     lat: p?.location?.latitude ?? null,

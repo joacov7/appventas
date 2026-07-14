@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { Users, RefreshCw, Plus, Trash2, X, MessageCircle, Search, Store, Phone, Globe, Instagram, Facebook, ExternalLink, MapPin, Clock, BarChart2 } from "lucide-react";
+import { esProbableFijo } from "@/lib/telefono";
 
 type Prospecto = {
   id: number;
@@ -117,6 +118,7 @@ export default function CaptacionPage() {
   const [pRubroFiltro, setPRubroFiltro] = useState("");
   const [pZonaFiltro, setPZonaFiltro] = useState("");
   const [pSoloContacto, setPSoloContacto] = useState(false);
+  const [pSoloCelular, setPSoloCelular] = useState(false);
   const [pPuntajeFiltro, setPPuntajeFiltro] = useState("");
 
   // Paginado: trae de a PAGINA filas; "Cargar más" apila la siguiente tanda.
@@ -700,6 +702,11 @@ export default function CaptacionPage() {
                   className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${pSoloContacto ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
                   Con teléfono
                 </button>
+                <button onClick={() => setPSoloCelular(v => !v)}
+                  title="Oculta las líneas fijas (probablemente sin WhatsApp)"
+                  className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${pSoloCelular ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
+                  📱 Solo celular
+                </button>
                 {["A", "B", "C"].map(l => (
                   <button key={l} onClick={() => setPPuntajeFiltro(v => v === l ? "" : l)}
                     title={l === "A" ? "Los mejores: rubro afín y contactables" : l === "B" ? "Valen la pena" : "Baja prioridad"}
@@ -718,6 +725,7 @@ export default function CaptacionPage() {
               (!pRubroFiltro || p.rubro === pRubroFiltro) &&
               (!pZonaFiltro || p.provincia === pZonaFiltro) &&
               (!pSoloContacto || !!p.telefono) &&
+              (!pSoloCelular || (!!p.telefono && !esProbableFijo(p.telefono))) &&
               (!pPuntajeFiltro || p.puntaje === pPuntajeFiltro)
             );
 
@@ -732,7 +740,7 @@ export default function CaptacionPage() {
           ) : filtrados.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <p className="text-sm">Ningún prospecto coincide con los filtros.</p>
-              <button onClick={() => { setPTexto(""); setPRubroFiltro(""); setPZonaFiltro(""); setPSoloContacto(false); }}
+              <button onClick={() => { setPTexto(""); setPRubroFiltro(""); setPZonaFiltro(""); setPSoloContacto(false); setPSoloCelular(false); setPPuntajeFiltro(""); }}
                 className="text-xs text-emerald-600 hover:underline mt-2">Limpiar filtros</button>
             </div>
           ) : (
@@ -766,11 +774,16 @@ export default function CaptacionPage() {
                         {p.telefono && (
                           <>
                             <span className="text-xs text-gray-500 flex items-center gap-1"><Phone size={11} /> {p.telefono}</span>
-                            <a href={waLink(p.telefono)} target="_blank" rel="noopener noreferrer"
-                              onClick={() => registrarEnvioWhatsapp(p)}
-                              className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1 rounded-full transition-colors">
-                              <MessageCircle size={12} fill="white" strokeWidth={0} /> WhatsApp
-                            </a>
+                            {esProbableFijo(p.telefono) && (
+                              <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" title="No tiene marcador de celular: probablemente es línea fija, sin WhatsApp">📞 posible fija</span>
+                            )}
+                            {!esProbableFijo(p.telefono) && (
+                              <a href={waLink(p.telefono)} target="_blank" rel="noopener noreferrer"
+                                onClick={() => registrarEnvioWhatsapp(p)}
+                                className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1 rounded-full transition-colors">
+                                <MessageCircle size={12} fill="white" strokeWidth={0} /> WhatsApp
+                              </a>
+                            )}
                             <button onClick={() => enviarAbordajeApi(p)} disabled={enviandoWa !== null}
                               className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium disabled:opacity-50"
                               title="Envía el abordaje (plantilla) desde el número del bot por la API">

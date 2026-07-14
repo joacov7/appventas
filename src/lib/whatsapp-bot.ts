@@ -5,6 +5,52 @@ import {
   type Segmento, detectarSegmento, interpretarRespuestaSegmento, preguntaSegmento,
   getContacto, setSegmento, marcarEsperandoSegmento,
 } from "@/lib/whatsapp-segmento";
+import { loadBotTextos, render, type BotTextos } from "@/lib/bot-config";
+
+// Nombre de la tienda para el placeholder {tienda}.
+async function nombreTienda(): Promise<string> {
+  try {
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT config FROM catalog_config WHERE tipo = 'store_config'`);
+    return rows[0]?.config?.storeName || "nuestra tienda";
+  } catch { return "nuestra tienda"; }
+}
+
+// Categorías (rubros) que tienen al menos un producto con stock.
+async function categoriasConProductos(): Promise<{ id: string; name: string; slug: string }[]> {
+  try {
+    return await (prisma as any).$queryRawUnsafe(`
+      SELECT DISTINCT c.id, c.name, c.slug
+      FROM categories c
+      JOIN products p ON p."categoryId" = c.id AND p.active = true
+      JOIN product_variants v ON v."productId" = p.id AND v.active = true AND v.stock > 0
+      WHERE c.active = true
+      ORDER BY c.name
+    `);
+  } catch { return []; }
+}
+
+// Busca una categoría cuyo nombre matchee lo que escribió el cliente.
+function matchCategoria(texto: string, cats: { id: string; name: string; slug: string }[]) {
+  const t = texto.toLowerCase().trim();
+  if (t.length < 3) return null;
+  return cats.find(c => t.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(t)) ?? null;
+}
+
+// Productos de una categoría (con precio según segmento).
+async function productosDeCategoria(catId: string) {
+  try {
+    return await (prisma as any).$queryRawUnsafe(`
+      SELECT p.id, p.name, p.slug, MIN(v.price)::float AS price
+      FROM products p
+      JOIN product_variants v ON v."productId" = p.id AND v.active = true AND v.stock > 0
+      WHERE p."categoryId" = $1 AND p.active = true
+      GROUP BY p.id, p.name, p.slug, p.featured
+      ORDER BY p.featured DESC, p.name
+      LIMIT 8
+    `, catId);
+  } catch { return []; }
+}
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
 
@@ -139,39 +185,28 @@ function precioDesde(
 // ── Bot responses ─────────────────────────────────────────────────────────────
 
 const GREETINGS = /^(hola|hi|hey|buenas|buen[ao]s?\s*(días?|tardes?|noches?)|saludos?|ola|hello)/i;
-const CATALOG_TRIGGERS = /^(catalogo|catálogo|productos?|ver\s+productos?|quiero\s+ver|1)/i;
-const PRICE_TRIGGERS = /^(precio|precios|cuanto\s+sale|cuánto\s+sale|2)/i;
-const HELP_TRIGGERS = /^(ayuda|help|hablar\s+con\s+alguien|asesor|3|humano)/i;
+const CATALOG_TRIGGERS = /^(catalogo|catálogo|productos?|ver\s+productos?|ver\s+cat|quiero\s+ver|🧉|1)/i;
+const REGALOS_TRIGGERS = /(regalo|empresarial|personaliz|con\s+logo|souvenir|merchandis|🎁)/i;
+const PRICE_TRIGGERS = /^(precio|precios|consultar|cuanto\s+sale|cuánto\s+sale|📦|2)/i;
+const HELP_TRIGGERS = /^(ayuda|help|hablar\s+con\s+alguien|asesor|humano|persona|👨|3|4)/i;
 const ORDER_TRIGGERS = /^(comprar|pedido|pedir|checkout|hacer\s+pedido|quiero\s+comprar)/i;
 const HOURS_TRIGGERS = /^(horario|horarios|cuando\s+atienden|cuándo\s+atienden)/i;
 
-function menuMessage() {
-  return `¡Hola! 👋 Bienvenido/a a nuestra tienda.
-
-¿En qué te puedo ayudar?
-
-1️⃣ *Ver catálogo* — Ver nuestros productos
-2️⃣ *Precio* — Consultar precio de un producto
-3️⃣ *Ayuda* — Hablar con una persona
-
-O escribí directamente el nombre del producto que buscás 🔍`;
-}
-
-function helpMessage() {
-  const waNumber = process.env.NEXT_PUBLIC_WHATSAPP_NUMBER ?? "";
-  return `Enseguida te conectamos con alguien del equipo 👤
-
-📞 También podés llamarnos o escribirnos directamente.
-🌐 Visitá nuestra tienda: ${APP_URL}
-
-¡En breve te responden!`;
-}
-
-async function catalogMessage(seg: Segmento = "minorista") {
-  const products = await getFeaturedProducts();
-  if (products.length === 0) {
-    return `Pronto tendremos productos disponibles. Visitá ${APP_URL} para ver el catálogo completo.`;
+// "Ver catálogo": muestra las categorías con productos (o, si no hay categorías
+// clasificadas, cae a la muestra de destacados).
+async function catalogMessage(textos: BotTextos, tienda: string, seg: Segmento = "minorista") {
+  const cats = await categoriasConProductos();
+  if (cats.length > 0) {
+    const lista = cats.map(c => `• *${c.name}*`).join("\n");
+    const intro = render(textos.catalogo_intro, { link: APP_URL, tienda });
+    const cierre = seg === "empresarial"
+      ? `\n\n✨ Todo se puede personalizar con tu logo. O escribí *regalos* para una cotización.`
+      : `\n\nO mirá todo en 👉 ${APP_URL}`;
+    return `${intro}\n\n${lista}${cierre}`;
   }
+  // Sin categorías: muestra de destacados (comportamiento anterior).
+  const products = await getFeaturedProducts();
+  if (products.length === 0) return `Pronto tendremos productos disponibles. Visitá ${APP_URL} para ver el catálogo completo.`;
   const may = seg === "minorista" ? {} : await preciosMayoristas(products.map(p => p.id));
   const lines = products.map((p) => {
     const v = p.variants[0];
@@ -179,47 +214,20 @@ async function catalogMessage(seg: Segmento = "minorista") {
     const { precio, esMayorista } = precioDesde(Number(v.price), p.id, seg, may);
     return `• *${p.name}* — ${formatARS(precio)}${esMayorista ? " (mayorista)" : ""}\n  ${APP_URL}/producto/${p.slug}`;
   });
-  const encabezado = seg === "mayorista"
-    ? `🛍️ *Productos (precios mayoristas):*`
-    : seg === "empresarial"
-      ? `🎁 *Ideas para regalos de empresa* (precios por cantidad):`
-      : `🛍️ *Nuestros productos:*`;
-  const cierre = seg === "empresarial"
-    ? `\n\n✨ Todos se pueden *personalizar con el logo de tu empresa* (grabado láser o vinilo). Decime cantidad aproximada y te armo una cotización 📄`
-    : seg === "mayorista"
-      ? `\n\n📦 Precios por cantidad. Escribí el nombre de un producto para el detalle, o pedime la *lista completa*.`
-      : `\n\n🔍 Escribí el nombre de un producto para más info, o entrá a ${APP_URL} para ver todos.`;
-  return `${encabezado}\n\n${lines.join("\n\n")}${cierre}`;
+  return `🛍️ *Nuestros productos:*\n\n${lines.join("\n\n")}\n\n🔍 Escribí el nombre de un producto, o entrá a ${APP_URL}.`;
 }
 
-// Pitch empresarial: no es una lista de precios unitarios, es una propuesta.
-function empresarialPitch() {
-  return `¡Buenísimo! 🙌 Trabajamos *regalos empresariales personalizados*: mates, termos, sets materos y más, *grabados con el logo de tu empresa* (láser o vinilo).
-
-Ideal para clientes, empleados o eventos. Manejamos *precios por cantidad* y armamos el pack a medida.
-
-Para cotizarte, contame:
-• ¿Qué producto/s te interesan? (o te sugiero opciones)
-• ¿Cantidad aproximada?
-• ¿Tenés el logo en imagen?
-
-Con eso te preparo un presupuesto 📄`;
-}
-
-// Bienvenida breve para el primer contacto (cuando no arrancan con "hola")
-function bienvenidaBreve() {
-  return `¡Hola! 👋 Gracias por escribirnos 🧉`;
-}
-
-// Fallback cálido: cuando el bot no entiende, no manda un error frío.
-// Le avisa al cliente que lo van a atender (vos respondés con el agente).
-function fallbackCalido() {
-  return `¡Gracias por tu mensaje! 🧉 Dejame chequear eso y en un ratito te respondo 😊
-
-Mientras tanto, si querés podés:
-• Escribir *catalogo* para ver nuestros productos
-• Entrar a ${APP_URL}
-• Escribir *ayuda* si preferís que te atienda una persona`;
+// Productos de una categoría elegida.
+async function categoriaMessage(cat: { id: string; name: string; slug: string }, seg: Segmento) {
+  const productos: any[] = await productosDeCategoria(cat.id);
+  if (!productos.length) return `Por ahora no tengo *${cat.name}* con stock. Mirá el catálogo completo en ${APP_URL}`;
+  const may = seg === "minorista" ? {} : await preciosMayoristas(productos.map(p => p.id));
+  const lines = productos.map(p => {
+    const { precio, esMayorista } = precioDesde(Number(p.price), p.id, seg, may);
+    return `• *${p.name}* — ${formatARS(precio)}${esMayorista ? " (may.)" : ""}\n  ${APP_URL}/producto/${p.slug}`;
+  });
+  const nota = seg === "empresarial" ? `\n\n✨ Personalizables con tu logo — pedime una cotización.` : "";
+  return `🧉 *${cat.name}:*\n\n${lines.join("\n\n")}\n\nVer todos 👉 ${APP_URL}/productos?category=${cat.slug}${nota}`;
 }
 
 // ¿Es la primera vez que este número nos escribe?
@@ -269,67 +277,76 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
   const text = texto.trim();
   const esSaludo = GREETINGS.test(text);
 
-  // ── Segmentación ──────────────────────────────────────────────────────────
+  // Textos editables + nombre de la tienda para los placeholders.
+  const textos = await loadBotTextos();
+  const tienda = await nombreTienda();
+  const R = (t: string) => render(t, { link: APP_URL, tienda });
+
   const contacto = await getContacto(waId);
 
-  // (a) Si estábamos esperando que dijera 1/2/3, interpretamos su respuesta.
+  // (a) Si estábamos esperando que elija 1/2/3 (segmento), interpretamos.
   if (contacto.esperandoSegmento) {
     const elegido = interpretarRespuestaSegmento(text);
     if (elegido) {
       await setSegmento(waId, elegido);
-      return elegido === "empresarial" ? empresarialPitch() : await catalogMessage(elegido);
+      return elegido === "empresarial" ? R(textos.regalos) : await catalogMessage(textos, tienda, elegido);
     }
-    // No entendió la pregunta: la limpiamos y seguimos como minorista (no lo trabamos).
     await marcarEsperandoSegmento(waId, false);
+  }
+
+  // Opción "Regalos empresariales / personalizados": fija empresarial y cotiza.
+  if (REGALOS_TRIGGERS.test(text)) {
+    await setSegmento(waId, "empresarial");
+    const pref = esPrimerContacto && !esSaludo ? `${R(textos.bienvenida)}\n\n` : "";
+    return `${pref}${R(textos.regalos)}`;
   }
 
   // (b) El propio mensaje puede delatar el segmento ("mayorista", "con logo", …).
   const detectado = detectarSegmento(text);
-  if (detectado && detectado !== contacto.segmento) {
-    await setSegmento(waId, detectado);
-  }
+  if (detectado && detectado !== contacto.segmento) await setSegmento(waId, detectado);
   const seg: Segmento | null = detectado ?? contacto.segmento;
+  const segEfectivo: Segmento = seg ?? "minorista";
 
-  // ¿El mensaje es una consulta comercial (catálogo / precio / nombre de producto)?
-  const esConsultaComercial =
-    CATALOG_TRIGGERS.test(text) || PRICE_TRIGGERS.test(text) ||
-    (text.length > 2 && !esSaludo && !HELP_TRIGGERS.test(text) &&
-     !HOURS_TRIGGERS.test(text) && !ORDER_TRIGGERS.test(text));
+  // Saludo → menú.
+  if (esSaludo) return R(textos.menu);
 
-  // (c) Consulta comercial sin segmento conocido → preguntamos una vez.
-  if (esConsultaComercial && !seg) {
+  // Ver catálogo → lista de categorías (no necesita saber el segmento aún).
+  if (CATALOG_TRIGGERS.test(text)) {
+    const cat = await catalogMessage(textos, tienda, segEfectivo);
+    return esPrimerContacto ? `${R(textos.bienvenida)}\n\n${cat}` : cat;
+  }
+  if (HELP_TRIGGERS.test(text)) return R(textos.asesor);
+  if (HOURS_TRIGGERS.test(text)) return R(textos.horarios);
+  if (ORDER_TRIGGERS.test(text)) {
+    return `¡Perfecto! Podés hacer tu pedido directo desde la tienda 🛒\n\n👉 ${APP_URL}\n\nMúltiples medios de pago y envío a todo el país.`;
+  }
+
+  // De acá en más mostramos PRECIOS → recién ahí necesitamos el segmento.
+  const cats = await categoriasConProductos();
+  const catElegida = matchCategoria(text, cats);
+  const esConsultaPrecio = PRICE_TRIGGERS.test(text) || !!catElegida || text.length > 2;
+
+  if (esConsultaPrecio && !seg) {
     await marcarEsperandoSegmento(waId, true);
-    const pref = esPrimerContacto ? `${bienvenidaBreve()}\n\n` : "";
+    const pref = esPrimerContacto ? `${R(textos.bienvenida)}\n\n` : "";
     return `${pref}${preguntaSegmento()}`;
   }
 
-  const segEfectivo: Segmento = seg ?? "minorista";
   let response: string;
-
-  if (esSaludo) {
-    response = menuMessage();
-  } else if (CATALOG_TRIGGERS.test(text)) {
-    response = segEfectivo === "empresarial" ? empresarialPitch() : await catalogMessage(segEfectivo);
-  } else if (ORDER_TRIGGERS.test(text)) {
-    response = `¡Perfecto! Podés hacer tu pedido directo desde nuestra tienda 🛒\n\n👉 ${APP_URL}\n\nTenemos múltiples medios de pago y envío a todo el país.`;
-  } else if (HELP_TRIGGERS.test(text)) {
-    response = helpMessage();
-  } else if (HOURS_TRIGGERS.test(text)) {
-    response = `🕐 Atendemos consultas por este medio de lunes a viernes de 9 a 18hs.\n\nPara comprar podés hacerlo en cualquier momento desde ${APP_URL} 🛍️`;
+  if (catElegida) {
+    response = await categoriaMessage(catElegida, segEfectivo);
   } else if (PRICE_TRIGGERS.test(text)) {
-    response = segEfectivo === "empresarial" ? empresarialPitch() : await priceQueryMessage(undefined, segEfectivo);
+    response = R(textos.consultar);
   } else if (text.length > 2) {
     const products = await searchProducts(text);
     response = products.length > 0
       ? await priceQueryMessage(text, segEfectivo)
-      : (segEfectivo === "empresarial" ? empresarialPitch() : fallbackCalido());
+      : (segEfectivo === "empresarial" ? R(textos.regalos) : R(textos.fallback));
   } else {
-    response = menuMessage();
+    response = R(textos.menu);
   }
 
-  if (esPrimerContacto && !esSaludo) {
-    response = `${bienvenidaBreve()}\n\n${response}`;
-  }
+  if (esPrimerContacto && !esSaludo) response = `${R(textos.bienvenida)}\n\n${response}`;
   return response;
 }
 

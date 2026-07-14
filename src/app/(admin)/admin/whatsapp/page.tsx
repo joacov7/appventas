@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { MessageCircle, Users, ArrowDownLeft, ArrowUpRight, RefreshCw, ExternalLink } from "lucide-react";
+import Link from "next/link";
+import { MessageCircle, Users, ArrowDownLeft, ArrowUpRight, RefreshCw, ExternalLink, MessageSquare } from "lucide-react";
 
 interface Mensaje {
   id: number;
@@ -83,9 +84,15 @@ export default function WhatsAppBotPage() {
           <MessageCircle size={22} className="text-emerald-600" />
           <h1 className="text-2xl font-bold text-gray-900">Bot de WhatsApp</h1>
         </div>
-        <button onClick={load} className="p-2 text-gray-400 hover:text-gray-600">
-          <RefreshCw size={16} />
-        </button>
+        <div className="flex items-center gap-3">
+          <Link href="/admin/whatsapp/mensajes"
+            className="flex items-center gap-1.5 text-sm text-emerald-700 hover:text-emerald-800 font-medium border border-emerald-200 hover:bg-emerald-50 px-3 py-1.5 rounded-lg">
+            <MessageSquare size={15} /> Editar mensajes
+          </Link>
+          <button onClick={load} className="p-2 text-gray-400 hover:text-gray-600">
+            <RefreshCw size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}

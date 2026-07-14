@@ -450,6 +450,26 @@ export default function CaptacionPage() {
     navigator.clipboard?.writeText(texto).catch(() => {});
   }
 
+  // Envía el abordaje por la API (plantilla), desde el número del bot.
+  const [enviandoWa, setEnviandoWa] = useState<number | null>(null);
+  async function enviarAbordajeApi(p: Prospecto) {
+    if (!confirm(`Enviar el abordaje a ${p.nombre} por WhatsApp (desde el número del bot)?`)) return;
+    setEnviandoWa(p.id);
+    try {
+      const r = await fetch("/api/captacion/enviar-abordaje", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prospectoId: p.id }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        setProspectos(prev => prev.map(x => x.id === p.id ? { ...x, estado: x.estado === "nuevo" ? "contactado" : x.estado } : x));
+        alert("✅ Abordaje enviado. Cuando responda, la charla te llega a la Bandeja (el bot no interrumpe).");
+      } else {
+        alert(d.error ?? "No se pudo enviar");
+      }
+    } catch { alert("Error de conexión"); }
+    finally { setEnviandoWa(null); }
+  }
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -751,6 +771,11 @@ export default function CaptacionPage() {
                               className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1 rounded-full transition-colors">
                               <MessageCircle size={12} fill="white" strokeWidth={0} /> WhatsApp
                             </a>
+                            <button onClick={() => enviarAbordajeApi(p)} disabled={enviandoWa !== null}
+                              className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium disabled:opacity-50"
+                              title="Envía el abordaje (plantilla) desde el número del bot por la API">
+                              {enviandoWa === p.id ? "Enviando..." : "📤 Abordar (bot)"}
+                            </button>
                             <button onClick={() => copiar(p.telefono!)}
                               className="text-xs text-gray-400 hover:text-gray-700" title="Copiar el número">Copiar Nº</button>
                           </>

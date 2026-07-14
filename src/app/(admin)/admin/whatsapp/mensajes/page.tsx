@@ -27,12 +27,26 @@ export default function MensajesBotPage() {
   const [defaults, setDefaults] = useState<Textos | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState("");
+  // Plantilla de abordaje (API).
+  const [plantilla, setPlantilla] = useState({ nombre: "", idioma: "es_AR" });
+  const [plGuardado, setPlGuardado] = useState("");
 
   useEffect(() => {
     fetch("/api/whatsapp/textos").then(r => r.json()).then(d => {
       if (d.textos) { setTextos(d.textos); setDefaults(d.defaults); }
     });
+    fetch("/api/whatsapp/plantilla").then(r => r.json()).then(d => {
+      if (d?.idioma) setPlantilla({ nombre: d.nombre ?? "", idioma: d.idioma });
+    });
   }, []);
+
+  async function guardarPlantilla() {
+    setPlGuardado("");
+    const r = await fetch("/api/whatsapp/plantilla", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(plantilla),
+    });
+    setPlGuardado(r.ok ? "✅ Guardado" : "Error");
+  }
 
   async function guardar() {
     if (!textos) return;
@@ -62,6 +76,26 @@ export default function MensajesBotPage() {
       <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 text-xs text-indigo-900">
         Podés usar <b>{"{tienda}"}</b> (nombre de la tienda) y <b>{"{link}"}</b> (dirección de la tienda) — se reemplazan solos.
         El bot arma las <b>categorías</b> y los <b>precios</b> automáticamente según tu catálogo.
+      </div>
+
+      {/* Plantilla de abordaje (API) */}
+      <div className="bg-white rounded-2xl border border-amber-200 p-4">
+        <p className="text-sm font-medium text-gray-800 mb-1">📤 Abordaje en frío (plantilla de la API)</p>
+        <p className="text-xs text-gray-500 mb-3">
+          Para escribirle a un prospecto que nunca te escribió, Meta exige una <b>plantilla aprobada</b>.
+          Creala en Meta Business Manager con <b>una variable</b> {"{{1}}"} (el nombre del negocio) y pegá acá su nombre exacto e idioma.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input value={plantilla.nombre} onChange={e => setPlantilla({ ...plantilla, nombre: e.target.value })}
+            placeholder="Nombre de la plantilla (ej: abordaje_inicial)"
+            className="flex-1 text-sm border rounded-xl px-3 py-2 outline-none" />
+          <input value={plantilla.idioma} onChange={e => setPlantilla({ ...plantilla, idioma: e.target.value })}
+            placeholder="Idioma (es_AR)"
+            className="sm:w-28 text-sm border rounded-xl px-3 py-2 outline-none" />
+          <button onClick={guardarPlantilla}
+            className="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-xl">Guardar</button>
+        </div>
+        {plGuardado && <p className="text-xs text-gray-500 mt-2">{plGuardado}</p>}
       </div>
 
       {CAMPOS.map(({ key, label, ayuda }) => (

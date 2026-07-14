@@ -7,12 +7,14 @@ import { MessageCircle, ArrowLeft, RotateCcw, Save } from "lucide-react";
 interface Textos {
   bienvenida: string; menu: string; catalogo_intro: string; regalos: string;
   consultar: string; asesor: string; horarios: string; fallback: string;
+  cotizacion_recibida: string;
 }
 
 const CAMPOS: { key: keyof Textos; label: string; ayuda: string }[] = [
   { key: "menu", label: "Menú principal", ayuda: "Lo primero que ve el cliente al saludar." },
   { key: "catalogo_intro", label: "Antes del catálogo", ayuda: "Se muestra arriba de la lista de categorías." },
   { key: "regalos", label: "Regalos empresariales", ayuda: "Cuando elige la opción de personalizados / empresa." },
+  { key: "cotizacion_recibida", label: "Datos de cotización recibidos", ayuda: "Cuando la empresa ya dio producto/cantidad/logo: acusa recibo y avisa que lo sigue una persona." },
   { key: "consultar", label: "Consultar un producto", ayuda: "Cuando pide consultar un producto puntual." },
   { key: "asesor", label: "Hablar con un asesor", ayuda: "Cuando pide hablar con una persona." },
   { key: "horarios", label: "Horarios", ayuda: "Cuando pregunta por horarios de atención." },

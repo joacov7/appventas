@@ -14,6 +14,7 @@ export interface BotTextos {
   asesor: string;       // derivar a una persona
   horarios: string;     // horarios de atención
   fallback: string;     // cuando no entiende
+  cotizacion_recibida: string; // empresa ya dio datos → acuse + derivación
 }
 
 export const BOT_DEFAULTS: BotTextos = {
@@ -50,6 +51,7 @@ Mientras tanto podés:
 • Escribir *catálogo* para ver los productos
 • Entrar a {link}
 • Escribir *asesor* si preferís que te atienda una persona`,
+  cotizacion_recibida: `¡Genial! 🙌 Tomo nota de eso. Con esos datos te preparamos el presupuesto y en breve te escribe alguien del equipo para cerrar los detalles 📄`,
 };
 
 export async function loadBotTextos(): Promise<BotTextos> {

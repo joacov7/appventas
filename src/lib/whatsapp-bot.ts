@@ -339,9 +339,15 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
     response = R(textos.consultar);
   } else if (text.length > 2) {
     const products = await searchProducts(text);
-    response = products.length > 0
-      ? await priceQueryMessage(text, segEfectivo)
-      : (segEfectivo === "empresarial" ? R(textos.regalos) : R(textos.fallback));
+    if (products.length > 0) {
+      response = await priceQueryMessage(text, segEfectivo);
+    } else if (segEfectivo === "empresarial") {
+      // La empresa ya vio el pitch y está respondiendo (producto/cantidad/logo):
+      // acusamos recibo y derivamos a una persona en vez de repetir el pitch.
+      response = R(textos.cotizacion_recibida);
+    } else {
+      response = R(textos.fallback);
+    }
   } else {
     response = R(textos.menu);
   }

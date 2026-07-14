@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { handleIncomingMessage, responderMensajeVoz, sendWhatsAppMessage } from "@/lib/whatsapp-bot";
 import { procesarAudioEntrante } from "@/lib/whatsapp-voice";
 import { alertaNuevoWhatsapp } from "@/lib/telegram";
+import { avisarPendientes } from "@/lib/services/whatsapp-pendientes.service";
 import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 
 // ── GET — Meta webhook verification ─────────────────────────────────────────
@@ -72,6 +73,9 @@ export async function POST(req: NextRequest) {
       }
       // Aviso al dueño por Telegram (no bloquea si falla).
       await alertaNuevoWhatsapp(waId, text).catch(() => {});
+      // Aprovecha el tráfico para recordar OTRAS charlas viejas sin responder
+      // (las de hace +45min; la actual queda excluida por ser reciente).
+      await avisarPendientes().catch(() => {});
     }
 
     return NextResponse.json({ status: "ok" });

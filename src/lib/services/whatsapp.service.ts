@@ -60,6 +60,11 @@ export async function enviarWhatsapp(to: string, texto: string): Promise<{ ok: b
       `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'saliente', $2)`, to, texto
     );
   } catch { /* no crítico */ }
+  // Esta vía es respuesta de un humano/agente → el bot se calla para ese contacto.
+  try {
+    const { marcarAtendidoHumano } = await import("@/lib/whatsapp-segmento");
+    await marcarAtendidoHumano(to);
+  } catch { /* no crítico */ }
   const conectado = !!process.env.WHATSAPP_ACCESS_TOKEN && !!process.env.WHATSAPP_PHONE_NUMBER_ID;
   return { ok: true, enviado: conectado };
 }

@@ -3,7 +3,7 @@ import { ensureSchema } from "@/lib/db/schema";
 import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 import {
   type Segmento, detectarSegmento, interpretarRespuestaSegmento, preguntaSegmento,
-  getContacto, setSegmento, marcarEsperandoSegmento,
+  getContacto, setSegmento, marcarEsperandoSegmento, botSilenciado,
 } from "@/lib/whatsapp-segmento";
 import { loadBotTextos, render, type BotTextos } from "@/lib/bot-config";
 
@@ -360,6 +360,9 @@ export async function handleIncomingMessage(waId: string, messageText: string) {
   const text = messageText.trim();
   const esPrimerContacto = await esNuevoContacto(waId);
   await logMessage(waId, "entrante", text);
+  // Si un humano está atendiendo esta charla, el bot no interrumpe (pero el
+  // mensaje queda registrado y el aviso a Telegram se dispara igual).
+  if (await botSilenciado(waId)) return;
   const response = await computarRespuesta(waId, text, esPrimerContacto);
   await logMessage(waId, "saliente", response);
   await sendWhatsAppMessage(waId, response);

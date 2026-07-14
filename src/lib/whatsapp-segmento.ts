@@ -74,6 +74,38 @@ export async function setSegmento(waId: string, seg: Segmento): Promise<void> {
   } catch { /* no crítico */ }
 }
 
+// Horas que el bot queda en silencio para un contacto tras responder un humano.
+const HORAS_SILENCIO = 12;
+
+// Un humano (o agente aprobado) respondió: silenciamos el bot y limpiamos el
+// pendiente (ya fue atendido).
+export async function marcarAtendidoHumano(waId: string): Promise<void> {
+  try {
+    await ensureSchema("whatsapp");
+    await (prisma as any).$executeRawUnsafe(
+      `INSERT INTO whatsapp_contactos (wa_id, humano_hasta, recordado_en, updated_at)
+       VALUES ($1, now() + interval '${HORAS_SILENCIO} hours', now(), now())
+       ON CONFLICT (wa_id) DO UPDATE SET
+         humano_hasta = now() + interval '${HORAS_SILENCIO} hours',
+         recordado_en = now(),
+         updated_at = now()`,
+      waId
+    );
+  } catch { /* no crítico */ }
+}
+
+// ¿El bot está en silencio para este contacto (un humano lo está atendiendo)?
+export async function botSilenciado(waId: string): Promise<boolean> {
+  try {
+    await ensureSchema("whatsapp");
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT (humano_hasta IS NOT NULL AND humano_hasta > now()) AS silenciado
+       FROM whatsapp_contactos WHERE wa_id = $1`, waId
+    );
+    return rows[0]?.silenciado === true;
+  } catch { return false; }
+}
+
 export async function marcarEsperandoSegmento(waId: string, valor: boolean): Promise<void> {
   try {
     await ensureSchema("whatsapp");

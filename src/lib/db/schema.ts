@@ -367,6 +367,9 @@ const DDL: Record<Ambito, string[]> = {
       esperando_segmento BOOLEAN DEFAULT FALSE,
       updated_at TIMESTAMPTZ DEFAULT now()
     )`,
+    // Silencio del bot cuando un humano toma la conversación + control de recordatorios.
+    `ALTER TABLE whatsapp_contactos ADD COLUMN IF NOT EXISTS humano_hasta TIMESTAMPTZ`,
+    `ALTER TABLE whatsapp_contactos ADD COLUMN IF NOT EXISTS recordado_en TIMESTAMPTZ`,
   ],
 
   // ─── Agentes (ejecuciones, cola de aprobaciones, briefings) ──────────────

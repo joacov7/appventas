@@ -26,7 +26,8 @@ type Ambito =
   | "ventas"
   | "whatsapp"
   | "agentes"
-  | "memoria";
+  | "memoria"
+  | "deposito";
 
 // Cada entrada es una sentencia DDL idempotente. Se ejecutan en orden para
 // respetar dependencias (una tabla referenciada antes de la que la referencia).
@@ -422,6 +423,26 @@ const DDL: Record<Ambito, string[]> = {
       UNIQUE (tenant_id, namespace, mkey)
     )`,
     `CREATE INDEX IF NOT EXISTS idx_memory_ns ON memory_entries (tenant_id, namespace)`,
+  ],
+
+  // ─── Depósito: preparación/armado de pedidos ─────────────────────────────
+  deposito: [
+    `CREATE TABLE IF NOT EXISTS pedido_preparacion (
+      order_id    TEXT PRIMARY KEY,
+      estado      TEXT DEFAULT 'armando',
+      armador     TEXT,
+      iniciado_en TIMESTAMPTZ DEFAULT now(),
+      cerrado_en  TIMESTAMPTZ,
+      updated_at  TIMESTAMPTZ DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS pedido_preparacion_item (
+      order_item_id TEXT PRIMARY KEY,
+      order_id      TEXT NOT NULL,
+      controlado    INT DEFAULT 0,
+      faltante      INT DEFAULT 0,
+      updated_at    TIMESTAMPTZ DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_prep_item_order ON pedido_preparacion_item(order_id)`,
   ],
 };
 

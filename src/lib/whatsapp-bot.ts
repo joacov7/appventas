@@ -184,13 +184,13 @@ function precioDesde(
 
 // ── Bot responses ─────────────────────────────────────────────────────────────
 
-const GREETINGS = /^(hola|hi|hey|buenas|buen[ao]s?\s*(días?|tardes?|noches?)|saludos?|ola|hello)/i;
-const CATALOG_TRIGGERS = /^(catalogo|catálogo|productos?|ver\s+productos?|ver\s+cat|quiero\s+ver|🧉|1)/i;
-const REGALOS_TRIGGERS = /(regalo|empresarial|personaliz|con\s+logo|souvenir|merchandis|🎁)/i;
-const PRICE_TRIGGERS = /^(precio|precios|consultar|cuanto\s+sale|cuánto\s+sale|📦|2)/i;
-const HELP_TRIGGERS = /^(ayuda|help|hablar\s+con\s+alguien|asesor|humano|persona|👨|3|4)/i;
-const ORDER_TRIGGERS = /^(comprar|pedido|pedir|checkout|hacer\s+pedido|quiero\s+comprar)/i;
-const HOURS_TRIGGERS = /^(horario|horarios|cuando\s+atienden|cuándo\s+atienden)/i;
+const GREETINGS = /^(hola+|ola+|hi|hey|buenas|buen[ao]s?\s*(días?|tardes?|noches?)|saludos?|hello|q(ue|é)?\s*(onda|tal))/i;
+const CATALOG_TRIGGERS = /^(cat[aá]l?[oa]go?|cat[aá]lg?o|productos?|ver\s+(cat|prod|todo)|quiero\s+ver|que\s+(tienen|tenes|ten[eé]s|venden|hay)|mostr[aá]|ver[eé]?|🧉|1)/i;
+const REGALOS_TRIGGERS = /(regalo|empresa|empresarial|personaliz|con\s+logo|con\s+mi\s+logo|grabar|souvenir|merchandis|🎁)/i;
+const PRICE_TRIGGERS = /^(precio|preci?os?|presi?o|consultar|consulta|cu[aá]nto|cotiz|valor|sale|cuesta|📦|2)/i;
+const HELP_TRIGGERS = /^(ayuda|help|hablar|asesor|humano|(una\s+)?persona|👨|3|4)/i;
+const ORDER_TRIGGERS = /^(comprar|pedido|pedir|checkout|hacer\s+pedido|quiero\s+comprar|como\s+compro)/i;
+const HOURS_TRIGGERS = /^(horario|cuando\s+atienden|cu[aá]ndo\s+atienden|atienden|abren|est[aá]n\s+abiert|a\s+qu[eé]\s+hora)/i;
 
 // "Ver catálogo": muestra las categorías con productos (o, si no hay categorías
 // clasificadas, cae a la muestra de destacados).
@@ -321,35 +321,38 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
     return `¡Perfecto! Podés hacer tu pedido directo desde la tienda 🛒\n\n👉 ${APP_URL}\n\nMúltiples medios de pago y envío a todo el país.`;
   }
 
-  // De acá en más mostramos PRECIOS → recién ahí necesitamos el segmento.
+  // ¿Hay intención concreta de producto? (comando de precio, categoría o match)
   const cats = await categoriasConProductos();
   const catElegida = matchCategoria(text, cats);
-  const esConsultaPrecio = PRICE_TRIGGERS.test(text) || !!catElegida || text.length > 2;
+  const productos = text.length > 2 ? await searchProducts(text) : [];
+  const hayIntentProducto = PRICE_TRIGGERS.test(text) || !!catElegida || productos.length > 0;
 
-  if (esConsultaPrecio && !seg) {
+  const conBienvenida = (t: string) => (esPrimerContacto ? `${R(textos.bienvenida)}\n\n${t}` : t);
+
+  // El mensaje delató el segmento pero NO busca un producto puntual
+  // (ej: "mayorista", "para mi empresa"): mostramos su oferta, no un fallback.
+  if (detectado && !hayIntentProducto) {
+    return conBienvenida(detectado === "empresarial"
+      ? R(textos.regalos)
+      : await catalogMessage(textos, tienda, segEfectivo));
+  }
+
+  // Consulta de producto/precio sin saber el segmento → preguntamos una vez.
+  if (hayIntentProducto && !seg) {
     await marcarEsperandoSegmento(waId, true);
-    const pref = esPrimerContacto ? `${R(textos.bienvenida)}\n\n` : "";
-    return `${pref}${preguntaSegmento()}`;
+    return conBienvenida(preguntaSegmento());
   }
 
   let response: string;
   if (catElegida) {
     response = await categoriaMessage(catElegida, segEfectivo);
+  } else if (productos.length > 0) {
+    response = await priceQueryMessage(text, segEfectivo);
   } else if (PRICE_TRIGGERS.test(text)) {
     response = R(textos.consultar);
-  } else if (text.length > 2) {
-    const products = await searchProducts(text);
-    if (products.length > 0) {
-      response = await priceQueryMessage(text, segEfectivo);
-    } else if (segEfectivo === "empresarial") {
-      // La empresa ya vio el pitch y está respondiendo (producto/cantidad/logo):
-      // acusamos recibo y derivamos a una persona en vez de repetir el pitch.
-      response = R(textos.cotizacion_recibida);
-    } else {
-      response = R(textos.fallback);
-    }
   } else {
-    response = R(textos.menu);
+    // No es producto ni comando reconocido: menú amable (o acuse si es empresa).
+    response = segEfectivo === "empresarial" ? R(textos.cotizacion_recibida) : R(textos.menu);
   }
 
   if (esPrimerContacto && !esSaludo) response = `${R(textos.bienvenida)}\n\n${response}`;

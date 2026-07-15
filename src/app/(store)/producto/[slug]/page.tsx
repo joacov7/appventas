@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { formatPrice, formatCuotas } from "@/lib/utils";
+import { useStoreFlags } from "@/hooks/useStoreFlags";
 import { useCartStore } from "@/store/cartStore";
 import { useViewers } from "@/hooks/useViewers";
 import { WhatsAppButton, buildWaLink } from "@/components/store/WhatsAppButton";
@@ -30,6 +31,7 @@ export default function ProductPage() {
   const addItem = useCartStore((s) => s.addItem);
   const viewers = useViewers(slug);
   const tiers = useTiers();
+  const { modoMayorista } = useStoreFlags();
   const [quantity, setQuantity] = useState(1);
   const [showCuotas, setShowCuotas] = useState(false);
 
@@ -202,21 +204,23 @@ export default function ProductPage() {
               <div className="flex items-baseline gap-3">
                 <p className="text-3xl font-bold text-emerald-700">{formatPrice(displayPrice)}</p>
               </div>
-              <div className="flex items-center gap-3">
-                {cuotas && hasStock && (
-                  <p className="text-sm text-gray-600">
-                    {cuotas.cuotas} cuotas de{" "}
-                    <span className="font-semibold text-emerald-600">{cuotas.valorCuota}</span>{" "}
-                    <span className="text-emerald-600 font-medium">sin interés</span>
-                  </p>
-                )}
-                <button
-                  onClick={() => setShowCuotas(true)}
-                  className="text-xs text-blue-600 hover:underline font-medium"
-                >
-                  Ver cuotas
-                </button>
-              </div>
+              {!modoMayorista && (
+                <div className="flex items-center gap-3">
+                  {cuotas && hasStock && (
+                    <p className="text-sm text-gray-600">
+                      {cuotas.cuotas} cuotas de{" "}
+                      <span className="font-semibold text-emerald-600">{cuotas.valorCuota}</span>{" "}
+                      <span className="text-emerald-600 font-medium">sin interés</span>
+                    </p>
+                  )}
+                  <button
+                    onClick={() => setShowCuotas(true)}
+                    className="text-xs text-blue-600 hover:underline font-medium"
+                  >
+                    Ver cuotas
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

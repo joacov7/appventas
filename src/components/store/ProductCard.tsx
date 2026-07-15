@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatPrice, formatCuotas } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import { useViewers } from "@/hooks/useViewers";
+import { useStoreFlags } from "@/hooks/useStoreFlags";
 import type { ProductPublic } from "@/types/product";
 
 interface ProductCardProps {
@@ -19,6 +20,7 @@ const LOW_STOCK_THRESHOLD = 5;
 export function ProductCard({ product }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
   const viewers = useViewers(product.id);
+  const { modoMayorista } = useStoreFlags();
 
   const mainVariant = product.variants[0];
   const minPrice = Math.min(...product.variants.map((v) => v.price));
@@ -111,8 +113,8 @@ export function ProductCard({ product }: ProductCardProps) {
             </Button>
           </div>
 
-          {/* Cuotas */}
-          {cuotas && hasStock && (
+          {/* Cuotas (ocultas en modo mayorista) */}
+          {cuotas && hasStock && !modoMayorista && (
             <p className="text-xs text-gray-500">
               {cuotas.cuotas}x {cuotas.valorCuota}{" "}
               <span className="text-emerald-600 font-medium">sin interés</span>

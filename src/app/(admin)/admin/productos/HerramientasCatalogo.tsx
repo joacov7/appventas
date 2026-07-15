@@ -23,6 +23,17 @@ export function HerramientasCatalogo() {
     setRecalcMsg(r.ok ? `✅ ${d.actualizados} producto(s): minorista = mayorista +${markup}%, redondeado a $${redondeo}.` : `Error: ${d.error ?? r.status}`);
   }
 
+  const [aplicMay, setAplicMay] = useState(false);
+  const [aplicMayMsg, setAplicMayMsg] = useState<string | null>(null);
+  async function aplicarMayorista() {
+    if (!confirm("Poner el precio MAYORISTA como precio visible de la tienda (para el modo mayorista)?")) return;
+    setAplicMay(true); setAplicMayMsg(null);
+    const r = await fetch("/api/productos/aplicar-mayorista", { method: "POST" });
+    setAplicMay(false);
+    const d = await r.json().catch(() => ({}));
+    setAplicMayMsg(r.ok ? `✅ ${d.actualizados} producto(s) con precio mayorista en la tienda.` : `Error: ${d.error ?? r.status}`);
+  }
+
   async function clasificar() {
     setClasif(true); setClasifMsg(null); setClasifErr(null);
     const r = await fetch("/api/productos/clasificar", { method: "POST" });
@@ -58,6 +69,14 @@ export function HerramientasCatalogo() {
           </button>
         </div>
         {recalcMsg && <p className="text-xs text-gray-600 mt-2 break-words">{recalcMsg}</p>}
+        <div className="mt-3 pt-3 border-t">
+          <button onClick={aplicarMayorista} disabled={aplicMay}
+            className="text-sm border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50 font-medium px-4 py-1.5 rounded-xl"
+            title="Modo mayorista: muestra el precio mayorista en toda la tienda">
+            {aplicMay ? "Aplicando..." : "Poner precios mayoristas en la tienda"}
+          </button>
+          {aplicMayMsg && <p className="text-xs text-gray-600 mt-2 break-words">{aplicMayMsg}</p>}
+        </div>
       </div>
 
       {/* Clasificar por rubro */}

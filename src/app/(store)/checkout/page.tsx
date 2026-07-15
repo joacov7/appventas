@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCartStore } from "@/store/cartStore";
 import { useTiers, getCartTier, applyTier } from "@/hooks/useTiers";
+import { useStoreFlags } from "@/hooks/useStoreFlags";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
 import Image from "next/image";
@@ -57,6 +58,7 @@ function CheckoutContent() {
   const [validatedRefCode, setValidatedRefCode] = useState<string | null>(null);
 
   const tiers = useTiers();
+  const { modoMayorista, pedidoMinimo } = useStoreFlags();
   const subtotal = getTotalPrice();
   const cartQty = items.reduce((acc, i) => acc + i.quantity, 0);
   const cartTier = getCartTier(tiers, cartQty, subtotal);
@@ -96,7 +98,49 @@ function CheckoutContent() {
       });
   }, [refCode, subtotal]);
 
+  // ── Modo mayorista: arma un PEDIDO (sin pago ni envío online) ──
+  async function enviarPedidoMayorista(data: FormData) {
+    if (items.length === 0) return;
+    if (pedidoMinimo > 0 && subtotal < pedidoMinimo) {
+      setError(`El pedido mínimo es ${formatPrice(pedidoMinimo)}. Agregá más productos.`);
+      return;
+    }
+    setLoading(true); setError(null);
+    try {
+      const validationRes = await fetch("/api/carrito/validar", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })) }),
+      });
+      const validation = await validationRes.json();
+      if (!validation.valid) { setError(validation.errors.join(", ")); setLoading(false); return; }
+
+      const orderRes = await fetch("/api/ordenes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: applyTier(i.price, cartTier) })),
+          shippingAddress: {
+            fullName: data.fullName, phone: data.phone,
+            street: data.street, city: data.city, province: data.province, postalCode: data.postalCode,
+          },
+          guestEmail: data.email,
+          notes: `[PEDIDO MAYORISTA] ${data.notes ?? ""}`.trim(),
+          canal: "mayorista",
+        }),
+      });
+      if (!orderRes.ok) throw new Error((await orderRes.json()).error ?? "Error al enviar el pedido");
+      const order = await orderRes.json();
+      fetch("/api/ordenes/notificar", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }),
+      }).catch(() => {});
+      clearCart();
+      router.push(`/checkout/gracias?id=${order.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally { setLoading(false); }
+  }
+
   async function onSubmit(data: FormData) {
+    if (modoMayorista) return enviarPedidoMayorista(data);
     if (items.length === 0) return;
     if (!selectedShipping && shippingOptions.length > 0) {
       setError("Seleccioná una opción de envío");
@@ -188,7 +232,10 @@ function CheckoutContent() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Finalizar compra</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">{modoMayorista ? "Solicitar pedido mayorista" : "Finalizar compra"}</h1>
+      {modoMayorista && (
+        <p className="text-sm text-gray-500 mb-6">Completá tus datos y enviá el pedido. Te contactamos para coordinar el pago y el envío. 🧉</p>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
         <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-3 space-y-5">
@@ -230,8 +277,8 @@ function CheckoutContent() {
             </div>
           </section>
 
-          {/* Opciones de envío */}
-          {shippingOptions.length > 0 && (
+          {/* Opciones de envío (ocultas en modo mayorista) */}
+          {!modoMayorista && shippingOptions.length > 0 && (
             <section className="bg-white rounded-2xl border border-gray-100 p-6 space-y-3">
               <h2 className="font-semibold text-gray-900">Método de envío</h2>
               {shippingOptions.map((opt) => (
@@ -269,8 +316,14 @@ function CheckoutContent() {
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
           )}
 
-          <Button type="submit" size="lg" className="w-full" loading={loading}>
-            Pagar con Mercado Pago
+          {modoMayorista && pedidoMinimo > 0 && subtotal < pedidoMinimo && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl px-4 py-3 text-sm">
+              Pedido mínimo: <b>{formatPrice(pedidoMinimo)}</b>. Te faltan {formatPrice(pedidoMinimo - subtotal)}.
+            </div>
+          )}
+          <Button type="submit" size="lg" className="w-full" loading={loading}
+            disabled={modoMayorista && pedidoMinimo > 0 && subtotal < pedidoMinimo}>
+            {modoMayorista ? "Enviar pedido" : "Pagar con Mercado Pago"}
           </Button>
         </form>
 
@@ -315,10 +368,15 @@ function CheckoutContent() {
                   <span>− {formatPrice(refDiscount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-gray-600">
-                <span>Envío</span>
-                <span>{selectedShipping ? (Number(selectedShipping.price) === 0 ? "Gratis" : formatPrice(Number(selectedShipping.price))) : "—"}</span>
-              </div>
+              {!modoMayorista && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Envío</span>
+                  <span>{selectedShipping ? (Number(selectedShipping.price) === 0 ? "Gratis" : formatPrice(Number(selectedShipping.price))) : "—"}</span>
+                </div>
+              )}
+              {modoMayorista && (
+                <p className="text-xs text-gray-400">El envío se coordina aparte.</p>
+              )}
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="font-semibold text-gray-900">Total</span>
                 <span className="text-xl font-bold text-emerald-700">{formatPrice(total)}</span>

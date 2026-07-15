@@ -20,6 +20,8 @@ export default function ConfiguracionPage() {
   const [logoAltura, setLogoAltura] = useState(40);
   const [storeName, setStoreName] = useState("");
   const [textoAlCostado, setTextoAlCostado] = useState("");
+  const [modoMayorista, setModoMayorista] = useState(false);
+  const [pedidoMinimo, setPedidoMinimo] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -37,6 +39,8 @@ export default function ConfiguracionPage() {
         setLogoAltura(data.logoAltura ?? 40);
         setStoreName(data.storeName ?? "");
         setTextoAlCostado(data.textoAlCostado ?? "");
+        setModoMayorista(data.modoMayorista === true);
+        setPedidoMinimo(Number(data.pedidoMinimo) || 0);
       })
       .finally(() => setLoading(false));
 
@@ -54,7 +58,7 @@ export default function ConfiguracionPage() {
     await fetch("/api/store-config", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ logoUrl, logoAltura, storeName, textoAlCostado }),
+      body: JSON.stringify({ logoUrl, logoAltura, storeName, textoAlCostado, modoMayorista, pedidoMinimo }),
     });
     setSaving(false);
     setSaved(true);
@@ -140,6 +144,35 @@ export default function ConfiguracionPage() {
           className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium"
         >
           {savedPricing ? <><Check size={15} /> Guardado</> : savingPricing ? "Guardando..." : "Guardar márgenes"}
+        </button>
+      </div>
+
+      {/* Modo mayorista */}
+      <div className="bg-white rounded-2xl border p-6 space-y-4">
+        <h2 className="font-semibold text-gray-900">Modo de la tienda</h2>
+        <label className="flex items-start gap-3 cursor-pointer">
+          <input type="checkbox" checked={modoMayorista} onChange={e => setModoMayorista(e.target.checked)}
+            className="mt-1 w-4 h-4 accent-emerald-600" />
+          <div>
+            <span className="text-sm font-medium text-gray-800">Tienda en modo mayorista</span>
+            <p className="text-xs text-gray-500">Muestra precios mayoristas, oculta las cuotas, y el carrito arma un <b>pedido</b> (sin pago ni envío online — se coordinan por fuera).</p>
+          </div>
+        </label>
+        {modoMayorista && (
+          <div>
+            <label className="text-sm font-medium text-gray-700 block mb-1">Pedido mínimo (monto)</label>
+            <div className="relative w-40">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+              <input type="number" min={0} value={pedidoMinimo}
+                onChange={e => setPedidoMinimo(Number(e.target.value) || 0)}
+                className="w-full border rounded-xl pl-7 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <p className="text-xs text-gray-400 mt-1">0 = sin mínimo. El cliente no puede enviar el pedido por debajo de este monto.</p>
+          </div>
+        )}
+        <button onClick={save} disabled={saving}
+          className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium">
+          {saved ? <><Check size={15} /> Guardado</> : saving ? "Guardando..." : "Guardar modo de tienda"}
         </button>
       </div>
 

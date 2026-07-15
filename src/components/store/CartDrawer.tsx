@@ -9,6 +9,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { CartUpsell } from "./CartUpsell";
 import { useTiers, getCartTier, getNextCartTier, applyTier } from "@/hooks/useTiers";
+import { useStoreFlags } from "@/hooks/useStoreFlags";
 
 interface CartDrawerProps {
   open: boolean;
@@ -25,6 +26,7 @@ interface CouponResult {
 
 export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const { items, removeItem, updateQuantity, getTotalPrice, getTotalItems } = useCartStore();
+  const { modoMayorista } = useStoreFlags();
 
   const [couponCode, setCouponCode] = useState("");
   const [coupon, setCoupon] = useState<CouponResult | null>(null);
@@ -273,16 +275,18 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
               </div>
             </div>
 
-            {/* Métodos de pago */}
-            <div className="flex items-center gap-2 justify-center">
-              <span className="text-xs text-gray-400">Pagás con</span>
-              {["Visa", "Master", "Amex", "MP"].map((m) => (
-                <span key={m} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-medium">{m}</span>
-              ))}
-            </div>
+            {/* Métodos de pago (ocultos en modo mayorista) */}
+            {!modoMayorista && (
+              <div className="flex items-center gap-2 justify-center">
+                <span className="text-xs text-gray-400">Pagás con</span>
+                {["Visa", "Master", "Amex", "MP"].map((m) => (
+                  <span key={m} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-md font-medium">{m}</span>
+                ))}
+              </div>
+            )}
 
             <Link href={`/checkout${coupon ? `?cupon=${coupon.code}` : ""}`} onClick={onClose} className="block">
-              <Button size="lg" className="w-full">Ir al checkout</Button>
+              <Button size="lg" className="w-full">{modoMayorista ? "Hacer pedido" : "Ir al checkout"}</Button>
             </Link>
 
             {/* Compartir carrito por WhatsApp */}

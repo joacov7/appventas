@@ -30,6 +30,7 @@ export default function MensajesBotPage() {
   // Plantilla de abordaje (API).
   const [plantilla, setPlantilla] = useState({ nombre: "", idioma: "es_AR" });
   const [plGuardado, setPlGuardado] = useState("");
+  const [presu, setPresu] = useState<{ limite_usd: number; enviados: number; gasto_usd: number } | null>(null);
 
   useEffect(() => {
     fetch("/api/whatsapp/textos").then(r => r.json()).then(d => {
@@ -38,7 +39,14 @@ export default function MensajesBotPage() {
     fetch("/api/whatsapp/plantilla").then(r => r.json()).then(d => {
       if (d?.idioma) setPlantilla({ nombre: d.nombre ?? "", idioma: d.idioma });
     });
+    cargarPresupuesto();
   }, []);
+
+  function cargarPresupuesto() {
+    fetch("/api/whatsapp/plantilla/presupuesto").then(r => r.json()).then(d => {
+      if (d && typeof d.limite_usd === "number") setPresu(d);
+    }).catch(() => {});
+  }
 
   async function guardarPlantilla() {
     setPlGuardado("");
@@ -46,6 +54,17 @@ export default function MensajesBotPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(plantilla),
     });
     setPlGuardado(r.ok ? "✅ Guardado" : "Error");
+  }
+
+  async function cambiarTope() {
+    const v = prompt("Tope de gasto mensual del abordaje por WhatsApp (USD):", String(presu?.limite_usd ?? 40));
+    if (v === null) return;
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 0) { alert("Poné un número válido"); return; }
+    const r = await fetch("/api/whatsapp/plantilla/presupuesto", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ limite_usd: n }),
+    });
+    if (r.ok) setPresu(await r.json());
   }
 
   async function guardar() {
@@ -96,6 +115,12 @@ export default function MensajesBotPage() {
             className="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-xl">Guardar</button>
         </div>
         {plGuardado && <p className="text-xs text-gray-500 mt-2">{plGuardado}</p>}
+        {presu && (
+          <p className="text-xs text-gray-500 mt-3 pt-3 border-t">
+            Gasto de abordaje este mes: <b className={presu.gasto_usd >= presu.limite_usd ? "text-red-500" : "text-gray-700"}>~US${presu.gasto_usd}</b> de US${presu.limite_usd} ({presu.enviados} envíos) ·{" "}
+            <button onClick={cambiarTope} className="text-indigo-500 hover:underline">cambiar tope</button>
+          </p>
+        )}
       </div>
 
       {CAMPOS.map(({ key, label, ayuda }) => (

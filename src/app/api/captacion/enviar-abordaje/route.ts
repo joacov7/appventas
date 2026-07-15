@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
-import { enviarPlantillaAbordaje } from "@/lib/whatsapp-plantilla";
+import { enviarPlantillaAbordaje, presupuestoAbordaje } from "@/lib/whatsapp-plantilla";
 import { registrarInteraccion } from "@/lib/services/prospectos.service";
 import { marcarAtendidoHumano } from "@/lib/whatsapp-segmento";
 import { normalizarTelefonoAR } from "@/lib/telefono";
@@ -23,6 +23,14 @@ export async function POST(req: NextRequest) {
   const p = rows[0];
   if (!p) return NextResponse.json({ error: "Prospecto no encontrado" }, { status: 404 });
   if (!p.telefono) return NextResponse.json({ error: "El prospecto no tiene teléfono" }, { status: 400 });
+
+  // Control de gasto: si se llegó al tope mensual, no se envía.
+  const presu = await presupuestoAbordaje();
+  if (!presu.disponible) {
+    return NextResponse.json({
+      error: `Tope de gasto de abordaje alcanzado: ~US$${presu.gasto_usd} de US$${presu.limite_usd} este mes. Subilo en Bot de WhatsApp → Mensajes.`,
+    }, { status: 402 });
+  }
 
   // Número en formato E.164 (para el destino y para el wa_id del bot).
   const norm = normalizarTelefonoAR(p.telefono);

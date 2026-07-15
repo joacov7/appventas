@@ -184,13 +184,15 @@ function precioDesde(
 
 // ── Bot responses ─────────────────────────────────────────────────────────────
 
+// Los triggers de contenido NO están anclados: buscan la palabra clave en
+// cualquier parte del mensaje ("quisiera ver el catálogo", "me pasás el precio?").
 const GREETINGS = /^(hola+|ola+|hi|hey|buenas|buen[ao]s?\s*(días?|tardes?|noches?)|saludos?|hello|q(ue|é)?\s*(onda|tal))/i;
-const CATALOG_TRIGGERS = /^(cat[aá]l?[oa]go?|cat[aá]lg?o|productos?|ver\s+(cat|prod|todo)|quiero\s+ver|que\s+(tienen|tenes|ten[eé]s|venden|hay)|mostr[aá]|ver[eé]?|🧉|1)/i;
-const REGALOS_TRIGGERS = /(regalo|empresa|empresarial|personaliz|con\s+logo|con\s+mi\s+logo|grabar|souvenir|merchandis|🎁)/i;
-const PRICE_TRIGGERS = /^(precio|preci?os?|presi?o|consultar|consulta|cu[aá]nto|cotiz|valor|sale|cuesta|📦|2)/i;
-const HELP_TRIGGERS = /^(ayuda|help|hablar|asesor|humano|(una\s+)?persona|👨|3|4)/i;
-const ORDER_TRIGGERS = /^(comprar|pedido|pedir|checkout|hacer\s+pedido|quiero\s+comprar|como\s+compro)/i;
-const HOURS_TRIGGERS = /^(horario|cuando\s+atienden|cu[aá]ndo\s+atienden|atienden|abren|est[aá]n\s+abiert|a\s+qu[eé]\s+hora)/i;
+const CATALOG_TRIGGERS = /(cat[aá]l[oa]go|cat[aá]lg?o|\bproductos?\b|ver\s+(el\s+|los\s+)?(cat[aá]log|producto|todo)|quier[oa]\s+ver|que\s+(tienen|tenes|ten[eé]s|venden|hay|manejan)|mostr[aá]|🧉)/i;
+const REGALOS_TRIGGERS = /(regalo|empresa|empresarial|personaliz|con\s+(mi\s+|nuestro\s+)?logo|grabar|souvenir|merchandis|🎁)/i;
+const PRICE_TRIGGERS = /(\bpreci?os?\b|\bpresi?o\b|consultar|cu[aá]nto\s+(sale|cuesta|vale|es|sal[ií]|est[aá])|cu[aá]nto\b|\bcotiz|\bvalor\b|📦)/i;
+const HELP_TRIGGERS = /(ayuda|asesor|humano|hablar\s+con|(una\s+)?persona\b|atender?me|👨)/i;
+const ORDER_TRIGGERS = /(comprar|hacer\s+(un\s+)?pedido|quiero\s+comprar|checkout|como\s+compro|realizar\s+(un\s+)?pedido)/i;
+const HOURS_TRIGGERS = /(horario|atienden|abren|abierto|est[aá]n\s+abiert|a\s+qu[eé]\s+hora)/i;
 
 // "Ver catálogo": muestra las categorías con productos (o, si no hay categorías
 // clasificadas, cae a la muestra de destacados).
@@ -294,8 +296,14 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
     await marcarEsperandoSegmento(waId, false);
   }
 
+  // Selección del menú por número exacto (1=catálogo, 2=regalos, 3=consultar, 4=asesor).
+  const soloNumero = /^([1-4])$/.exec(text.trim())?.[1];
+  if (soloNumero === "1") return await catalogMessage(textos, tienda, contacto.segmento ?? "minorista");
+  if (soloNumero === "3") return R(textos.consultar);
+  if (soloNumero === "4") return R(textos.asesor);
+
   // Opción "Regalos empresariales / personalizados": fija empresarial y cotiza.
-  if (REGALOS_TRIGGERS.test(text)) {
+  if (soloNumero === "2" || REGALOS_TRIGGERS.test(text)) {
     await setSegmento(waId, "empresarial");
     const pref = esPrimerContacto && !esSaludo ? `${R(textos.bienvenida)}\n\n` : "";
     return `${pref}${R(textos.regalos)}`;
@@ -307,8 +315,9 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
   const seg: Segmento | null = detectado ?? contacto.segmento;
   const segEfectivo: Segmento = seg ?? "minorista";
 
-  // Saludo → menú.
-  if (esSaludo) return R(textos.menu);
+  // Saludo suelto (mensaje corto) → menú. Si el saludo viene con un pedido
+  // ("hola quiero el catálogo"), seguimos para atender el pedido.
+  if (esSaludo && text.trim().length <= 16) return R(textos.menu);
 
   // Ver catálogo → lista de categorías (no necesita saber el segmento aún).
   if (CATALOG_TRIGGERS.test(text)) {

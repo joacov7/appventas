@@ -6,7 +6,7 @@ import { PackageCheck, RefreshCw } from "lucide-react";
 
 interface Pedido {
   order_id: string; cliente: string; ciudad: string | null; total: number;
-  items: number; creado: string; estado: string; armador: string | null;
+  items: number; creado: string; estado: string; armador: string | null; despachado_en?: string | null;
 }
 
 const ESTADO: Record<string, { label: string; cls: string }> = {
@@ -24,14 +24,15 @@ function fecha(s: string) {
 export default function DepositoPage() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<"activos" | "despachados">("activos");
 
   async function cargar() {
     setLoading(true);
-    const r = await fetch("/api/deposito");
+    const r = await fetch(`/api/deposito?filtro=${tab}`);
     if (r.ok) setPedidos(await r.json());
     setLoading(false);
   }
-  useEffect(() => { cargar(); }, []);
+  useEffect(() => { cargar(); /* eslint-disable-next-line */ }, [tab]);
 
   const paraArmar = pedidos.filter(p => p.estado === "para_armar" || p.estado === "armando");
 
@@ -46,12 +47,22 @@ export default function DepositoPage() {
         <button onClick={cargar} className="ml-auto p-2 text-gray-400 hover:text-gray-600"><RefreshCw size={16} /></button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1 mb-5 w-fit">
+        {([["activos", "Para armar"], ["despachados", "Despachados"]] as const).map(([k, label]) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${tab === k ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <p className="text-sm text-gray-400">Cargando pedidos...</p>
       ) : pedidos.length === 0 ? (
         <div className="text-center py-16 text-gray-400">
           <PackageCheck size={40} strokeWidth={1} className="mx-auto mb-3" />
-          <p>No hay pedidos para armar.</p>
+          <p>{tab === "despachados" ? "Todavía no despachaste ningún pedido." : "No hay pedidos para armar."}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -67,13 +78,16 @@ export default function DepositoPage() {
                     <span className={`text-[10px] px-2 py-0.5 rounded-full ${est.cls}`}>{est.label}</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
-                    {p.items} artículo(s) · #{p.order_id.slice(0, 8)} · {fecha(p.creado)}
-                    {p.armador && ` · arma: ${p.armador}`}
+                    {p.items} artículo(s) · #{p.order_id.slice(0, 8)} ·{" "}
+                    {p.estado === "despachado" && p.despachado_en ? `despachado ${fecha(p.despachado_en)}` : fecha(p.creado)}
+                    {p.armador && ` · armó: ${p.armador}`}
                   </p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className="font-semibold text-gray-900 text-sm">${Math.round(p.total).toLocaleString("es-AR")}</p>
-                  <span className="text-xs text-emerald-600 font-medium">{p.estado === "armando" ? "Continuar →" : "Armar →"}</span>
+                  <span className="text-xs text-emerald-600 font-medium">
+                    {p.estado === "despachado" ? "Ver →" : p.estado === "armando" ? "Continuar →" : "Armar →"}
+                  </span>
                 </div>
               </Link>
             );

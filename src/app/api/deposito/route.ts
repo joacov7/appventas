@@ -1,13 +1,15 @@
 export const dynamic = "force-dynamic";
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { pedidosParaArmar } from "@/lib/services/deposito.service";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  const f = req.nextUrl.searchParams.get("filtro");
+  const filtro = f === "despachados" || f === "todos" ? f : "activos";
   try {
-    return NextResponse.json(await pedidosParaArmar());
+    return NextResponse.json(await pedidosParaArmar(filtro));
   } catch (e: any) {
     return NextResponse.json({ error: e?.message }, { status: 500 });
   }

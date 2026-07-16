@@ -444,6 +444,7 @@ const DDL: Record<Ambito, string[]> = {
       updated_at    TIMESTAMPTZ DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_prep_item_order ON pedido_preparacion_item(order_id)`,
+    `ALTER TABLE pedido_preparacion ADD COLUMN IF NOT EXISTS despachado_en TIMESTAMPTZ`,
   ],
 
   // ─── Órdenes (tablas de Prisma; se crean acá por si falta `prisma db push`) ──

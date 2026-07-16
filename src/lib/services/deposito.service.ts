@@ -14,19 +14,26 @@ export interface PedidoResumen {
   creado: string;
   estado: string; // para_armar | armando | listo | con_faltante | despachado
   armador: string | null;
+  despachado_en?: string | null;
 }
 
-// Lista de pedidos que el depósito tiene que trabajar (no despachados).
-export async function pedidosParaArmar(): Promise<PedidoResumen[]> {
+// Lista de pedidos. filtro: 'activos' (para armar / en armado / listos),
+// 'despachados' (historial), o 'todos'.
+export async function pedidosParaArmar(filtro: "activos" | "despachados" | "todos" = "activos"): Promise<PedidoResumen[]> {
   await ensureSchema("deposito", "ordenes");
+  const where =
+    filtro === "despachados" ? `pp.estado = 'despachado'`
+    : filtro === "todos" ? `TRUE`
+    : `COALESCE(pp.estado, '') <> 'despachado'`;
+  const orden = filtro === "despachados" ? `pp.despachado_en DESC` : `o."createdAt" DESC`;
   const rows: any[] = await (prisma as any).$queryRawUnsafe(`
     SELECT o.id AS order_id, o."shippingAddress" AS dir, o.total::float AS total, o."createdAt" AS creado,
-           COALESCE(pp.estado, 'para_armar') AS estado, pp.armador,
+           COALESCE(pp.estado, 'para_armar') AS estado, pp.armador, pp.despachado_en,
            (SELECT COUNT(*)::int FROM order_items oi WHERE oi."orderId" = o.id) AS items
     FROM orders o
     LEFT JOIN pedido_preparacion pp ON pp.order_id = o.id
-    WHERE COALESCE(pp.estado, '') <> 'despachado'
-    ORDER BY o."createdAt" DESC
+    WHERE ${where}
+    ORDER BY ${orden}
     LIMIT 100
   `);
   return rows.map(r => ({
@@ -38,6 +45,7 @@ export async function pedidosParaArmar(): Promise<PedidoResumen[]> {
     creado: r.creado,
     estado: r.estado,
     armador: r.armador ?? null,
+    despachado_en: r.despachado_en ?? null,
   }));
 }
 
@@ -146,5 +154,9 @@ export async function cerrarPreparacion(orderId: string): Promise<{ ok: boolean;
 export async function marcarDespachado(orderId: string): Promise<void> {
   await ensureSchema("deposito", "ordenes");
   await (prisma as any).$executeRawUnsafe(
-    `UPDATE pedido_preparacion SET estado = 'despachado', updated_at = now() WHERE order_id = $1`, orderId);
+    `UPDATE pedido_preparacion SET estado = 'despachado', despachado_en = now(), updated_at = now() WHERE order_id = $1`, orderId);
+  // La orden pasa a "Enviado" también en Órdenes (queda el registro).
+  try {
+    await prisma.order.update({ where: { id: orderId }, data: { status: "SHIPPED" as any } });
+  } catch { /* no crítico */ }
 }

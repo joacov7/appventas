@@ -66,7 +66,12 @@ export default async function ProductosAdminPage() {
                   <td className="px-4 py-3">
                     <div>
                       <p className="font-medium text-gray-900">{product.name}</p>
-                      <p className="text-xs text-gray-400">{product.slug}</p>
+                      {(() => {
+                        const cod = product.variants.find(v => v.sku)?.sku;
+                        return cod
+                          ? <p className="text-xs text-gray-500">Cód: <span className="font-mono">{cod}</span></p>
+                          : <p className="text-xs text-gray-400">{product.slug}</p>;
+                      })()}
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{product.category?.name ?? "—"}</td>

@@ -198,6 +198,10 @@ export default function ProductPage() {
 
           <h1 className="text-3xl font-bold text-gray-900">{product.name}</h1>
 
+          {selectedVariant?.sku && (
+            <p className="text-xs text-gray-400 -mt-2">Código: <span className="font-mono text-gray-600">{selectedVariant.sku}</span></p>
+          )}
+
           {/* Precio y cuotas */}
           {selectedVariant && (
             <div className="space-y-1">

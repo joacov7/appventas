@@ -318,7 +318,7 @@ export default function ProductPage() {
             />
           </div>
 
-          {selectedVariant && hasStock && (
+          {selectedVariant && hasStock && !modoMayorista && (
             <SubscribeReposicion
               variantId={selectedVariant.id}
               productName={product.name}

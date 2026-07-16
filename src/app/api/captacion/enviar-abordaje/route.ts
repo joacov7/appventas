@@ -14,8 +14,9 @@ import { normalizarTelefonoAR } from "@/lib/telefono";
 // La variable {{1}} de la plantilla se completa con el nombre del negocio.
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  const { prospectoId } = await req.json();
+  const { prospectoId, tipo } = await req.json();
   if (!prospectoId) return NextResponse.json({ error: "prospectoId requerido" }, { status: 400 });
+  const tipoValido = ["mayorista", "empresa", "concesionaria"].includes(tipo) ? tipo : undefined;
   await ensureSchema("captacion");
 
   const rows: any[] = await (prisma as any).$queryRawUnsafe(
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
   const norm = normalizarTelefonoAR(p.telefono);
   const destino = norm ? norm.replace("+", "") : p.telefono.replace(/[^\d]/g, "");
 
-  const r = await enviarPlantillaAbordaje(destino, [String(p.nombre)]);
+  const r = await enviarPlantillaAbordaje(destino, [String(p.nombre)], tipoValido);
   if (!r.ok) return NextResponse.json({ error: r.error }, { status: 400 });
 
   // Registro: sale, pasa a contactado, queda en el historial y el bot no

@@ -9,9 +9,26 @@ import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
 
 const KEY = "whatsapp_plantilla";
 
-export interface PlantillaConfig {
+// Cada segmento tiene su propia plantilla de abordaje aprobada en Meta.
+export type AbordajeTipo = "mayorista" | "empresa" | "concesionaria";
+
+export const ABORDAJE_TIPOS: { clave: AbordajeTipo; etiqueta: string; ayuda: string }[] = [
+  { clave: "mayorista", etiqueta: "Comercios mayoristas", ayuda: "Revendedores / comercios (ej: abordaje_inicial)" },
+  { clave: "empresa", etiqueta: "Regalos empresariales", ayuda: "Empresas para regalería corporativa (ej: abordajecorpo)" },
+  { clave: "concesionaria", etiqueta: "Concesionarias", ayuda: "Concesionarias / automotrices (ej: abordaje_con)" },
+];
+
+export interface PlantillaItem {
   nombre: string;   // nombre exacto de la plantilla aprobada en Meta
   idioma: string;   // código de idioma, ej: es_AR o es
+}
+
+export interface PlantillaConfig {
+  // Legacy: plantilla por defecto (equivale a la de mayoristas).
+  nombre: string;
+  idioma: string;
+  // Plantilla por segmento.
+  plantillas: Partial<Record<AbordajeTipo, PlantillaItem>>;
 }
 
 export async function loadPlantillaConfig(): Promise<PlantillaConfig> {
@@ -20,18 +37,39 @@ export async function loadPlantillaConfig(): Promise<PlantillaConfig> {
     const rows: any[] = await (prisma as any).$queryRawUnsafe(
       `SELECT config FROM catalog_config WHERE tipo = $1`, KEY);
     const c = rows[0]?.config ?? {};
-    return { nombre: c.nombre || "", idioma: c.idioma || "es_AR" };
+    const plantillas: Partial<Record<AbordajeTipo, PlantillaItem>> = c.plantillas ?? {};
+    // Compat: si venía la plantilla vieja única, la mapeamos a mayorista.
+    if (!plantillas.mayorista && c.nombre) {
+      plantillas.mayorista = { nombre: c.nombre, idioma: c.idioma || "es_AR" };
+    }
+    return { nombre: c.nombre || "", idioma: c.idioma || "es_AR", plantillas };
   } catch {
-    return { nombre: "", idioma: "es_AR" };
+    return { nombre: "", idioma: "es_AR", plantillas: {} };
   }
 }
 
-export async function savePlantillaConfig(cfg: PlantillaConfig): Promise<void> {
+// Resuelve la plantilla a usar para un tipo (con fallback a la de mayoristas).
+export async function plantillaPara(tipo?: AbordajeTipo): Promise<PlantillaItem | null> {
+  const cfg = await loadPlantillaConfig();
+  const t = tipo ?? "mayorista";
+  const item = cfg.plantillas[t] ?? cfg.plantillas.mayorista;
+  if (item?.nombre) return { nombre: item.nombre, idioma: item.idioma || "es_AR" };
+  if (cfg.nombre) return { nombre: cfg.nombre, idioma: cfg.idioma || "es_AR" };
+  return null;
+}
+
+export async function savePlantillaConfig(cfg: Partial<PlantillaConfig>): Promise<void> {
   await ensureSchema("config");
+  const actual = await loadPlantillaConfig();
+  const merged: PlantillaConfig = {
+    nombre: cfg.nombre ?? actual.nombre,
+    idioma: cfg.idioma ?? actual.idioma,
+    plantillas: { ...actual.plantillas, ...(cfg.plantillas ?? {}) },
+  };
   await (prisma as any).$executeRawUnsafe(
     `INSERT INTO catalog_config (tipo, config) VALUES ($1, $2::jsonb)
      ON CONFLICT (tipo) DO UPDATE SET config = $2::jsonb, updated_at = NOW()`,
-    KEY, JSON.stringify(cfg)
+    KEY, JSON.stringify(merged)
   );
 }
 
@@ -100,13 +138,14 @@ function normalizarDestino(to: string): string {
 
 // Envía la plantilla de abordaje a un número, con las variables ({{1}}, {{2}}…).
 export async function enviarPlantillaAbordaje(
-  to: string, params: string[]
+  to: string, params: string[], tipo?: AbordajeTipo
 ): Promise<{ ok: boolean; error?: string }> {
   const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
   if (!accessToken || !phoneNumberId) return { ok: false, error: "WhatsApp no configurado (falta token/phone id)." };
 
-  const { nombre, idioma } = await loadPlantillaConfig();
-  if (!nombre) return { ok: false, error: "Falta configurar el nombre de la plantilla de abordaje." };
+  const pl = await plantillaPara(tipo);
+  if (!pl?.nombre) return { ok: false, error: "Falta configurar el nombre de la plantilla de abordaje para este segmento (Bot → Mensajes)." };
+  const { nombre, idioma } = pl;
 
   const components = params.length
     ? [{ type: "body", parameters: params.map(p => ({ type: "text", text: String(p).slice(0, 200) })) }]

@@ -27,8 +27,17 @@ export default function MensajesBotPage() {
   const [defaults, setDefaults] = useState<Textos | null>(null);
   const [guardando, setGuardando] = useState(false);
   const [msg, setMsg] = useState("");
-  // Plantilla de abordaje (API).
-  const [plantilla, setPlantilla] = useState({ nombre: "", idioma: "es_AR" });
+  // Plantillas de abordaje (API), una por segmento.
+  const TIPOS_PL: { clave: string; etiqueta: string; ayuda: string }[] = [
+    { clave: "mayorista", etiqueta: "Comercios mayoristas", ayuda: "Revendedores / comercios (ej: abordaje_inicial)" },
+    { clave: "empresa", etiqueta: "Regalos empresariales", ayuda: "Empresas para regalería corporativa (ej: abordajecorpo)" },
+    { clave: "concesionaria", etiqueta: "Concesionarias", ayuda: "Concesionarias / automotrices (ej: abordaje_con)" },
+  ];
+  const [plantillas, setPlantillas] = useState<Record<string, { nombre: string; idioma: string }>>({
+    mayorista: { nombre: "", idioma: "es_AR" },
+    empresa: { nombre: "", idioma: "es_AR" },
+    concesionaria: { nombre: "", idioma: "es_AR" },
+  });
   const [plGuardado, setPlGuardado] = useState("");
   const [presu, setPresu] = useState<{ limite_usd: number; enviados: number; gasto_usd: number } | null>(null);
 
@@ -37,7 +46,12 @@ export default function MensajesBotPage() {
       if (d.textos) { setTextos(d.textos); setDefaults(d.defaults); }
     });
     fetch("/api/whatsapp/plantilla").then(r => r.json()).then(d => {
-      if (d?.idioma) setPlantilla({ nombre: d.nombre ?? "", idioma: d.idioma });
+      const pl = d?.plantillas ?? {};
+      setPlantillas(prev => ({
+        mayorista: pl.mayorista ?? (d?.nombre ? { nombre: d.nombre, idioma: d.idioma || "es_AR" } : prev.mayorista),
+        empresa: pl.empresa ?? prev.empresa,
+        concesionaria: pl.concesionaria ?? prev.concesionaria,
+      }));
     });
     cargarPresupuesto();
   }, []);
@@ -51,7 +65,7 @@ export default function MensajesBotPage() {
   async function guardarPlantilla() {
     setPlGuardado("");
     const r = await fetch("/api/whatsapp/plantilla", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(plantilla),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ plantillas }),
     });
     setPlGuardado(r.ok ? "✅ Guardado" : "Error");
   }
@@ -103,16 +117,29 @@ export default function MensajesBotPage() {
         <p className="text-xs text-gray-500 mb-3">
           Para escribirle a un prospecto que nunca te escribió, Meta exige una <b>plantilla aprobada</b>.
           Creala en Meta Business Manager con <b>una variable</b> {"{{1}}"} (el nombre del negocio) y pegá acá su nombre exacto e idioma.
+          Configurá una plantilla por <b>segmento</b>: al abordar elegís cuál mandar.
         </p>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input value={plantilla.nombre} onChange={e => setPlantilla({ ...plantilla, nombre: e.target.value })}
-            placeholder="Nombre de la plantilla (ej: abordaje_inicial)"
-            className="flex-1 text-sm border rounded-xl px-3 py-2 outline-none" />
-          <input value={plantilla.idioma} onChange={e => setPlantilla({ ...plantilla, idioma: e.target.value })}
-            placeholder="Idioma (es_AR)"
-            className="sm:w-28 text-sm border rounded-xl px-3 py-2 outline-none" />
+        <div className="space-y-3">
+          {TIPOS_PL.map(({ clave, etiqueta, ayuda }) => (
+            <div key={clave}>
+              <div className="flex items-baseline gap-2 mb-1">
+                <span className="text-xs font-semibold text-gray-700">{etiqueta}</span>
+                <span className="text-[11px] text-gray-400">{ayuda}</span>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <input value={plantillas[clave]?.nombre ?? ""}
+                  onChange={e => setPlantillas({ ...plantillas, [clave]: { ...plantillas[clave], nombre: e.target.value } })}
+                  placeholder="Nombre de la plantilla"
+                  className="flex-1 text-sm border rounded-xl px-3 py-2 outline-none" />
+                <input value={plantillas[clave]?.idioma ?? "es_AR"}
+                  onChange={e => setPlantillas({ ...plantillas, [clave]: { ...plantillas[clave], idioma: e.target.value } })}
+                  placeholder="es_AR"
+                  className="sm:w-24 text-sm border rounded-xl px-3 py-2 outline-none" />
+              </div>
+            </div>
+          ))}
           <button onClick={guardarPlantilla}
-            className="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-xl">Guardar</button>
+            className="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-xl">Guardar plantillas</button>
         </div>
         {plGuardado && <p className="text-xs text-gray-500 mt-2">{plGuardado}</p>}
         {presu && (

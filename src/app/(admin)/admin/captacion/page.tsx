@@ -454,12 +454,20 @@ export default function CaptacionPage() {
 
   // Envía el abordaje por la API (plantilla), desde el número del bot.
   const [enviandoWa, setEnviandoWa] = useState<number | null>(null);
-  async function enviarAbordajeApi(p: Prospecto) {
-    if (!confirm(`Enviar el abordaje a ${p.nombre} por WhatsApp (desde el número del bot)?`)) return;
+  const [menuAbordaje, setMenuAbordaje] = useState<number | null>(null);
+  const TIPOS_ABORDAJE: { clave: string; etiqueta: string }[] = [
+    { clave: "mayorista", etiqueta: "🛒 Comercio mayorista" },
+    { clave: "empresa", etiqueta: "🎁 Regalo empresarial" },
+    { clave: "concesionaria", etiqueta: "🚗 Concesionaria" },
+  ];
+  async function enviarAbordajeApi(p: Prospecto, tipo: string) {
+    setMenuAbordaje(null);
+    const et = TIPOS_ABORDAJE.find(t => t.clave === tipo)?.etiqueta ?? tipo;
+    if (!confirm(`Enviar el abordaje "${et}" a ${p.nombre} por WhatsApp (desde el número del bot)?`)) return;
     setEnviandoWa(p.id);
     try {
       const r = await fetch("/api/captacion/enviar-abordaje", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prospectoId: p.id }),
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prospectoId: p.id, tipo }),
       });
       const d = await r.json();
       if (r.ok) {
@@ -784,11 +792,23 @@ export default function CaptacionPage() {
                                 <MessageCircle size={12} fill="white" strokeWidth={0} /> WhatsApp
                               </a>
                             )}
-                            <button onClick={() => enviarAbordajeApi(p)} disabled={enviandoWa !== null}
-                              className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium disabled:opacity-50"
-                              title="Envía el abordaje (plantilla) desde el número del bot por la API">
-                              {enviandoWa === p.id ? "Enviando..." : "📤 Abordar (bot)"}
-                            </button>
+                            <div className="relative">
+                              <button onClick={() => setMenuAbordaje(menuAbordaje === p.id ? null : p.id)} disabled={enviandoWa !== null}
+                                className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-medium disabled:opacity-50"
+                                title="Envía el abordaje (plantilla) desde el número del bot por la API">
+                                {enviandoWa === p.id ? "Enviando..." : "📤 Abordar (bot) ▾"}
+                              </button>
+                              {menuAbordaje === p.id && (
+                                <div className="absolute z-10 mt-1 left-0 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[180px]">
+                                  {TIPOS_ABORDAJE.map(t => (
+                                    <button key={t.clave} onClick={() => enviarAbordajeApi(p, t.clave)}
+                                      className="block w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-amber-50">
+                                      {t.etiqueta}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                             <button onClick={() => copiar(p.telefono!)}
                               className="text-xs text-gray-400 hover:text-gray-700" title="Copiar el número">Copiar Nº</button>
                           </>

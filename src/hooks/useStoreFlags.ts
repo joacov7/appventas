@@ -33,8 +33,11 @@ function fetchFlags(): Promise<StoreFlags> {
 export function useStoreFlags(): StoreFlags {
   const [flags, setFlags] = useState<StoreFlags>(cache ?? { modoMayorista: false, pedidoMinimo: 0, storeName: "" });
   useEffect(() => {
-    if (cache) { setFlags(cache); return; }
     let vivo = true;
+    // Pintamos rápido con el cache, pero SIEMPRE re-consultamos por si cambió
+    // la config (ej: se activó el modo mayorista) para no quedar con un valor viejo.
+    if (cache && vivo) setFlags(cache);
+    promesa = null; // forzar refetch fresco
     fetchFlags().then(f => { if (vivo) setFlags(f); });
     return () => { vivo = false; };
   }, []);

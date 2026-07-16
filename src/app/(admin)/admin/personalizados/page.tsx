@@ -97,29 +97,45 @@ export default function PersonalizadosPage() {
       try {
         const data = octx.getImageData(0, 0, off.width, off.height);
         const px = data.data;
+        const W2 = off.width, H2 = off.height;
         const [tr, tg, tb] = hexToRgb(tono);
+
+        // Detecta el color de fondo mirando las 4 esquinas. Si son opacas y
+        // parecidas entre sí, es un fondo sólido (blanco, gris o de color) que
+        // podemos quitar. Si difieren mucho, el logo ya llega a los bordes.
+        const esquinas = [0, (W2 - 1) * 4, (H2 - 1) * W2 * 4, ((H2 - 1) * W2 + (W2 - 1)) * 4];
+        const cols = esquinas.map(o => [px[o], px[o + 1], px[o + 2], px[o + 3]]);
+        const opacas = cols.every(c => c[3] > 200);
+        const prom = [0, 1, 2].map(k => cols.reduce((s, c) => s + c[k], 0) / 4);
+        const disp = Math.max(...cols.map(c => Math.hypot(c[0] - prom[0], c[1] - prom[1], c[2] - prom[2])));
+        const bg = opacas && disp < 34 ? prom : null; // fondo sólido detectado
+        const T1 = 42, T2 = 92; // distancias: dentro de T1 = fondo, T1..T2 = borde suave
+
         for (let i = 0; i < px.length; i += 4) {
           const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
           if (a === 0) continue;
 
-          // Quitar el fondo (casi) blanco en AMBOS modos, con borde suave para
-          // que no quede el cuadrado ni un halo. Miramos el canal más bajo:
-          // si los tres son altos, es fondo → transparente.
-          const minc = Math.min(r, g, b);
           let alpha = a;
-          if (minc >= 236) alpha = 0;                                   // blanco → fuera
-          else if (minc >= 205) alpha = Math.round(a * (236 - minc) / 31); // borde: se desvanece
+          if (bg) {
+            // Quita el color de fondo detectado, con borde suave (feather).
+            const d = Math.hypot(r - bg[0], g - bg[1], b - bg[2]);
+            if (d <= T1) alpha = 0;
+            else if (d < T2) alpha = Math.round(a * (d - T1) / (T2 - T1));
+          } else {
+            // Sin fondo sólido claro: al menos quitamos el (casi) blanco.
+            const minc = Math.min(r, g, b);
+            if (minc >= 236) alpha = 0;
+            else if (minc >= 205) alpha = Math.round(a * (236 - minc) / 31);
+          }
           if (alpha === 0) { px[i + 3] = 0; continue; }
 
           const lum = 0.299 * r + 0.587 * g + 0.114 * b; // 0=negro, 255=blanco
           if (modo === "grabado") {
-            // Sobre lo que queda, cuanto más oscuro el logo, más quema.
             const burn = (1 - lum / 255) * (alpha / 255);
             px[i] = tr; px[i + 1] = tg; px[i + 2] = tb;
             px[i + 3] = Math.round(burn * 255);
           } else {
-            // Vinilo: mantiene el color del logo, ya sin fondo.
-            px[i + 3] = alpha;
+            px[i + 3] = alpha; // vinilo: color del logo, sin fondo
           }
         }
         octx.putImageData(data, 0, 0);

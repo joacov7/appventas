@@ -27,7 +27,8 @@ type Ambito =
   | "whatsapp"
   | "agentes"
   | "memoria"
-  | "deposito";
+  | "deposito"
+  | "ordenes";
 
 // Cada entrada es una sentencia DDL idempotente. Se ejecutan en orden para
 // respetar dependencias (una tabla referenciada antes de la que la referencia).
@@ -443,6 +444,36 @@ const DDL: Record<Ambito, string[]> = {
       updated_at    TIMESTAMPTZ DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_prep_item_order ON pedido_preparacion_item(order_id)`,
+  ],
+
+  // ─── Órdenes (tablas de Prisma; se crean acá por si falta `prisma db push`) ──
+  ordenes: [
+    `DO $$ BEGIN
+       CREATE TYPE "OrderStatus" AS ENUM ('PENDING','PROCESSING','SHIPPED','DELIVERED','CANCELLED','REFUNDED');
+     EXCEPTION WHEN duplicate_object THEN null; END $$`,
+    `CREATE TABLE IF NOT EXISTS orders (
+      id TEXT PRIMARY KEY,
+      "userId" TEXT,
+      "guestEmail" TEXT,
+      status "OrderStatus" NOT NULL DEFAULT 'PENDING',
+      subtotal DECIMAL(10,2) NOT NULL DEFAULT 0,
+      "shippingCost" DECIMAL(10,2) NOT NULL DEFAULT 0,
+      total DECIMAL(10,2) NOT NULL DEFAULT 0,
+      "shippingAddress" JSONB,
+      notes TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT now(),
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT now()
+    )`,
+    `CREATE TABLE IF NOT EXISTS order_items (
+      id TEXT PRIMARY KEY,
+      "orderId" TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      "productId" TEXT NOT NULL,
+      "variantId" TEXT NOT NULL,
+      quantity INT NOT NULL,
+      "unitPrice" DECIMAL(10,2) NOT NULL,
+      subtotal DECIMAL(10,2) NOT NULL
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items("orderId")`,
   ],
 };
 

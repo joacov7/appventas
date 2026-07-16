@@ -18,7 +18,7 @@ export interface PedidoResumen {
 
 // Lista de pedidos que el depósito tiene que trabajar (no despachados).
 export async function pedidosParaArmar(): Promise<PedidoResumen[]> {
-  await ensureSchema("deposito");
+  await ensureSchema("deposito", "ordenes");
   const rows: any[] = await (prisma as any).$queryRawUnsafe(`
     SELECT o.id AS order_id, o."shippingAddress" AS dir, o.total::float AS total, o."createdAt" AS creado,
            COALESCE(pp.estado, 'para_armar') AS estado, pp.armador,
@@ -65,7 +65,7 @@ export interface Preparacion {
 
 // Abre (o reabre) la preparación de un pedido y crea las filas de control.
 export async function iniciarPreparacion(orderId: string, armador: string): Promise<void> {
-  await ensureSchema("deposito");
+  await ensureSchema("deposito", "ordenes");
   await (prisma as any).$executeRawUnsafe(`
     INSERT INTO pedido_preparacion (order_id, estado, armador, iniciado_en, updated_at)
     VALUES ($1, 'armando', $2, now(), now())
@@ -80,7 +80,7 @@ export async function iniciarPreparacion(orderId: string, armador: string): Prom
 }
 
 export async function getPreparacion(orderId: string): Promise<Preparacion | null> {
-  await ensureSchema("deposito");
+  await ensureSchema("deposito", "ordenes");
   const ord = await prisma.order.findUnique({
     where: { id: orderId },
     include: { items: { include: { product: { select: { name: true } }, variant: { select: { name: true } } } } },
@@ -123,7 +123,7 @@ export async function getPreparacion(orderId: string): Promise<Preparacion | nul
 
 // Actualiza el control de un ítem (unidades controladas y faltantes).
 export async function actualizarItem(orderId: string, orderItemId: string, controlado: number, faltante: number): Promise<void> {
-  await ensureSchema("deposito");
+  await ensureSchema("deposito", "ordenes");
   await (prisma as any).$executeRawUnsafe(`
     INSERT INTO pedido_preparacion_item (order_item_id, order_id, controlado, faltante, updated_at)
     VALUES ($1, $2, $3, $4, now())
@@ -144,7 +144,7 @@ export async function cerrarPreparacion(orderId: string): Promise<{ ok: boolean;
 }
 
 export async function marcarDespachado(orderId: string): Promise<void> {
-  await ensureSchema("deposito");
+  await ensureSchema("deposito", "ordenes");
   await (prisma as any).$executeRawUnsafe(
     `UPDATE pedido_preparacion SET estado = 'despachado', updated_at = now() WHERE order_id = $1`, orderId);
 }

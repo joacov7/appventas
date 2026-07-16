@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
+import { ensureSchema } from "@/lib/db/schema";
 
 async function getTiersFromDB(): Promise<{ min_qty: number; descuento_pct: number }[]> {
   try {
@@ -45,6 +46,7 @@ const createOrderSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureSchema("ordenes");
     const session = await auth();
     const body = createOrderSchema.parse(await req.json());
 

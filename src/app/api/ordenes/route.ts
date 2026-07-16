@@ -33,13 +33,14 @@ const createOrderSchema = z.object({
       z.object({
         variantId: z.string(),
         quantity: z.number().int().positive(),
-        unitPrice: z.number().positive(),
+        unitPrice: z.number().nonnegative(),
       })
     )
     .min(1),
   shippingAddress: shippingSchema,
   guestEmail: z.string().email().optional(),
   notes: z.string().optional(),
+  canal: z.string().optional(), // "mayorista" = solicitud de pedido (no bloquea stock)
 });
 
 export async function POST(req: NextRequest) {
@@ -53,6 +54,7 @@ export async function POST(req: NextRequest) {
       where: { id: { in: variantIds } },
     });
 
+    const esMayorista = body.canal === "mayorista";
     for (const item of body.items) {
       const variant = variants.find((v) => v.id === item.variantId);
       if (!variant) {
@@ -61,7 +63,8 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      if (variant.stock < item.quantity) {
+      // El pedido mayorista es una SOLICITUD: no se bloquea por stock (lo coordina el vendedor).
+      if (!esMayorista && variant.stock < item.quantity) {
         return NextResponse.json(
           { error: `Stock insuficiente para "${variant.name}"` },
           { status: 409 }

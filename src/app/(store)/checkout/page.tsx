@@ -107,13 +107,7 @@ function CheckoutContent() {
     }
     setLoading(true); setError(null);
     try {
-      const validationRes = await fetch("/api/carrito/validar", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })) }),
-      });
-      const validation = await validationRes.json();
-      if (!validation.valid) { setError(validation.errors.join(", ")); setLoading(false); return; }
-
+      // Un pedido mayorista es una solicitud: no validamos stock (lo coordina el vendedor).
       const orderRes = await fetch("/api/ordenes", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -127,7 +121,10 @@ function CheckoutContent() {
           canal: "mayorista",
         }),
       });
-      if (!orderRes.ok) throw new Error((await orderRes.json()).error ?? "Error al enviar el pedido");
+      if (!orderRes.ok) {
+        const e = (await orderRes.json().catch(() => ({}))).error;
+        throw new Error(typeof e === "string" ? e : "No se pudo enviar el pedido. Revisá los datos e intentá de nuevo.");
+      }
       const order = await orderRes.json();
       fetch("/api/ordenes/notificar", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }),

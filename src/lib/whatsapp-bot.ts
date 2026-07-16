@@ -12,8 +12,8 @@ async function nombreTienda(): Promise<string> {
   try {
     const rows: any[] = await (prisma as any).$queryRawUnsafe(
       `SELECT config FROM catalog_config WHERE tipo = 'store_config'`);
-    return rows[0]?.config?.storeName || "nuestra tienda";
-  } catch { return "nuestra tienda"; }
+    return rows[0]?.config?.storeName || "Regionales por Mayor";
+  } catch { return "Regionales por Mayor"; }
 }
 
 // Categorías (rubros) que tienen al menos un producto con stock.

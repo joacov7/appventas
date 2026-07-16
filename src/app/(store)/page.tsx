@@ -46,7 +46,7 @@ export default async function HomePage() {
         <section className="bg-gradient-to-br from-emerald-50 to-teal-50 py-16 px-4">
           <div className="max-w-4xl mx-auto text-center space-y-5">
             <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
-              Bienvenido a <span className="text-emerald-600">AppVentas</span>
+              Bienvenido a <span className="text-emerald-600">Regionales por Mayor</span>
             </h1>
             <p className="text-lg text-gray-600 max-w-xl mx-auto">
               Encontrá los mejores productos con envío a todo el país.

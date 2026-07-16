@@ -14,7 +14,7 @@ export function Navbar() {
   const totalItems = useCartStore((s) => s.getTotalItems());
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [logoAltura, setLogoAltura] = useState(40);
-  const [storeName, setStoreName] = useState("AppVentas");
+  const [storeName, setStoreName] = useState("Regionales por Mayor");
   const [textoAlCostado, setTextoAlCostado] = useState("");
 
   useEffect(() => {

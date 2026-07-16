@@ -108,7 +108,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="p-5 border-b shrink-0">
           <div className="flex items-center gap-2 font-bold text-gray-900">
             <Store size={20} className="text-emerald-600" />
-            AppVentas Admin
+            Regionales por Mayor Admin
           </div>
         </div>
         <NavLinks pathname={pathname} />
@@ -142,7 +142,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="p-5 border-b flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2 font-bold text-gray-900">
             <Store size={20} className="text-emerald-600" />
-            AppVentas Admin
+            Regionales por Mayor Admin
           </div>
           <button onClick={() => setOpen(false)} className="p-1 hover:bg-gray-100 rounded-lg">
             <X size={20} />

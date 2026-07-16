@@ -17,13 +17,13 @@ export async function loadStoreConfig(): Promise<StoreConfig> {
       `SELECT config FROM catalog_config WHERE tipo = 'store_config'`);
     const c = rows[0]?.config ?? {};
     return {
-      storeName: c.storeName || "nuestra tienda",
+      storeName: c.storeName || "Regionales por Mayor",
       modoMayorista: c.modoMayorista === true,
       pedidoMinimo: Number(c.pedidoMinimo) || 0,
       logoUrl: c.logoUrl ?? null,
       ...c,
     };
   } catch {
-    return { storeName: "nuestra tienda", modoMayorista: false, pedidoMinimo: 0 };
+    return { storeName: "Regionales por Mayor", modoMayorista: false, pedidoMinimo: 0 };
   }
 }

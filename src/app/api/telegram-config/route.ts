@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   // Prueba de envío sin guardar cambios (usa lo guardado).
   if (test) {
-    const ok = await enviarAlertaTelegram("✅ <b>Prueba de AppVentas</b>\nSi ves este mensaje, los avisos por Telegram están funcionando.");
+    const ok = await enviarAlertaTelegram("✅ <b>Prueba de Regionales por Mayor</b>\nSi ves este mensaje, los avisos por Telegram están funcionando.");
     return NextResponse.json({ ok });
   }
 

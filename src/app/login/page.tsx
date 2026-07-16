@@ -41,7 +41,7 @@ export default function LoginPage() {
               <Store size={28} className="text-emerald-600" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">AppVentas</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Regionales por Mayor</h1>
           <p className="text-sm text-gray-500">Panel de administración</p>
         </div>
 

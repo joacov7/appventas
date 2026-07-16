@@ -51,7 +51,7 @@ function orderItemsHtml(items: OrderItem[]) {
 }
 
 export async function sendOrderConfirmationToCustomer(data: OrderEmailData) {
-  const from = "AppVentas <onboarding@resend.dev>";
+  const from = "Regionales por Mayor <onboarding@resend.dev>";
 
   await getResend().emails.send({
     from,
@@ -112,7 +112,7 @@ export async function sendOrderConfirmationToCustomer(data: OrderEmailData) {
         </div>
 
         <div style="background:#f9fafb;padding:16px;text-align:center;">
-          <p style="color:#9ca3af;font-size:12px;margin:0;">AppVentas</p>
+          <p style="color:#9ca3af;font-size:12px;margin:0;">Regionales por Mayor</p>
         </div>
       </div>
     `,
@@ -172,7 +172,7 @@ export async function sendAbandonedCartEmail({
   ` : "";
 
   await getResend().emails.send({
-    from: "AppVentas <onboarding@resend.dev>",
+    from: "Regionales por Mayor <onboarding@resend.dev>",
     to: email,
     subject: asunto,
     html: `
@@ -214,7 +214,7 @@ export async function sendAbandonedCartEmail({
 
           <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
             Si no querés recibir más emails, ignorá este mensaje.<br/>
-            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+            <a href="${appUrl}" style="color:#9ca3af;">Regionales por Mayor</a>
           </p>
         </div>
       </div>
@@ -236,7 +236,7 @@ export async function sendWelcomeEmail({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
 
   await getResend().emails.send({
-    from: "AppVentas <onboarding@resend.dev>",
+    from: "Regionales por Mayor <onboarding@resend.dev>",
     to: email,
     subject: "🎁 ¡Bienvenido/a! Acá va tu cupón de descuento",
     html: `
@@ -261,7 +261,7 @@ export async function sendWelcomeEmail({
           </div>
           <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
             Si no querés recibir más emails, ignorá este mensaje.<br/>
-            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+            <a href="${appUrl}" style="color:#9ca3af;">Regionales por Mayor</a>
           </p>
         </div>
       </div>
@@ -283,7 +283,7 @@ export async function sendReactivationEmail({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
 
   await getResend().emails.send({
-    from: "AppVentas <onboarding@resend.dev>",
+    from: "Regionales por Mayor <onboarding@resend.dev>",
     to: email,
     subject: "💛 ¡Te extrañamos! Un descuento especial para vos",
     html: `
@@ -308,7 +308,7 @@ export async function sendReactivationEmail({
           </div>
           <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
             Si no querés recibir más emails, ignorá este mensaje.<br/>
-            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+            <a href="${appUrl}" style="color:#9ca3af;">Regionales por Mayor</a>
           </p>
         </div>
       </div>
@@ -336,7 +336,7 @@ export async function sendReposicionEmail({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
 
   await getResend().emails.send({
-    from: "AppVentas <onboarding@resend.dev>",
+    from: "Regionales por Mayor <onboarding@resend.dev>",
     to: email,
     subject: `🔄 Es hora de reponer: ${productName}`,
     html: `
@@ -362,7 +362,7 @@ export async function sendReposicionEmail({
           </div>
           <p style="color:#9ca3af;font-size:12px;text-align:center;margin-top:32px;">
             Recibís este email porque suscribiste la reposición automática de este producto.<br/>
-            <a href="${appUrl}" style="color:#9ca3af;">AppVentas</a>
+            <a href="${appUrl}" style="color:#9ca3af;">Regionales por Mayor</a>
           </p>
         </div>
       </div>
@@ -382,7 +382,7 @@ export async function sendReferralNotification({
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
 
   await getResend().emails.send({
-    from: "AppVentas <onboarding@resend.dev>",
+    from: "Regionales por Mayor <onboarding@resend.dev>",
     to: referrerEmail,
     subject: "🎉 ¡Alguien usó tu link de referido!",
     html: `
@@ -416,7 +416,7 @@ export async function sendNewOrderNotificationToAdmin(data: OrderEmailData) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "";
 
   await getResend().emails.send({
-    from: "AppVentas <onboarding@resend.dev>",
+    from: "Regionales por Mayor <onboarding@resend.dev>",
     to: adminEmail,
     subject: `🛒 Nueva venta — ${formatPrice(data.total)} — ${data.customerName}`,
     html: `

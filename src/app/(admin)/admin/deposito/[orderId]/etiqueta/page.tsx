@@ -12,7 +12,7 @@ interface Prep {
 export default function EtiquetaPage() {
   const { orderId } = useParams<{ orderId: string }>();
   const [prep, setPrep] = useState<Prep | null>(null);
-  const [tienda, setTienda] = useState("Pava Negra");
+  const [tienda, setTienda] = useState("Regionales por Mayor");
 
   useEffect(() => {
     fetch(`/api/deposito/${orderId}`).then(r => r.json()).then(setPrep);

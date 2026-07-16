@@ -5,7 +5,7 @@ import "./globals.css";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "AppVentas — Tu tienda online",
+  title: "Regionales por Mayor — Venta mayorista",
   description: "Plataforma de e-commerce con Mercado Pago",
 };
 

@@ -74,16 +74,18 @@ export async function POST(req: NextRequest) {
 
     const priceTiers = await getTiersFromDB();
 
-    // Precio SIEMPRE desde la base — nunca confiar en el unitPrice del cliente
+    // Precio SIEMPRE desde la base — nunca confiar en el unitPrice del cliente.
+    // Redondeamos y evitamos NaN (variantes sin precio) para no romper el Decimal.
     const itemsWithPrice = body.items.map((item) => {
       const variant = variants.find((v) => v.id === item.variantId)!;
-      const basePrice = Number(variant.price);
+      const basePrice = Number(variant.price) || 0;
       const pct = getTierDiscount(priceTiers, item.quantity);
-      const effectivePrice = pct > 0 ? basePrice * (1 - pct / 100) : basePrice;
+      const bruto = pct > 0 ? basePrice * (1 - pct / 100) : basePrice;
+      const effectivePrice = Math.round(bruto * 100) / 100;
       return { ...item, effectivePrice };
     });
 
-    const subtotal = itemsWithPrice.reduce((acc, i) => acc + i.effectivePrice * i.quantity, 0);
+    const subtotal = Math.round(itemsWithPrice.reduce((acc, i) => acc + i.effectivePrice * i.quantity, 0) * 100) / 100;
     const total = subtotal;
 
     const order = await prisma.order.create({
@@ -113,6 +115,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
     console.error("[ORDER_ERROR]", error);
-    return NextResponse.json({ error: "Error al crear la orden" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Error al crear la orden";
+    return NextResponse.json({ error: `Error al crear la orden: ${msg}` }, { status: 500 });
   }
 }

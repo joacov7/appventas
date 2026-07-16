@@ -224,13 +224,15 @@ export default function ProductPage() {
             </div>
           )}
 
-          {/* Social proof */}
-          <div className="flex items-center gap-3 text-sm text-gray-500">
-            <span className="flex items-center gap-1.5">
-              <Eye size={14} className="text-emerald-600" />
-              <span className="font-medium text-gray-700">{viewers}</span> personas viendo esto ahora
-            </span>
-          </div>
+          {/* Social proof (oculto en modo mayorista) */}
+          {!modoMayorista && (
+            <div className="flex items-center gap-3 text-sm text-gray-500">
+              <span className="flex items-center gap-1.5">
+                <Eye size={14} className="text-emerald-600" />
+                <span className="font-medium text-gray-700">{viewers}</span> personas viendo esto ahora
+              </span>
+            </div>
+          )}
 
           {product.description && (
             <p className="text-gray-600 leading-relaxed">{product.description}</p>
@@ -280,7 +282,7 @@ export default function ProductPage() {
                   </div>
                 </div>
               </div>
-              <VolumePricing basePrice={selectedVariant.price} />
+              {!modoMayorista && <VolumePricing basePrice={selectedVariant.price} />}
             </div>
           )}
 
@@ -325,20 +327,22 @@ export default function ProductPage() {
             />
           )}
 
-          {/* Garantías */}
-          <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
-            {[
-              { icon: CreditCard, label: "Pagás en cuotas", sub: "sin interés" },
-              { icon: Truck, label: "Envío a todo", sub: "el país" },
-              { icon: Shield, label: "Compra", sub: "protegida" },
-            ].map(({ icon: Icon, label, sub }) => (
-              <div key={label} className="flex flex-col items-center text-center gap-1">
-                <Icon size={18} className="text-emerald-600" />
-                <p className="text-xs font-medium text-gray-700 leading-tight">{label}</p>
-                <p className="text-xs text-gray-400 leading-tight">{sub}</p>
-              </div>
-            ))}
-          </div>
+          {/* Garantías (minorista) — en mayorista no aplican */}
+          {!modoMayorista && (
+            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+              {[
+                { icon: CreditCard, label: "Pagás en cuotas", sub: "sin interés" },
+                { icon: Truck, label: "Envío a todo", sub: "el país" },
+                { icon: Shield, label: "Compra", sub: "protegida" },
+              ].map(({ icon: Icon, label, sub }) => (
+                <div key={label} className="flex flex-col items-center text-center gap-1">
+                  <Icon size={18} className="text-emerald-600" />
+                  <p className="text-xs font-medium text-gray-700 leading-tight">{label}</p>
+                  <p className="text-xs text-gray-400 leading-tight">{sub}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

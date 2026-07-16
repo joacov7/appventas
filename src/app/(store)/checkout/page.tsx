@@ -57,8 +57,9 @@ function CheckoutContent() {
   const [refDiscount, setRefDiscount] = useState(0);
   const [validatedRefCode, setValidatedRefCode] = useState<string | null>(null);
 
-  const tiers = useTiers();
   const { modoMayorista, pedidoMinimo } = useStoreFlags();
+  const tiersRaw = useTiers();
+  const tiers = modoMayorista ? [] : tiersRaw; // sin descuentos por monto en mayorista
   const subtotal = getTotalPrice();
   const cartQty = items.reduce((acc, i) => acc + i.quantity, 0);
   const cartTier = getCartTier(tiers, cartQty, subtotal);

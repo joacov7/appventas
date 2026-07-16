@@ -37,7 +37,9 @@ export function CartDrawer({ open, onClose }: CartDrawerProps) {
   const [cartEmailSaved, setCartEmailSaved] = useState(false);
   const cartEmailTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const tiers = useTiers();
+  // En modo mayorista no aplicamos descuentos por monto/cantidad.
+  const tiersRaw = useTiers();
+  const tiers = modoMayorista ? [] : tiersRaw;
 
   const subtotal = getTotalPrice();
   const discount = coupon?.discount ?? 0;

@@ -77,8 +77,8 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Viewers */}
-        {hasStock && (
+        {/* Viewers (oculto en modo mayorista) */}
+        {hasStock && !modoMayorista && (
           <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm">
             <Eye size={10} /> {viewers} viendo
           </div>

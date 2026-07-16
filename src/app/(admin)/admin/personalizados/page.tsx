@@ -101,15 +101,25 @@ export default function PersonalizadosPage() {
         for (let i = 0; i < px.length; i += 4) {
           const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
           if (a === 0) continue;
+
+          // Quitar el fondo (casi) blanco en AMBOS modos, con borde suave para
+          // que no quede el cuadrado ni un halo. Miramos el canal más bajo:
+          // si los tres son altos, es fondo → transparente.
+          const minc = Math.min(r, g, b);
+          let alpha = a;
+          if (minc >= 236) alpha = 0;                                   // blanco → fuera
+          else if (minc >= 205) alpha = Math.round(a * (236 - minc) / 31); // borde: se desvanece
+          if (alpha === 0) { px[i + 3] = 0; continue; }
+
           const lum = 0.299 * r + 0.587 * g + 0.114 * b; // 0=negro, 255=blanco
           if (modo === "grabado") {
-            // El blanco no se graba; cuanto más oscuro el logo, más quema.
-            const burn = (1 - lum / 255) * (a / 255);
+            // Sobre lo que queda, cuanto más oscuro el logo, más quema.
+            const burn = (1 - lum / 255) * (alpha / 255);
             px[i] = tr; px[i + 1] = tg; px[i + 2] = tb;
             px[i + 3] = Math.round(burn * 255);
           } else {
-            // Vinilo a color: sólo quitamos el fondo casi-blanco.
-            if (lum > 240) px[i + 3] = 0;
+            // Vinilo: mantiene el color del logo, ya sin fondo.
+            px[i + 3] = alpha;
           }
         }
         octx.putImageData(data, 0, 0);
@@ -250,6 +260,7 @@ export default function PersonalizadosPage() {
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
             <FileBtn label={modelos.length ? "…o subí otra foto" : "1. Foto del producto"} onFile={f => cargarImagen(f, setBaseImg)} listo={!!baseImg} />
             <FileBtn label="Logo del cliente (PNG)" onFile={f => cargarImagen(f, setLogoImg)} listo={!!logoImg} />
+            <p className="text-[11px] text-gray-400">Ideal: PNG con fondo transparente. Si el logo tiene fondo blanco, lo quitamos automáticamente.</p>
           </div>
 
           <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-4">

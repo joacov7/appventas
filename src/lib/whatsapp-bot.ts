@@ -194,29 +194,14 @@ const HELP_TRIGGERS = /(ayuda|asesor|humano|hablar\s+con|(una\s+)?persona\b|aten
 const ORDER_TRIGGERS = /(comprar|hacer\s+(un\s+)?pedido|quiero\s+comprar|checkout|como\s+compro|realizar\s+(un\s+)?pedido)/i;
 const HOURS_TRIGGERS = /(horario|atienden|abren|abierto|est[aá]n\s+abiert|a\s+qu[eé]\s+hora)/i;
 
-// "Ver catálogo": muestra las categorías con productos (o, si no hay categorías
-// clasificadas, cae a la muestra de destacados).
+// "Ver catálogo": manda directo a la página del catálogo (la web) con un
+// mensaje corto y editable. El link va a la tienda pública.
 async function catalogMessage(textos: BotTextos, tienda: string, seg: Segmento = "minorista") {
-  const cats = await categoriasConProductos();
-  if (cats.length > 0) {
-    const lista = cats.map(c => `• *${c.name}*`).join("\n");
-    const intro = render(textos.catalogo_intro, { link: APP_URL, tienda });
-    const cierre = seg === "empresarial"
-      ? `\n\n✨ Todo se puede personalizar con tu logo. O escribí *regalos* para una cotización.`
-      : `\n\nO mirá todo en 👉 ${APP_URL}`;
-    return `${intro}\n\n${lista}${cierre}`;
-  }
-  // Sin categorías: muestra de destacados (comportamiento anterior).
-  const products = await getFeaturedProducts();
-  if (products.length === 0) return `Pronto tendremos productos disponibles. Visitá ${APP_URL} para ver el catálogo completo.`;
-  const may = seg === "minorista" ? {} : await preciosMayoristas(products.map(p => p.id));
-  const lines = products.map((p) => {
-    const v = p.variants[0];
-    if (!v) return `• *${p.name}* — Consultar`;
-    const { precio, esMayorista } = precioDesde(Number(v.price), p.id, seg, may);
-    return `• *${p.name}* — ${formatARS(precio)}${esMayorista ? " (mayorista)" : ""}\n  ${APP_URL}/producto/${p.slug}`;
-  });
-  return `🛍️ *Nuestros productos:*\n\n${lines.join("\n\n")}\n\n🔍 Escribí el nombre de un producto, o entrá a ${APP_URL}.`;
+  const intro = render(textos.catalogo_intro, { link: APP_URL, tienda });
+  const extra = seg === "empresarial"
+    ? `\n\n✨ Todo se puede personalizar con tu logo. Escribí *regalos* para una cotización.`
+    : "";
+  return `${intro}\n\n👉 ${APP_URL}/productos${extra}`;
 }
 
 // Productos de una categoría elegida.

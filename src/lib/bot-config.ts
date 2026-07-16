@@ -29,7 +29,7 @@ export const BOT_DEFAULTS: BotTextos = {
 👨 *Hablar con un asesor*
 
 Escribí una opción o el nombre del producto que buscás 🔍`,
-  catalogo_intro: "Elegí una categoría 👇 (o escribime el nombre del producto)",
+  catalogo_intro: "¡Genial! 🧉 Mirá todo nuestro catálogo con precios acá 👇",
   regalos: `¡Buenísimo! 🙌 Trabajamos *regalos empresariales personalizados*: mates, termos, sets materos y más, *grabados con el logo de tu empresa* (láser o vinilo).
 
 Ideal para clientes, empleados o eventos. Manejamos *precios por cantidad* y armamos el pack a medida.

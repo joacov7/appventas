@@ -23,6 +23,22 @@ export function HerramientasCatalogo() {
     setRecalcMsg(r.ok ? `✅ ${d.actualizados} producto(s): minorista = mayorista +${markup}%, redondeado a $${redondeo}.` : `Error: ${d.error ?? r.status}`);
   }
 
+  const [stockN, setStockN] = useState(20);
+  const [stockSoloVacios, setStockSoloVacios] = useState(true);
+  const [stockCargando, setStockCargando] = useState(false);
+  const [stockMsg, setStockMsg] = useState<string | null>(null);
+  async function cargarStock() {
+    if (!confirm(`Poner ${stockN} unidades de stock ${stockSoloVacios ? "a los productos que están en 0" : "a TODOS los productos (pisa lo cargado)"}?`)) return;
+    setStockCargando(true); setStockMsg(null);
+    const r = await fetch("/api/productos/stock-masivo", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ cantidad: stockN, soloVacios: stockSoloVacios }),
+    });
+    setStockCargando(false);
+    const d = await r.json().catch(() => ({}));
+    setStockMsg(r.ok ? `✅ ${d.actualizados} producto(s) con ${d.cantidad} unidades.` : `Error: ${d.error ?? r.status}`);
+  }
+
   const [aplicMay, setAplicMay] = useState(false);
   const [aplicMayMsg, setAplicMayMsg] = useState<string | null>(null);
   async function aplicarMayorista() {
@@ -69,6 +85,22 @@ export function HerramientasCatalogo() {
           </button>
         </div>
         {recalcMsg && <p className="text-xs text-gray-600 mt-2 break-words">{recalcMsg}</p>}
+        <div className="mt-3 pt-3 border-t">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm text-gray-500">Stock inicial</span>
+            <input type="number" min={0} value={stockN} onChange={e => setStockN(Math.max(0, Number(e.target.value) || 0))}
+              className="w-16 text-sm border rounded-lg px-2 py-1.5 text-center" />
+            <label className="text-xs text-gray-500 flex items-center gap-1">
+              <input type="checkbox" checked={stockSoloVacios} onChange={e => setStockSoloVacios(e.target.checked)} className="accent-indigo-600" />
+              solo los que están en 0
+            </label>
+            <button onClick={cargarStock} disabled={stockCargando}
+              className="text-sm border border-indigo-300 text-indigo-700 hover:bg-indigo-50 disabled:opacity-50 font-medium px-4 py-1.5 rounded-xl">
+              {stockCargando ? "Cargando..." : "Cargar stock"}
+            </button>
+          </div>
+          {stockMsg && <p className="text-xs text-gray-600 mt-2 break-words">{stockMsg}</p>}
+        </div>
         <div className="mt-3 pt-3 border-t">
           <button onClick={aplicarMayorista} disabled={aplicMay}
             className="text-sm border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-50 font-medium px-4 py-1.5 rounded-xl"

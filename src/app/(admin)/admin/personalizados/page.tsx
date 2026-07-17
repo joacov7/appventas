@@ -21,8 +21,21 @@ export default function PersonalizadosPage() {
   const [rot, setRot] = useState(0);
   const [opacidad, setOpacidad] = useState(1);
   const [modo, setModo] = useState<Modo>("grabado");
-  const [tab, setTab] = useState<"mockup" | "modelos">("mockup");
+  const [tab, setTab] = useState<"rapida" | "mockup" | "modelos">("rapida");
   const [modelos, setModelos] = useState<Modelo[]>([]);
+
+  // Muestra rápida: un logo → muestras sobre todos los modelos.
+  const [logoRapido, setLogoRapido] = useState<HTMLImageElement | null>(null);
+  const [modoRapido, setModoRapido] = useState<Modo>("grabado");
+  const [tonoRapido, setTonoRapido] = useState("#3b2a1a");
+  const descargasRef = useRef<Map<number, () => void>>(new Map());
+  const registrarDescarga = useCallback((id: number, fn: (() => void) | null) => {
+    if (fn) descargasRef.current.set(id, fn); else descargasRef.current.delete(id);
+  }, []);
+  function descargarTodas() {
+    let i = 0;
+    for (const fn of descargasRef.current.values()) { setTimeout(fn, i * 250); i++; }
+  }
   const [nuevoModelo, setNuevoModelo] = useState<{ nombre: string; categoria: string; imagen_url: string }>({ nombre: "", categoria: "mate", imagen_url: "" });
 
   async function cargarModelos() {
@@ -65,91 +78,10 @@ export default function PersonalizadosPage() {
     reader.readAsDataURL(file);
   }
 
-  // Dibuja todo en el canvas.
+  // Dibuja todo en el canvas (usa el motor común).
   const render = useCallback(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    // Tamaño del canvas según la foto del producto (o un lienzo por defecto)
-    const W = 900;
-    const H = baseImg ? Math.round((baseImg.height / baseImg.width) * W) : 600;
-    canvas.width = W; canvas.height = H;
-
-    ctx.clearRect(0, 0, W, H);
-    if (baseImg) ctx.drawImage(baseImg, 0, 0, W, H);
-    else { ctx.fillStyle = "#f3f4f6"; ctx.fillRect(0, 0, W, H); }
-
-    if (logoImg) {
-      const logoW = escala * W;
-      const logoH = (logoImg.height / logoImg.width) * logoW;
-      const cx = pos.x * W, cy = pos.y * H;
-
-      // Procesamos el logo en un lienzo aparte: quitamos el fondo blanco y,
-      // en modo grabado, lo convertimos en "quemado" según su luminancia.
-      const off = document.createElement("canvas");
-      off.width = Math.max(1, Math.round(logoW));
-      off.height = Math.max(1, Math.round(logoH));
-      const octx = off.getContext("2d")!;
-      octx.drawImage(logoImg, 0, 0, off.width, off.height);
-
-      try {
-        const data = octx.getImageData(0, 0, off.width, off.height);
-        const px = data.data;
-        const W2 = off.width, H2 = off.height;
-        const [tr, tg, tb] = hexToRgb(tono);
-
-        // Detecta el color de fondo mirando las 4 esquinas. Si son opacas y
-        // parecidas entre sí, es un fondo sólido (blanco, gris o de color) que
-        // podemos quitar. Si difieren mucho, el logo ya llega a los bordes.
-        const esquinas = [0, (W2 - 1) * 4, (H2 - 1) * W2 * 4, ((H2 - 1) * W2 + (W2 - 1)) * 4];
-        const cols = esquinas.map(o => [px[o], px[o + 1], px[o + 2], px[o + 3]]);
-        const opacas = cols.every(c => c[3] > 200);
-        const prom = [0, 1, 2].map(k => cols.reduce((s, c) => s + c[k], 0) / 4);
-        const disp = Math.max(...cols.map(c => Math.hypot(c[0] - prom[0], c[1] - prom[1], c[2] - prom[2])));
-        const bg = opacas && disp < 34 ? prom : null; // fondo sólido detectado
-        const T1 = 42, T2 = 92; // distancias: dentro de T1 = fondo, T1..T2 = borde suave
-
-        for (let i = 0; i < px.length; i += 4) {
-          const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
-          if (a === 0) continue;
-
-          let alpha = a;
-          if (bg) {
-            // Quita el color de fondo detectado, con borde suave (feather).
-            const d = Math.hypot(r - bg[0], g - bg[1], b - bg[2]);
-            if (d <= T1) alpha = 0;
-            else if (d < T2) alpha = Math.round(a * (d - T1) / (T2 - T1));
-          } else {
-            // Sin fondo sólido claro: al menos quitamos el (casi) blanco.
-            const minc = Math.min(r, g, b);
-            if (minc >= 236) alpha = 0;
-            else if (minc >= 205) alpha = Math.round(a * (236 - minc) / 31);
-          }
-          if (alpha === 0) { px[i + 3] = 0; continue; }
-
-          const lum = 0.299 * r + 0.587 * g + 0.114 * b; // 0=negro, 255=blanco
-          if (modo === "grabado") {
-            const burn = (1 - lum / 255) * (alpha / 255);
-            px[i] = tr; px[i + 1] = tg; px[i + 2] = tb;
-            px[i + 3] = Math.round(burn * 255);
-          } else {
-            px[i + 3] = alpha; // vinilo: color del logo, sin fondo
-          }
-        }
-        octx.putImageData(data, 0, 0);
-      } catch { /* si el logo es de otro dominio sin CORS, se dibuja tal cual */ }
-
-      ctx.save();
-      ctx.translate(cx, cy);
-      ctx.rotate((rot * Math.PI) / 180);
-      ctx.globalAlpha = opacidad;
-      // Multiply integra el grabado con la veta de la madera (look realista).
-      if (modo === "grabado") ctx.globalCompositeOperation = "multiply";
-      ctx.drawImage(off, -logoW / 2, -logoH / 2, logoW, logoH);
-      ctx.restore();
-    }
+    if (!canvasRef.current) return;
+    dibujarMockup(canvasRef.current, baseImg, logoImg, { pos, escala, rot, opacidad, modo, tono });
   }, [baseImg, logoImg, pos, escala, rot, opacidad, modo, tono]);
 
   useEffect(() => { render(); }, [render]);
@@ -184,13 +116,64 @@ export default function PersonalizadosPage() {
       </div>
 
       <div className="flex gap-2 bg-gray-100 p-1 rounded-xl w-fit">
-        {([["mockup", "Mockup"], ["modelos", "Modelos"]] as [typeof tab, string][]).map(([t, l]) => (
+        {([["rapida", "Muestra rápida"], ["mockup", "Mockup manual"], ["modelos", "Modelos"]] as [typeof tab, string][]).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium ${tab === t ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"}`}>
             {l}
           </button>
         ))}
       </div>
+
+      {tab === "rapida" && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl border border-gray-100 p-4 space-y-3">
+            <p className="text-sm text-gray-600">Subí el logo del cliente y sale la muestra sobre <b>todos tus modelos</b>. Sin acomodar nada.</p>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <FileBtn label="Logo del cliente (PNG)" onFile={f => cargarImagen(f, setLogoRapido)} listo={!!logoRapido} />
+              <div className="flex items-center gap-2">
+                <div className="grid grid-cols-2 gap-1 flex-1">
+                  {([["grabado", "Grabado"], ["color", "Vinilo"]] as [Modo, string][]).map(([m, l]) => (
+                    <button key={m} onClick={() => setModoRapido(m)}
+                      className={`text-sm py-2 rounded-lg border ${modoRapido === m ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600"}`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+                {modoRapido === "grabado" && (
+                  <input type="color" value={tonoRapido} onChange={e => setTonoRapido(e.target.value)}
+                    title="Tono del grabado" className="w-9 h-9 rounded border shrink-0" />
+                )}
+              </div>
+            </div>
+            {logoRapido && modelos.length > 0 && (
+              <div className="flex justify-end">
+                <button onClick={descargarTodas}
+                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-xl">
+                  <Download size={16} /> Descargar todas
+                </button>
+              </div>
+            )}
+          </div>
+
+          {!logoRapido ? (
+            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+              <Wand2 className="mx-auto text-gray-300 mb-3" size={32} />
+              <p className="text-gray-500 text-sm">Subí un logo para ver las muestras sobre tus productos.</p>
+            </div>
+          ) : modelos.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-dashed border-gray-200 p-10 text-center">
+              <Images className="mx-auto text-gray-300 mb-3" size={32} />
+              <p className="text-gray-500 text-sm">Primero cargá tus productos en la pestaña <b>Modelos</b>. Ahí subís las fotos de los mates, termos, etc.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {modelos.map(m => (
+                <MuestraModelo key={m.id} modelo={m} logoImg={logoRapido} modo={modoRapido} tono={tonoRapido} registrar={registrarDescarga} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {tab === "modelos" && (
         <div className="space-y-4">
@@ -313,6 +296,138 @@ export default function PersonalizadosPage() {
         </div>
       </div>
       )}
+    </div>
+  );
+}
+
+interface OpcionesMockup {
+  pos: { x: number; y: number };
+  escala: number; rot: number; opacidad: number; modo: Modo; tono: string;
+}
+
+// Motor de dibujo del mockup: compone el logo (con fondo removido y grabado/
+// vinilo) sobre la foto del producto, en el canvas dado. Reutilizable para el
+// mockup interactivo y para las muestras rápidas.
+function dibujarMockup(canvas: HTMLCanvasElement, baseImg: HTMLImageElement | null, logoImg: HTMLImageElement | null, o: OpcionesMockup) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+
+  const W = 900;
+  const H = baseImg ? Math.round((baseImg.height / baseImg.width) * W) : 600;
+  canvas.width = W; canvas.height = H;
+
+  ctx.clearRect(0, 0, W, H);
+  if (baseImg) ctx.drawImage(baseImg, 0, 0, W, H);
+  else { ctx.fillStyle = "#f3f4f6"; ctx.fillRect(0, 0, W, H); }
+  if (!logoImg) return;
+
+  const logoW = o.escala * W;
+  const logoH = (logoImg.height / logoImg.width) * logoW;
+  const cx = o.pos.x * W, cy = o.pos.y * H;
+
+  // Procesamos el logo en un lienzo aparte: quitamos el fondo y, en modo
+  // grabado, lo convertimos en "quemado" según su luminancia.
+  const off = document.createElement("canvas");
+  off.width = Math.max(1, Math.round(logoW));
+  off.height = Math.max(1, Math.round(logoH));
+  const octx = off.getContext("2d")!;
+  octx.drawImage(logoImg, 0, 0, off.width, off.height);
+
+  try {
+    const data = octx.getImageData(0, 0, off.width, off.height);
+    const px = data.data;
+    const W2 = off.width, H2 = off.height;
+    const [tr, tg, tb] = hexToRgb(o.tono);
+
+    // Detecta el color de fondo mirando las 4 esquinas. Si son opacas y
+    // parecidas entre sí, es un fondo sólido (blanco, gris o de color) que
+    // podemos quitar. Si difieren mucho, el logo ya llega a los bordes.
+    const esquinas = [0, (W2 - 1) * 4, (H2 - 1) * W2 * 4, ((H2 - 1) * W2 + (W2 - 1)) * 4];
+    const cols = esquinas.map(off2 => [px[off2], px[off2 + 1], px[off2 + 2], px[off2 + 3]]);
+    const opacas = cols.every(c => c[3] > 200);
+    const prom = [0, 1, 2].map(k => cols.reduce((s, c) => s + c[k], 0) / 4);
+    const disp = Math.max(...cols.map(c => Math.hypot(c[0] - prom[0], c[1] - prom[1], c[2] - prom[2])));
+    const bg = opacas && disp < 34 ? prom : null; // fondo sólido detectado
+    const T1 = 42, T2 = 92; // distancias: dentro de T1 = fondo, T1..T2 = borde suave
+
+    for (let i = 0; i < px.length; i += 4) {
+      const r = px[i], g = px[i + 1], b = px[i + 2], a = px[i + 3];
+      if (a === 0) continue;
+
+      let alpha = a;
+      if (bg) {
+        const d = Math.hypot(r - bg[0], g - bg[1], b - bg[2]);
+        if (d <= T1) alpha = 0;
+        else if (d < T2) alpha = Math.round(a * (d - T1) / (T2 - T1));
+      } else {
+        const minc = Math.min(r, g, b);
+        if (minc >= 236) alpha = 0;
+        else if (minc >= 205) alpha = Math.round(a * (236 - minc) / 31);
+      }
+      if (alpha === 0) { px[i + 3] = 0; continue; }
+
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      if (o.modo === "grabado") {
+        const burn = (1 - lum / 255) * (alpha / 255);
+        px[i] = tr; px[i + 1] = tg; px[i + 2] = tb;
+        px[i + 3] = Math.round(burn * 255);
+      } else {
+        px[i + 3] = alpha;
+      }
+    }
+    octx.putImageData(data, 0, 0);
+  } catch { /* si el logo es de otro dominio sin CORS, se dibuja tal cual */ }
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((o.rot * Math.PI) / 180);
+  ctx.globalAlpha = o.opacidad;
+  if (o.modo === "grabado") ctx.globalCompositeOperation = "multiply";
+  ctx.drawImage(off, -logoW / 2, -logoH / 2, logoW, logoH);
+  ctx.restore();
+}
+
+// Una muestra automática: el logo centrado sobre un modelo, con valores por
+// defecto. Carga la foto del modelo y expone su descarga al padre.
+function MuestraModelo({ modelo, logoImg, modo, tono, registrar }: {
+  modelo: Modelo; logoImg: HTMLImageElement; modo: Modo; tono: string;
+  registrar: (id: number, fn: (() => void) | null) => void;
+}) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const [base, setBase] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => setBase(img);
+    img.src = modelo.imagen_url;
+  }, [modelo.imagen_url]);
+
+  useEffect(() => {
+    if (ref.current && base) {
+      dibujarMockup(ref.current, base, logoImg, { pos: { x: 0.5, y: 0.5 }, escala: 0.3, rot: 0, opacidad: 1, modo, tono });
+    }
+  }, [base, logoImg, modo, tono]);
+
+  const descargar = useCallback(() => {
+    const c = ref.current;
+    if (!c) return;
+    const a = document.createElement("a");
+    a.download = `muestra-${modelo.nombre.replace(/\s+/g, "-").toLowerCase()}.png`;
+    a.href = c.toDataURL("image/png");
+    a.click();
+  }, [modelo.nombre]);
+
+  useEffect(() => { registrar(modelo.id, descargar); return () => registrar(modelo.id, null); }, [modelo.id, descargar, registrar]);
+
+  return (
+    <div className="bg-white rounded-xl border overflow-hidden">
+      <canvas ref={ref} className="w-full bg-gray-50" />
+      <div className="p-2 flex items-center gap-2">
+        <p className="text-xs font-medium text-gray-800 truncate flex-1">{modelo.nombre}</p>
+        <button onClick={descargar} title="Descargar esta muestra"
+          className="text-gray-400 hover:text-indigo-600"><Download size={15} /></button>
+      </div>
     </div>
   );
 }

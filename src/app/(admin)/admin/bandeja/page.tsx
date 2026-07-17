@@ -64,6 +64,25 @@ export default function BandejaPage() {
     setTimeout(() => finRef.current?.scrollIntoView(), 100);
   }, []);
 
+  // Refresco silencioso del hilo abierto: actualiza tildes y mensajes nuevos
+  // sin spinner ni saltos de scroll.
+  useEffect(() => {
+    if (!sel) return;
+    let vivo = true;
+    async function refrescar() {
+      if (document.hidden) return;
+      try {
+        const r = await fetch(`/api/bandeja?canal=${sel!.canal}&contacto=${encodeURIComponent(sel!.contacto)}`);
+        if (r.ok && vivo) {
+          const nuevo: Mensaje[] = await r.json();
+          setHilo(prev => (JSON.stringify(prev) === JSON.stringify(nuevo) ? prev : nuevo));
+        }
+      } catch { /* silencioso */ }
+    }
+    const t = setInterval(refrescar, 5000);
+    return () => { vivo = false; clearInterval(t); };
+  }, [sel]);
+
   async function enviar() {
     if (!sel || !respuesta.trim()) return;
     setEnviando(true);

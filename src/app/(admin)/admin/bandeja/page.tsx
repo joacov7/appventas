@@ -10,7 +10,16 @@ interface Conversacion {
   ultima_direccion: "entrante" | "saliente" | "error"; total: number; espera_respuesta: boolean;
   segmento?: Segmento | null;
 }
-interface Mensaje { direccion: "entrante" | "saliente" | "error"; texto: string; fecha: string }
+interface Mensaje { direccion: "entrante" | "saliente" | "error"; texto: string; fecha: string; estado?: string | null }
+
+// Tildes de entrega, estilo WhatsApp. sent = ✓, delivered/read = ✓✓ (read en azul).
+function TildeEstado({ estado }: { estado?: string | null }) {
+  if (estado === "failed") return <span title="No se pudo entregar" className="text-red-300">✕</span>;
+  if (estado === "read") return <span title="Leído" className="text-sky-300">✓✓</span>;
+  if (estado === "delivered") return <span title="Entregado">✓✓</span>;
+  if (estado === "sent") return <span title="Enviado">✓</span>;
+  return <span title="Enviando…" className="opacity-60">🕓</span>;
+}
 
 const CANAL_ICON: Record<Canal, any> = { whatsapp: MessageCircle, instagram: Instagram, facebook: Facebook };
 const CANAL_COLOR: Record<Canal, string> = { whatsapp: "text-emerald-600", instagram: "text-pink-600", facebook: "text-blue-600" };
@@ -209,7 +218,10 @@ export default function BandejaPage() {
                       : m.direccion === "error" ? "bg-red-50 text-red-600 border border-red-100"
                       : "bg-indigo-600 text-white"}`}>
                       <p className="whitespace-pre-wrap break-words">{m.texto}</p>
-                      <p className={`text-[10px] mt-1 ${m.direccion === "saliente" ? "text-indigo-200" : "text-gray-400"}`}>{hora(m.fecha)}</p>
+                      <p className={`text-[10px] mt-1 flex items-center gap-1 justify-end ${m.direccion === "saliente" ? "text-indigo-200" : "text-gray-400"}`}>
+                        {hora(m.fecha)}
+                        {m.direccion === "saliente" && <TildeEstado estado={m.estado} />}
+                      </p>
                     </div>
                   </div>
                 ))}

@@ -75,7 +75,7 @@ function normalizarDestino(to: string): string {
   return d;
 }
 
-export async function sendWhatsAppMessage(to: string, text: string): Promise<{ ok: boolean; error?: string }> {
+export async function sendWhatsAppMessage(to: string, text: string): Promise<{ ok: boolean; error?: string; wamId?: string }> {
   const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
   if (!accessToken || !phoneNumberId) {
     await registrarError(to, "WhatsApp no configurado: falta Access Token o Phone Number ID en el admin.");
@@ -105,7 +105,8 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<{ o
       await registrarError(to, `Error al enviar (HTTP ${res.status}): ${err}`);
       return { ok: false, error: err };
     }
-    return { ok: true };
+    const data = await res.json().catch(() => ({}));
+    return { ok: true, wamId: data?.messages?.[0]?.id };
   } catch (e: any) {
     await registrarError(to, `Error de conexión al enviar: ${e?.message ?? "desconocido"}`);
     return { ok: false, error: e?.message };
@@ -115,7 +116,7 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<{ o
 // Envía una imagen o documento (PDF) por su URL pública, con texto opcional.
 export async function sendWhatsAppMedia(
   to: string, url: string, tipo: "image" | "document", caption?: string
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; wamId?: string }> {
   const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
   if (!accessToken || !phoneNumberId) {
     await registrarError(to, "WhatsApp no configurado: falta Access Token o Phone Number ID en el admin.");
@@ -136,7 +137,8 @@ export async function sendWhatsAppMedia(
       await registrarError(to, `Error al enviar ${tipo} (HTTP ${res.status}): ${err}`);
       return { ok: false, error: err };
     }
-    return { ok: true };
+    const data = await res.json().catch(() => ({}));
+    return { ok: true, wamId: data?.messages?.[0]?.id };
   } catch (e: any) {
     await registrarError(to, `Error de conexión al enviar ${tipo}: ${e?.message ?? "desconocido"}`);
     return { ok: false, error: e?.message };

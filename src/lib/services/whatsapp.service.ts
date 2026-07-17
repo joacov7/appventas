@@ -54,10 +54,11 @@ export async function conversacionesPendientes(limitConv = 10): Promise<Conversa
 
 // Envía un WhatsApp y lo registra en el historial.
 export async function enviarWhatsapp(to: string, texto: string): Promise<{ ok: boolean; enviado: boolean }> {
-  await sendWhatsAppMessage(to, texto);
+  const env = await sendWhatsAppMessage(to, texto);
   try {
     await (prisma as any).$executeRawUnsafe(
-      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'saliente', $2)`, to, texto
+      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto, wam_id, estado) VALUES ($1, 'saliente', $2, $3, $4)`,
+      to, texto, env.wamId ?? null, env.ok ? "sent" : "failed"
     );
   } catch { /* no crítico */ }
   // Esta vía es respuesta de un humano/agente → el bot se calla para ese contacto.
@@ -78,7 +79,8 @@ export async function enviarWhatsappMedia(
   const etiqueta = (tipo === "document" ? "📄 Archivo enviado" : "📷 Foto enviada") + (caption ? `: ${caption}` : "");
   try {
     await (prisma as any).$executeRawUnsafe(
-      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'saliente', $2)`, to, etiqueta
+      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto, wam_id, estado) VALUES ($1, 'saliente', $2, $3, 'sent')`,
+      to, etiqueta, r.wamId ?? null
     );
   } catch { /* no crítico */ }
   try {

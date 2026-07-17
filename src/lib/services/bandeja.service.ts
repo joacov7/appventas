@@ -27,6 +27,7 @@ export interface MensajeHilo {
   direccion: "entrante" | "saliente" | "error";
   texto: string;
   fecha: string;
+  estado?: string | null; // sent | delivered | read | failed (solo salientes)
 }
 
 // Conversaciones de WhatsApp agrupadas por contacto.
@@ -94,10 +95,10 @@ export async function hiloConversacion(canal: Canal, contacto: string): Promise<
   if (canal === "whatsapp") {
     try {
       const rows: any[] = await (prisma as any).$queryRawUnsafe(`
-        SELECT direccion, texto, creado_en FROM whatsapp_mensajes
+        SELECT direccion, texto, creado_en, estado FROM whatsapp_mensajes
         WHERE wa_id = $1 ORDER BY creado_en ASC LIMIT 200
       `, contacto);
-      return rows.map(r => ({ direccion: r.direccion, texto: r.texto, fecha: r.creado_en }));
+      return rows.map(r => ({ direccion: r.direccion, texto: r.texto, fecha: r.creado_en, estado: r.estado ?? null }));
     } catch { return []; }
   }
   return [];

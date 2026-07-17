@@ -362,6 +362,10 @@ const DDL: Record<Ambito, string[]> = {
       creado_en TIMESTAMPTZ DEFAULT now()
     )`,
     `CREATE INDEX IF NOT EXISTS idx_wa_mensajes_wa_id ON whatsapp_mensajes(wa_id)`,
+    // ID del mensaje en WhatsApp y su estado de entrega (para los tildes ✓✓).
+    `ALTER TABLE whatsapp_mensajes ADD COLUMN IF NOT EXISTS wam_id TEXT`,
+    `ALTER TABLE whatsapp_mensajes ADD COLUMN IF NOT EXISTS estado TEXT`,
+    `CREATE INDEX IF NOT EXISTS idx_wa_mensajes_wam ON whatsapp_mensajes(wam_id)`,
     // Perfil del contacto: recordamos su segmento para responder con el precio correcto.
     `CREATE TABLE IF NOT EXISTS whatsapp_contactos (
       wa_id TEXT PRIMARY KEY,

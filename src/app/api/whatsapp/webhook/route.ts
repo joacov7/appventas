@@ -7,6 +7,33 @@ import { procesarAudioEntrante } from "@/lib/whatsapp-voice";
 import { alertaNuevoWhatsapp } from "@/lib/telegram";
 import { avisarPendientes } from "@/lib/services/whatsapp-pendientes.service";
 import { loadWhatsAppConfig } from "@/lib/whatsapp-config";
+import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
+
+// Rango de estados: no permitimos "bajar" (read no vuelve a delivered si el
+// evento llega desordenado). failed se registra siempre.
+const RANGO: Record<string, number> = { sent: 1, delivered: 2, read: 3 };
+
+async function registrarEstados(statuses: any[]): Promise<void> {
+  await ensureSchema("whatsapp");
+  for (const s of statuses) {
+    const id = s?.id;
+    const estado = s?.status;
+    if (!id || !estado) continue;
+    if (estado === "failed") {
+      await (prisma as any).$executeRawUnsafe(
+        `UPDATE whatsapp_mensajes SET estado = 'failed' WHERE wam_id = $1`, id).catch(() => {});
+      continue;
+    }
+    const rango = RANGO[estado];
+    if (!rango) continue;
+    // Solo sube de nivel (evita read → delivered por eventos fuera de orden).
+    await (prisma as any).$executeRawUnsafe(
+      `UPDATE whatsapp_mensajes SET estado = $2 WHERE wam_id = $1
+         AND COALESCE(CASE estado WHEN 'sent' THEN 1 WHEN 'delivered' THEN 2 WHEN 'read' THEN 3 ELSE 0 END, 0) < $3`,
+      id, estado, rango).catch(() => {});
+  }
+}
 
 // ── GET — Meta webhook verification ─────────────────────────────────────────
 export async function GET(req: NextRequest) {
@@ -37,8 +64,13 @@ export async function POST(req: NextRequest) {
     const changes = entry?.changes?.[0];
     const value = changes?.value;
 
+    // Actualizaciones de estado de entrega (sent → delivered → read → failed).
+    if (value?.statuses?.length) {
+      await registrarEstados(value.statuses).catch(() => {});
+      return NextResponse.json({ status: "ok" });
+    }
+
     if (!value?.messages?.length) {
-      // Could be a status update — acknowledge and ignore
       return NextResponse.json({ status: "ok" });
     }
 

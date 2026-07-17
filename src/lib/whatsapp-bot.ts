@@ -5,7 +5,7 @@ import {
   type Segmento, detectarSegmento, interpretarRespuestaSegmento, preguntaSegmento,
   getContacto, setSegmento, marcarEsperandoSegmento, botSilenciado,
 } from "@/lib/whatsapp-segmento";
-import { loadBotTextos, render, type BotTextos } from "@/lib/bot-config";
+import { loadBotTextos, loadBotCatalogo, render, type BotTextos } from "@/lib/bot-config";
 
 // Nombre de la tienda para el placeholder {tienda}.
 async function nombreTienda(): Promise<string> {
@@ -201,7 +201,10 @@ async function catalogMessage(textos: BotTextos, tienda: string, seg: Segmento =
   const extra = seg === "empresarial"
     ? `\n\n✨ Todo se puede personalizar con tu logo. Escribí *regalos* para una cotización.`
     : "";
-  return `${intro}\n\n👉 ${APP_URL}/productos${extra}`;
+  // Según config: la página de productos, o un link provisorio (Drive) con fotos.
+  const cat = await loadBotCatalogo();
+  const destino = cat.modo === "drive" && cat.drive_url ? cat.drive_url : `${APP_URL}/productos`;
+  return `${intro}\n\n👉 ${destino}${extra}`;
 }
 
 // Productos de una categoría elegida.

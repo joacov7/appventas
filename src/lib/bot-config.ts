@@ -77,6 +77,44 @@ export async function saveBotTextos(textos: Partial<BotTextos>): Promise<void> {
   );
 }
 
+// ─── A dónde manda el bot cuando piden el catálogo ───────────────────────────
+// "web" = la página de productos. "drive" = un link (ej: carpeta de Drive con
+// fotos) provisorio, hasta terminar de cargar todo en la web.
+export interface BotCatalogo {
+  modo: "web" | "drive";
+  drive_url: string;
+}
+
+export const CATALOGO_DEFAULT: BotCatalogo = { modo: "web", drive_url: "" };
+
+export async function loadBotCatalogo(): Promise<BotCatalogo> {
+  try {
+    await ensureSchema("config");
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT config FROM catalog_config WHERE tipo = 'bot_catalogo'`);
+    const c = rows[0]?.config ?? {};
+    return {
+      modo: c.modo === "drive" ? "drive" : "web",
+      drive_url: typeof c.drive_url === "string" ? c.drive_url : "",
+    };
+  } catch {
+    return CATALOGO_DEFAULT;
+  }
+}
+
+export async function saveBotCatalogo(cfg: BotCatalogo): Promise<void> {
+  await ensureSchema("config");
+  const limpio: BotCatalogo = {
+    modo: cfg.modo === "drive" ? "drive" : "web",
+    drive_url: String(cfg.drive_url ?? "").trim(),
+  };
+  await (prisma as any).$executeRawUnsafe(
+    `INSERT INTO catalog_config (tipo, config) VALUES ('bot_catalogo', $1::jsonb)
+     ON CONFLICT (tipo) DO UPDATE SET config = $1::jsonb, updated_at = NOW()`,
+    JSON.stringify(limpio)
+  );
+}
+
 // Reemplaza los placeholders del texto.
 export function render(texto: string, vars: { link: string; tienda: string }): string {
   return (texto ?? "")

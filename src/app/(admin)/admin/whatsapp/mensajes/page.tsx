@@ -40,6 +40,9 @@ export default function MensajesBotPage() {
   });
   const [plGuardado, setPlGuardado] = useState("");
   const [presu, setPresu] = useState<{ limite_usd: number; enviados: number; gasto_usd: number } | null>(null);
+  // A dónde manda el catálogo (página web o link de Drive provisorio).
+  const [catalogo, setCatalogo] = useState<{ modo: "web" | "drive"; drive_url: string }>({ modo: "web", drive_url: "" });
+  const [catGuardado, setCatGuardado] = useState("");
 
   useEffect(() => {
     fetch("/api/whatsapp/textos").then(r => r.json()).then(d => {
@@ -53,8 +56,19 @@ export default function MensajesBotPage() {
         concesionaria: pl.concesionaria ?? prev.concesionaria,
       }));
     });
+    fetch("/api/whatsapp/catalogo").then(r => r.json()).then(d => {
+      if (d?.modo) setCatalogo({ modo: d.modo, drive_url: d.drive_url ?? "" });
+    }).catch(() => {});
     cargarPresupuesto();
   }, []);
+
+  async function guardarCatalogo() {
+    setCatGuardado("");
+    const r = await fetch("/api/whatsapp/catalogo", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(catalogo),
+    });
+    setCatGuardado(r.ok ? "✅ Guardado" : "Error");
+  }
 
   function cargarPresupuesto() {
     fetch("/api/whatsapp/plantilla/presupuesto").then(r => r.json()).then(d => {
@@ -109,6 +123,36 @@ export default function MensajesBotPage() {
       <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-3 text-xs text-indigo-900">
         Podés usar <b>{"{tienda}"}</b> (nombre de la tienda) y <b>{"{link}"}</b> (dirección de la tienda) — se reemplazan solos.
         El bot arma las <b>categorías</b> y los <b>precios</b> automáticamente según tu catálogo.
+      </div>
+
+      {/* A dónde manda el catálogo */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        <p className="text-sm font-medium text-gray-800 mb-1">📎 Cuando piden el catálogo, enviar…</p>
+        <p className="text-xs text-gray-500 mb-3">Elegí a dónde manda el bot. Usá el link de Drive mientras terminás de cargar las fotos; después cambiá a la página web.</p>
+        <div className="space-y-2">
+          <label className={`flex items-start gap-2 p-3 rounded-xl border cursor-pointer ${catalogo.modo === "web" ? "border-emerald-300 bg-emerald-50" : "border-gray-200"}`}>
+            <input type="radio" name="catmodo" checked={catalogo.modo === "web"} onChange={() => setCatalogo({ ...catalogo, modo: "web" })} className="mt-0.5 accent-emerald-600" />
+            <span className="text-sm text-gray-700"><b>La página web</b> (catálogo con precios y pedido)</span>
+          </label>
+          <label className={`flex items-start gap-2 p-3 rounded-xl border cursor-pointer ${catalogo.modo === "drive" ? "border-emerald-300 bg-emerald-50" : "border-gray-200"}`}>
+            <input type="radio" name="catmodo" checked={catalogo.modo === "drive"} onChange={() => setCatalogo({ ...catalogo, modo: "drive" })} className="mt-0.5 accent-emerald-600" />
+            <span className="text-sm text-gray-700 flex-1"><b>Un link de Drive</b> (provisorio, fotos del catálogo)</span>
+          </label>
+          {catalogo.modo === "drive" && (
+            <input value={catalogo.drive_url} onChange={e => setCatalogo({ ...catalogo, drive_url: e.target.value })}
+              placeholder="Pegá el link de la carpeta de Drive (https://drive.google.com/...)"
+              className="w-full text-sm border rounded-xl px-3 py-2 outline-none" />
+          )}
+        </div>
+        <div className="flex items-center gap-3 mt-3">
+          <button onClick={guardarCatalogo}
+            className="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-xl">Guardar</button>
+          {catGuardado && <span className="text-xs text-gray-500">{catGuardado}</span>}
+        </div>
+        {catalogo.modo === "drive" && !catalogo.drive_url && (
+          <p className="text-xs text-amber-600 mt-2">⚠️ Sin link cargado, el bot manda igual a la página web.</p>
+        )}
+        <p className="text-[11px] text-gray-400 mt-2">Tip: en Drive, compartí la carpeta como “Cualquier persona con el enlace” para que se vea sin permisos.</p>
       </div>
 
       {/* Plantilla de abordaje (API) */}

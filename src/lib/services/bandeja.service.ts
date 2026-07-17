@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
 import { enviarWhatsapp, enviarWhatsappMedia } from "./whatsapp.service";
 import { type Segmento, setSegmento } from "@/lib/whatsapp-segmento";
 
@@ -93,13 +94,24 @@ export async function listarConversaciones(opts: { canal?: Canal } = {}): Promis
 // Devuelve el hilo completo de una conversación (orden cronológico).
 export async function hiloConversacion(canal: Canal, contacto: string): Promise<MensajeHilo[]> {
   if (canal === "whatsapp") {
+    // Garantiza las columnas nuevas (wam_id/estado) antes de leerlas.
+    await ensureSchema("whatsapp").catch(() => {});
     try {
       const rows: any[] = await (prisma as any).$queryRawUnsafe(`
         SELECT direccion, texto, creado_en, estado FROM whatsapp_mensajes
         WHERE wa_id = $1 ORDER BY creado_en ASC LIMIT 200
       `, contacto);
       return rows.map(r => ({ direccion: r.direccion, texto: r.texto, fecha: r.creado_en, estado: r.estado ?? null }));
-    } catch { return []; }
+    } catch {
+      // Fallback: si por lo que sea falla el estado, al menos mostramos el hilo.
+      try {
+        const rows: any[] = await (prisma as any).$queryRawUnsafe(`
+          SELECT direccion, texto, creado_en FROM whatsapp_mensajes
+          WHERE wa_id = $1 ORDER BY creado_en ASC LIMIT 200
+        `, contacto);
+        return rows.map(r => ({ direccion: r.direccion, texto: r.texto, fecha: r.creado_en, estado: null }));
+      } catch { return []; }
+    }
   }
   return [];
 }

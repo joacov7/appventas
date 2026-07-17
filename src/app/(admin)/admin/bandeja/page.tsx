@@ -35,6 +35,7 @@ export default function BandejaPage() {
   const [respuesta, setRespuesta] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [altaCalidad, setAltaCalidad] = useState(false);
   const finRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -78,22 +79,25 @@ export default function BandejaPage() {
     const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
     if (!cloudName || !preset) { alert("Cloudinary no configurado (falta cloud name / upload preset)."); return; }
     const esPdf = file.type === "application/pdf";
+    // En "alta calidad" mandamos la imagen como archivo (documento): WhatsApp no
+    // la recomprime y llega igual que el original.
+    const comoDocumento = esPdf || altaCalidad;
     setSubiendo(true);
     try {
       const form = new FormData();
       form.append("file", file);
       form.append("upload_preset", preset);
-      const resType = esPdf ? "auto" : "image";
+      const resType = comoDocumento ? "auto" : "image";
       const up = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resType}/upload`, { method: "POST", body: form });
       const data = await up.json();
       if (!data.secure_url) { alert("No se pudo subir el archivo."); return; }
       const caption = respuesta.trim();
       const r = await fetch("/api/bandeja", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ canal: sel.canal, contacto: sel.contacto, mediaUrl: data.secure_url, mediaTipo: esPdf ? "document" : "image", texto: caption || undefined }),
+        body: JSON.stringify({ canal: sel.canal, contacto: sel.contacto, mediaUrl: data.secure_url, mediaTipo: comoDocumento ? "document" : "image", texto: caption || undefined }),
       });
       if (r.ok) {
-        const etiqueta = (esPdf ? "📄 Archivo enviado" : "📷 Foto enviada") + (caption ? `: ${caption}` : "");
+        const etiqueta = (comoDocumento ? "📄 Archivo enviado" : "📷 Foto enviada") + (caption ? `: ${caption}` : "");
         setHilo(prev => [...prev, { direccion: "saliente", texto: etiqueta, fecha: new Date().toISOString() }]);
         setRespuesta("");
         setTimeout(() => finRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
@@ -212,7 +216,13 @@ export default function BandejaPage() {
                 <div ref={finRef} />
               </div>
 
-              <div className="p-3 border-t flex items-end gap-2 shrink-0 bg-white">
+              <div className="px-3 pt-2 shrink-0 bg-white flex items-center border-t">
+                <label className="text-[11px] text-gray-500 flex items-center gap-1.5 cursor-pointer" title="Manda la foto como archivo, sin que WhatsApp le baje la calidad">
+                  <input type="checkbox" checked={altaCalidad} onChange={e => setAltaCalidad(e.target.checked)} className="accent-indigo-600" />
+                  Enviar fotos en alta calidad (como archivo)
+                </label>
+              </div>
+              <div className="px-3 pb-3 pt-1 flex items-end gap-2 shrink-0 bg-white">
                 <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
                   onChange={e => e.target.files?.[0] && enviarAdjunto(e.target.files[0])} />
                 <button onClick={() => fileRef.current?.click()} disabled={subiendo || enviando}

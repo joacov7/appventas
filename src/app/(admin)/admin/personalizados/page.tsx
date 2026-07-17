@@ -312,8 +312,9 @@ function dibujarMockup(canvas: HTMLCanvasElement, baseImg: HTMLImageElement | nu
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  const W = 900;
-  const H = baseImg ? Math.round((baseImg.height / baseImg.width) * W) : 600;
+  // Resolución alta para que la muestra salga nítida al enviarla/descargarla.
+  const W = 1600;
+  const H = baseImg ? Math.round((baseImg.height / baseImg.width) * W) : Math.round(W * 2 / 3);
   canvas.width = W; canvas.height = H;
 
   ctx.clearRect(0, 0, W, H);

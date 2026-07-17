@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
@@ -54,19 +54,35 @@ const GRUPOS = [
     { href: "/admin/memoria", label: "Memoria", icon: Brain },
   ] },
   { grupo: "Sistema", items: [
+    { href: "/admin/usuarios", label: "Usuarios y roles", icon: Users },
     { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
     { href: "/admin/telegram", label: "Avisos Telegram", icon: Bell },
     { href: "/admin/configuracion", label: "Configuración", icon: Settings },
   ] },
 ];
 
+// Secciones visibles para roles no-admin (debe coincidir con el middleware).
+const PERMISOS_POR_ROL: Record<string, string[]> = {
+  deposito: ["/admin/deposito"],
+};
+
+// Filtra los grupos/ítems del menú según el rol. El admin ve todo.
+function gruposParaRol(rol: string | null) {
+  if (!rol || rol === "admin") return GRUPOS;
+  const permitidas = PERMISOS_POR_ROL[rol] ?? [];
+  return GRUPOS
+    .map(g => ({ ...g, items: g.items.filter(i => permitidas.some(p => i.href === p || i.href.startsWith(p + "/"))) }))
+    .filter(g => g.items.length > 0);
+}
+
 // Lista plana derivada, para resolver la página actual (encabezado móvil).
 const NAV = GRUPOS.flatMap(g => g.items);
 
-function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
+function NavLinks({ pathname, rol, onNavigate }: { pathname: string; rol: string | null; onNavigate?: () => void }) {
+  const grupos = gruposParaRol(rol);
   return (
     <nav className="flex-1 p-3 overflow-y-auto">
-      {GRUPOS.map(({ grupo, items }) => (
+      {grupos.map(({ grupo, items }) => (
         <div key={grupo} className="mb-3">
           <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider px-3 mb-1">{grupo}</p>
           <div className="space-y-0.5">
@@ -98,6 +114,11 @@ function NavLinks({ pathname, onNavigate }: { pathname: string; onNavigate?: () 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [rol, setRol] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me").then(r => r.json()).then(d => setRol(d.rol ?? null)).catch(() => {});
+  }, []);
 
   const currentPage = NAV.find(n => n.href === pathname || (n.href !== "/admin" && pathname.startsWith(n.href)));
 
@@ -111,7 +132,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             Regionales por Mayor Admin
           </div>
         </div>
-        <NavLinks pathname={pathname} />
+        <NavLinks pathname={pathname} rol={rol} />
         <div className="p-4 border-t shrink-0">
           <form action="/api/auth/admin-logout" method="POST">
             <button
@@ -148,7 +169,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <X size={20} />
           </button>
         </div>
-        <NavLinks pathname={pathname} onNavigate={() => setOpen(false)} />
+        <NavLinks pathname={pathname} rol={rol} onNavigate={() => setOpen(false)} />
         <div className="p-4 border-t shrink-0">
           <form action="/api/auth/admin-logout" method="POST">
             <button

@@ -1,13 +1,13 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { isAdmin } from "@/lib/admin-auth";
+import { tieneRol } from "@/lib/admin-auth";
 import {
   getPreparacion, iniciarPreparacion, actualizarItem, cerrarPreparacion, marcarDespachado,
 } from "@/lib/services/deposito.service";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ orderId: string }> }) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  if (!(await tieneRol("admin", "deposito"))) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const { orderId } = await params;
   const p = await getPreparacion(orderId);
   if (!p) return NextResponse.json({ error: "Pedido no encontrado" }, { status: 404 });
@@ -15,7 +15,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ ord
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ orderId: string }> }) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  if (!(await tieneRol("admin", "deposito"))) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const { orderId } = await params;
   const body = await req.json();
   try {

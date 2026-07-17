@@ -28,7 +28,8 @@ type Ambito =
   | "agentes"
   | "memoria"
   | "deposito"
-  | "ordenes";
+  | "ordenes"
+  | "usuarios";
 
 // Cada entrada es una sentencia DDL idempotente. Se ejecutan en orden para
 // respetar dependencias (una tabla referenciada antes de la que la referencia).
@@ -475,6 +476,19 @@ const DDL: Record<Ambito, string[]> = {
       subtotal DECIMAL(10,2) NOT NULL
     )`,
     `CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items("orderId")`,
+  ],
+
+  // ─── Usuarios del panel (multiusuario + roles) ───────────────────────────
+  usuarios: [
+    `CREATE TABLE IF NOT EXISTS usuarios_panel (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      nombre TEXT,
+      password_hash TEXT NOT NULL,
+      rol TEXT NOT NULL DEFAULT 'deposito',
+      activo BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
   ],
 };
 

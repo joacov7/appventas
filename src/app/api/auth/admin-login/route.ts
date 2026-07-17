@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { signAdminToken } from "@/lib/admin-token";
+import { signSessionToken } from "@/lib/admin-token";
+import { buscarPorEmail } from "@/lib/services/usuarios.service";
+import { verifyPassword } from "@/lib/password";
 
 // Rate limit simple en memoria: 5 intentos fallidos por IP cada 15 minutos.
 // (Best-effort en serverless: cada instancia tiene su contador, pero corta
@@ -47,21 +49,36 @@ export async function POST(req: NextRequest) {
   const adminPassword = process.env.ADMIN_PASSWORD;
   const adminSecret = process.env.ADMIN_SECRET;
 
-  if (!adminEmail || !adminPassword || !adminSecret) {
+  if (!adminSecret) {
     return NextResponse.json({ error: "Admin no configurado" }, { status: 500 });
   }
 
-  const emailOk = timingSafeEqual(String(email ?? ""), adminEmail);
-  const passOk = timingSafeEqual(String(password ?? ""), adminPassword);
-  if (!emailOk || !passOk) {
+  // 1) Súper-admin por variables de entorno (acceso total, no se puede borrar).
+  let sub: string | null = null;
+  let rol: string | null = null;
+  if (adminEmail && adminPassword &&
+      timingSafeEqual(String(email ?? ""), adminEmail) &&
+      timingSafeEqual(String(password ?? ""), adminPassword)) {
+    sub = "admin"; rol = "admin";
+  } else {
+    // 2) Usuarios del panel (tabla), con contraseña hasheada.
+    try {
+      const u = await buscarPorEmail(String(email ?? ""));
+      if (u && u.activo && await verifyPassword(String(password ?? ""), u.password_hash)) {
+        sub = u.email; rol = u.rol;
+      }
+    } catch { /* si falla la DB, cae en credenciales incorrectas */ }
+  }
+
+  if (!sub || !rol) {
     recordFailure(ip);
     return NextResponse.json({ error: "Credenciales incorrectas" }, { status: 401 });
   }
 
   attempts.delete(ip);
 
-  const token = await signAdminToken(adminSecret);
-  const response = NextResponse.json({ ok: true });
+  const token = await signSessionToken(adminSecret, sub, rol);
+  const response = NextResponse.json({ ok: true, rol });
   response.cookies.set("admin-token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

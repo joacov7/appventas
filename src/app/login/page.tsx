@@ -24,7 +24,8 @@ export default function LoginPage() {
     });
 
     if (res.ok) {
-      router.push("/admin");
+      const data = await res.json().catch(() => ({}));
+      router.push(data.rol === "deposito" ? "/admin/deposito" : "/admin");
     } else {
       const data = await res.json();
       setError(data.error ?? "Credenciales incorrectas");

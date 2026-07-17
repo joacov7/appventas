@@ -1,11 +1,11 @@
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { isAdmin } from "@/lib/admin-auth";
+import { tieneRol } from "@/lib/admin-auth";
 import { pedidosParaArmar } from "@/lib/services/deposito.service";
 
 export async function GET(req: NextRequest) {
-  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  if (!(await tieneRol("admin", "deposito"))) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const f = req.nextUrl.searchParams.get("filtro");
   const filtro = f === "despachados" || f === "todos" ? f : "activos";
   try {

@@ -2,7 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
-import { listarConversaciones, hiloConversacion, responderConversacion, cambiarSegmento, type Canal } from "@/lib/services/bandeja.service";
+import { listarConversaciones, hiloConversacion, responderConversacion, responderMediaConversacion, cambiarSegmento, type Canal } from "@/lib/services/bandeja.service";
 import type { Segmento } from "@/lib/whatsapp-segmento";
 
 const SEGMENTOS: Segmento[] = ["minorista", "mayorista", "empresarial"];
@@ -27,9 +27,16 @@ export async function GET(req: NextRequest) {
 // POST: responde en el canal correspondiente.
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  const { canal, contacto, texto } = await req.json();
-  if (!contacto || !texto) return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
+  const { canal, contacto, texto, mediaUrl, mediaTipo } = await req.json();
+  if (!contacto) return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
   try {
+    // Con adjunto: manda imagen o PDF (texto = pie de foto opcional).
+    if (mediaUrl) {
+      const tipo = mediaTipo === "document" ? "document" : "image";
+      const r = await responderMediaConversacion((canal as Canal) || "whatsapp", contacto, mediaUrl, tipo, texto);
+      return NextResponse.json(r, { status: r.ok ? 200 : 400 });
+    }
+    if (!texto) return NextResponse.json({ error: "Faltan datos" }, { status: 400 });
     const r = await responderConversacion((canal as Canal) || "whatsapp", contacto, texto);
     return NextResponse.json(r, { status: r.ok ? 200 : 400 });
   } catch (e: any) {

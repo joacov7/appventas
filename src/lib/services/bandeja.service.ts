@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { enviarWhatsapp } from "./whatsapp.service";
+import { enviarWhatsapp, enviarWhatsappMedia } from "./whatsapp.service";
 import { type Segmento, setSegmento } from "@/lib/whatsapp-segmento";
 
 // ─── Bandeja de entrada omnicanal ─────────────────────────────────────────────
@@ -108,6 +108,19 @@ export async function responderConversacion(canal: Canal, contacto: string, text
   if (!texto?.trim()) return { ok: false, error: "El mensaje está vacío" };
   if (canal === "whatsapp") {
     const r = await enviarWhatsapp(contacto, texto.trim());
+    return { ok: true, enviado: r.enviado };
+  }
+  return { ok: false, error: `El canal "${canal}" todavía no está conectado.` };
+}
+
+// Responde con un adjunto (imagen o PDF) y texto opcional.
+export async function responderMediaConversacion(
+  canal: Canal, contacto: string, url: string, tipo: "image" | "document", caption?: string
+): Promise<{ ok: boolean; enviado?: boolean; error?: string }> {
+  if (!url) return { ok: false, error: "Falta el archivo" };
+  if (canal === "whatsapp") {
+    const r = await enviarWhatsappMedia(contacto, url, tipo, caption?.trim() || undefined);
+    if (!r.ok) return { ok: false, error: r.error };
     return { ok: true, enviado: r.enviado };
   }
   return { ok: false, error: `El canal "${canal}" todavía no está conectado.` };

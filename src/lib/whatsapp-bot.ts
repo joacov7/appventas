@@ -112,6 +112,37 @@ export async function sendWhatsAppMessage(to: string, text: string): Promise<{ o
   }
 }
 
+// Envía una imagen o documento (PDF) por su URL pública, con texto opcional.
+export async function sendWhatsAppMedia(
+  to: string, url: string, tipo: "image" | "document", caption?: string
+): Promise<{ ok: boolean; error?: string }> {
+  const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
+  if (!accessToken || !phoneNumberId) {
+    await registrarError(to, "WhatsApp no configurado: falta Access Token o Phone Number ID en el admin.");
+    return { ok: false, error: "no configurado" };
+  }
+  const destino = normalizarDestino(to);
+  const media: any = { link: url };
+  if (caption) media.caption = caption.slice(0, 1024);
+  if (tipo === "document") media.filename = (url.split("/").pop() || "archivo").slice(0, 60);
+  try {
+    const res = await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", to: destino, type: tipo, [tipo]: media }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      await registrarError(to, `Error al enviar ${tipo} (HTTP ${res.status}): ${err}`);
+      return { ok: false, error: err };
+    }
+    return { ok: true };
+  } catch (e: any) {
+    await registrarError(to, `Error de conexión al enviar ${tipo}: ${e?.message ?? "desconocido"}`);
+    return { ok: false, error: e?.message };
+  }
+}
+
 // ── Log messages to DB ───────────────────────────────────────────────────────
 
 async function ensureTable() {

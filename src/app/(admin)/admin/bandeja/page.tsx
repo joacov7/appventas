@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Inbox, RefreshCw, Send, MessageCircle, Instagram, Facebook, ArrowLeft } from "lucide-react";
+import { Inbox, RefreshCw, Send, MessageCircle, Instagram, Facebook, ArrowLeft, Paperclip } from "lucide-react";
 
 type Canal = "whatsapp" | "instagram" | "facebook";
 type Segmento = "minorista" | "mayorista" | "empresarial";
@@ -34,7 +34,9 @@ export default function BandejaPage() {
   const [cargandoHilo, setCargandoHilo] = useState(false);
   const [respuesta, setRespuesta] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
   const finRef = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const loadConvs = useCallback(async () => {
     setLoading(true);
@@ -67,6 +69,39 @@ export default function BandejaPage() {
     } else {
       alert((await r.json()).error ?? "No se pudo enviar");
     }
+  }
+
+  // Sube una foto o PDF a Cloudinary y lo manda al cliente (texto = pie opcional).
+  async function enviarAdjunto(file: File) {
+    if (!sel) return;
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    if (!cloudName || !preset) { alert("Cloudinary no configurado (falta cloud name / upload preset)."); return; }
+    const esPdf = file.type === "application/pdf";
+    setSubiendo(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("upload_preset", preset);
+      const resType = esPdf ? "auto" : "image";
+      const up = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/${resType}/upload`, { method: "POST", body: form });
+      const data = await up.json();
+      if (!data.secure_url) { alert("No se pudo subir el archivo."); return; }
+      const caption = respuesta.trim();
+      const r = await fetch("/api/bandeja", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canal: sel.canal, contacto: sel.contacto, mediaUrl: data.secure_url, mediaTipo: esPdf ? "document" : "image", texto: caption || undefined }),
+      });
+      if (r.ok) {
+        const etiqueta = (esPdf ? "📄 Archivo enviado" : "📷 Foto enviada") + (caption ? `: ${caption}` : "");
+        setHilo(prev => [...prev, { direccion: "saliente", texto: etiqueta, fecha: new Date().toISOString() }]);
+        setRespuesta("");
+        setTimeout(() => finRef.current?.scrollIntoView({ behavior: "smooth" }), 50);
+      } else {
+        alert((await r.json()).error ?? "No se pudo enviar");
+      }
+    } catch { alert("Error al enviar el adjunto"); }
+    finally { setSubiendo(false); if (fileRef.current) fileRef.current.value = ""; }
   }
 
   async function cambiarSegmento(seg: Segmento) {
@@ -178,9 +213,16 @@ export default function BandejaPage() {
               </div>
 
               <div className="p-3 border-t flex items-end gap-2 shrink-0 bg-white">
+                <input ref={fileRef} type="file" accept="image/*,application/pdf" className="hidden"
+                  onChange={e => e.target.files?.[0] && enviarAdjunto(e.target.files[0])} />
+                <button onClick={() => fileRef.current?.click()} disabled={subiendo || enviando}
+                  title="Enviar foto o PDF"
+                  className="text-gray-400 hover:text-indigo-600 disabled:opacity-50 p-2.5 rounded-xl shrink-0">
+                  {subiendo ? <RefreshCw size={16} className="animate-spin" /> : <Paperclip size={16} />}
+                </button>
                 <textarea value={respuesta} onChange={e => setRespuesta(e.target.value)} rows={1}
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); enviar(); } }}
-                  placeholder="Escribí una respuesta..."
+                  placeholder={subiendo ? "Enviando archivo..." : "Escribí una respuesta (o el pie de la foto)..."}
                   className="flex-1 text-sm border rounded-xl px-3 py-2 outline-none resize-none max-h-24" />
                 <button onClick={enviar} disabled={enviando || !respuesta.trim()}
                   className="bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white p-2.5 rounded-xl shrink-0">

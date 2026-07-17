@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { sendWhatsAppMessage } from "@/lib/whatsapp-bot";
+import { sendWhatsAppMessage, sendWhatsAppMedia } from "@/lib/whatsapp-bot";
 
 export interface ConversacionPendiente {
   wa_id: string;
@@ -61,6 +61,26 @@ export async function enviarWhatsapp(to: string, texto: string): Promise<{ ok: b
     );
   } catch { /* no crítico */ }
   // Esta vía es respuesta de un humano/agente → el bot se calla para ese contacto.
+  try {
+    const { marcarAtendidoHumano } = await import("@/lib/whatsapp-segmento");
+    await marcarAtendidoHumano(to);
+  } catch { /* no crítico */ }
+  const conectado = !!process.env.WHATSAPP_ACCESS_TOKEN && !!process.env.WHATSAPP_PHONE_NUMBER_ID;
+  return { ok: true, enviado: conectado };
+}
+
+// Envía una imagen o PDF (por URL) y lo registra en el historial.
+export async function enviarWhatsappMedia(
+  to: string, url: string, tipo: "image" | "document", caption?: string
+): Promise<{ ok: boolean; enviado: boolean; error?: string }> {
+  const r = await sendWhatsAppMedia(to, url, tipo, caption);
+  if (!r.ok) return { ok: false, enviado: false, error: r.error };
+  const etiqueta = (tipo === "document" ? "📄 Archivo enviado" : "📷 Foto enviada") + (caption ? `: ${caption}` : "");
+  try {
+    await (prisma as any).$executeRawUnsafe(
+      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'saliente', $2)`, to, etiqueta
+    );
+  } catch { /* no crítico */ }
   try {
     const { marcarAtendidoHumano } = await import("@/lib/whatsapp-segmento");
     await marcarAtendidoHumano(to);

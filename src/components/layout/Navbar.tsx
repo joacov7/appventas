@@ -53,6 +53,7 @@ export function Navbar() {
             <Link href="/" className="hover:text-gray-900 transition-colors">Inicio</Link>
             <Link href="/productos" className="hover:text-gray-900 transition-colors">Catálogo</Link>
             <Link href="/virolas" className="hover:text-gray-900 transition-colors font-medium text-emerald-700">Personalizá tu virola</Link>
+            <Link href="/portal" className="hover:text-gray-900 transition-colors">Acceso mayoristas</Link>
           </div>
 
           {/* Actions */}
@@ -86,6 +87,7 @@ export function Navbar() {
             <Link href="/" onClick={() => setMenuOpen(false)} className="block py-2 text-sm text-gray-700 hover:text-gray-900">Inicio</Link>
             <Link href="/productos" onClick={() => setMenuOpen(false)} className="block py-2 text-sm text-gray-700 hover:text-gray-900">Catálogo</Link>
             <Link href="/virolas" onClick={() => setMenuOpen(false)} className="block py-2 text-sm font-medium text-emerald-700">Personalizá tu virola</Link>
+            <Link href="/portal" onClick={() => setMenuOpen(false)} className="block py-2 text-sm text-gray-700 hover:text-gray-900">Acceso mayoristas</Link>
           </div>
         )}
       </header>

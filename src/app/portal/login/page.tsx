@@ -48,9 +48,13 @@ export default function PortalLogin() {
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
         </form>
-        <p className="text-sm text-center text-gray-500">
-          ¿No tenés cuenta? <Link href="/portal/registro" className="text-emerald-600 font-medium hover:underline">Registrate</Link>
-        </p>
+        <div className="pt-2 border-t text-center space-y-2">
+          <p className="text-sm text-gray-500">¿Todavía no tenés cuenta mayorista?</p>
+          <Link href="/portal/registro"
+            className="block w-full border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-medium py-2.5 rounded-xl">
+            Crear cuenta mayorista
+          </Link>
+        </div>
       </div>
     </div>
   );

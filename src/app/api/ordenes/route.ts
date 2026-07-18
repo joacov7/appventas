@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
 import { ensureSchema } from "@/lib/db/schema";
+import { getClienteSesion } from "@/lib/cliente-auth";
 
 async function getTiersFromDB(): Promise<{ min_qty: number; descuento_pct: number }[]> {
   try {
@@ -57,6 +58,21 @@ export async function POST(req: NextRequest) {
     });
 
     const esMayorista = body.canal === "mayorista";
+
+    // Pedido mayorista: solo clientes registrados y aprobados. El email se toma
+    // de la sesión (no del formulario), así el pedido queda ligado a la cuenta.
+    let emailPedido = body.guestEmail ?? null;
+    if (esMayorista) {
+      const ses = await getClienteSesion();
+      if (!ses) {
+        return NextResponse.json(
+          { error: "Necesitás iniciar sesión como mayorista para hacer un pedido." },
+          { status: 401 }
+        );
+      }
+      emailPedido = ses.email;
+    }
+
     for (const item of body.items) {
       const variant = variants.find((v) => v.id === item.variantId);
       if (!variant) {
@@ -93,7 +109,7 @@ export async function POST(req: NextRequest) {
     const order = await prisma.order.create({
       data: {
         userId: session?.user?.id ?? null,
-        guestEmail: body.guestEmail ?? null,
+        guestEmail: emailPedido,
         shippingAddress: body.shippingAddress,
         notes: body.notes,
         subtotal: subtotal.toString(),

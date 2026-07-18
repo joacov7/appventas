@@ -67,9 +67,19 @@ function CheckoutContent() {
   const shippingCost = selectedShipping ? Number(selectedShipping.price) : 0;
   const total = subtotal - couponDiscount - refDiscount - tierDiscount + shippingCost;
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  // En modo mayorista, exigimos cuenta de cliente (logueado y aprobado).
+  const [clienteEmail, setClienteEmail] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!modoMayorista) return;
+    fetch("/api/portal/me").then(r => r.json()).then(d => setClienteEmail(d.email ?? null)).catch(() => setClienteEmail(null));
+  }, [modoMayorista]);
+  useEffect(() => {
+    if (clienteEmail) setValue("email", clienteEmail);
+  }, [clienteEmail, setValue]);
 
   useEffect(() => {
     fetch("/api/envios").then((r) => r.json()).then((opts: ShippingOption[]) => {
@@ -228,9 +238,30 @@ function CheckoutContent() {
     );
   }
 
+  // Modo mayorista sin sesión: pedimos ingresar/registrarse antes de pedir.
+  if (modoMayorista && clienteEmail === null) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <h1 className="text-2xl font-bold text-gray-900">Ingresá para hacer tu pedido</h1>
+        <p className="text-sm text-gray-500">Los pedidos son exclusivos para clientes mayoristas registrados. Iniciá sesión o creá tu cuenta para continuar.</p>
+        <div className="flex flex-col gap-2 pt-2">
+          <a href="/portal/login" className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl">Iniciar sesión</a>
+          <a href="/portal/registro" className="border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-medium py-2.5 rounded-xl">Crear cuenta mayorista</a>
+        </div>
+        <p className="text-xs text-gray-400">Tu carrito se mantiene mientras ingresás.</p>
+      </div>
+    );
+  }
+  if (modoMayorista && clienteEmail === undefined) {
+    return <div className="max-w-md mx-auto px-4 py-16 text-center text-sm text-gray-400">Cargando…</div>;
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
       <h1 className="text-2xl font-bold text-gray-900 mb-2">{modoMayorista ? "Solicitar pedido mayorista" : "Finalizar compra"}</h1>
+      {modoMayorista && clienteEmail && (
+        <p className="text-xs text-gray-400 mb-1">Comprando como <b>{clienteEmail}</b></p>
+      )}
       {modoMayorista && (
         <p className="text-sm text-gray-500 mb-6">Completá tus datos y enviá el pedido. Te contactamos para coordinar el pago y el envío. 🧉</p>
       )}

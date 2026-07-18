@@ -29,7 +29,8 @@ type Ambito =
   | "memoria"
   | "deposito"
   | "ordenes"
-  | "usuarios";
+  | "usuarios"
+  | "clientes";
 
 // Cada entrada es una sentencia DDL idempotente. Se ejecutan en orden para
 // respetar dependencias (una tabla referenciada antes de la que la referencia).
@@ -490,6 +491,21 @@ const DDL: Record<Ambito, string[]> = {
       nombre TEXT,
       password_hash TEXT NOT NULL,
       rol TEXT NOT NULL DEFAULT 'deposito',
+      activo BOOLEAN NOT NULL DEFAULT TRUE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+  ],
+
+  // ─── Clientes mayoristas (portal de autogestión) ─────────────────────────
+  clientes: [
+    `CREATE TABLE IF NOT EXISTS clientes_mayoristas (
+      id SERIAL PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      nombre TEXT,
+      empresa TEXT,
+      telefono TEXT,
+      aprobado BOOLEAN NOT NULL DEFAULT FALSE,
       activo BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,

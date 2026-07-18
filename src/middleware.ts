@@ -27,9 +27,21 @@ export async function middleware(request: NextRequest) {
     }
   }
 
+  // Portal del cliente mayorista: login/registro son públicos; el resto exige sesión de cliente.
+  if (pathname.startsWith("/portal")) {
+    const publicas = pathname === "/portal/login" || pathname === "/portal/registro";
+    if (!publicas) {
+      const token = request.cookies.get("cliente-token")?.value;
+      const sesion = await verificarSesion(token, process.env.ADMIN_SECRET);
+      if (!sesion || sesion.rol !== "cliente") {
+        return NextResponse.redirect(new URL("/portal/login", request.url));
+      }
+    }
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*"],
+  matcher: ["/admin/:path*", "/portal/:path*"],
 };

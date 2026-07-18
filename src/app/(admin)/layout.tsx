@@ -29,6 +29,7 @@ const GRUPOS = [
     { href: "/admin/deposito", label: "Depósito", icon: PackageCheck },
     { href: "/admin/ventas", label: "Ventas manuales", icon: Receipt },
     { href: "/admin/mayorista", label: "Mayorista", icon: Layers },
+    { href: "/admin/clientes", label: "Clientes mayoristas", icon: Store },
     { href: "/admin/cupones", label: "Cupones", icon: Tag },
     { href: "/admin/envios", label: "Envíos", icon: Truck },
   ] },

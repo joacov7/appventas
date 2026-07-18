@@ -1,16 +1,26 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { Plus, Pencil, Upload } from "lucide-react";
+import { Plus, Pencil, Upload, Search } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { DeleteButton } from "./DeleteButton";
 import { HerramientasCatalogo } from "./HerramientasCatalogo";
 
-async function getProducts() {
+async function getProducts(q?: string) {
   try {
     const { prisma } = await import("@/lib/prisma");
+    const termino = q?.trim();
     return await prisma.product.findMany({
-      where: { active: true },
+      where: {
+        active: true,
+        ...(termino ? {
+          OR: [
+            { name: { contains: termino, mode: "insensitive" } },
+            { slug: { contains: termino, mode: "insensitive" } },
+            { variants: { some: { sku: { contains: termino, mode: "insensitive" } } } },
+          ],
+        } : {}),
+      },
       include: {
         category: { select: { name: true } },
         variants: { where: { active: true } },
@@ -22,8 +32,9 @@ async function getProducts() {
   }
 }
 
-export default async function ProductosAdminPage() {
-  const products = await getProducts();
+export default async function ProductosAdminPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+  const { q } = await searchParams;
+  const products = await getProducts(q);
 
   return (
     <div>
@@ -46,6 +57,18 @@ export default async function ProductosAdminPage() {
       </div>
 
       <HerramientasCatalogo />
+
+      {/* Buscador por nombre o código (SKU) */}
+      <form method="GET" className="mb-4 flex items-center gap-2">
+        <div className="relative flex-1 max-w-md">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input name="q" defaultValue={q ?? ""} placeholder="Buscar por nombre o código…"
+            className="w-full text-sm border border-gray-200 rounded-xl pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-emerald-400" />
+        </div>
+        <button type="submit" className="text-sm bg-gray-800 hover:bg-gray-900 text-white font-medium px-4 py-2 rounded-xl">Buscar</button>
+        {q && <Link href="/admin/productos" className="text-sm text-gray-400 hover:text-gray-700">Limpiar</Link>}
+      </form>
+      {q && <p className="text-xs text-gray-500 mb-2">{products.length} resultado(s) para “{q}”.</p>}
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
@@ -106,7 +129,9 @@ export default async function ProductosAdminPage() {
         </div>
         {products.length === 0 && (
           <div className="text-center py-12 text-gray-400">
-            No hay productos. <Link href="/admin/productos/nuevo" className="text-emerald-600 hover:underline">Creá el primero</Link>.
+            {q
+              ? <>No se encontraron productos para “{q}”. <Link href="/admin/productos" className="text-emerald-600 hover:underline">Ver todos</Link>.</>
+              : <>No hay productos. <Link href="/admin/productos/nuevo" className="text-emerald-600 hover:underline">Creá el primero</Link>.</>}
           </div>
         )}
       </div>

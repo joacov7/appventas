@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Inbox, RefreshCw, Send, MessageCircle, Instagram, Facebook, ArrowLeft, Paperclip } from "lucide-react";
+import { Inbox, RefreshCw, Send, MessageCircle, Instagram, Facebook, ArrowLeft, Paperclip, UserPlus } from "lucide-react";
 
 type Canal = "whatsapp" | "instagram" | "facebook";
 type Segmento = "minorista" | "mayorista" | "empresarial";
@@ -47,6 +47,11 @@ export default function BandejaPage() {
   const [altaCalidad, setAltaCalidad] = useState(false);
   const finRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Agendar el contacto como prospecto en Captación.
+  const [agendarOpen, setAgendarOpen] = useState(false);
+  const [agenda, setAgenda] = useState({ nombre: "", rubro: "", email: "", provincia: "", notas: "" });
+  const [agendando, setAgendando] = useState(false);
+  const [agendaMsg, setAgendaMsg] = useState("");
 
   const loadConvs = useCallback(async () => {
     setLoading(true);
@@ -134,6 +139,23 @@ export default function BandejaPage() {
       }
     } catch { alert("Error al enviar el adjunto"); }
     finally { setSubiendo(false); if (fileRef.current) fileRef.current.value = ""; }
+  }
+
+  async function agendarProspecto() {
+    if (!sel || !agenda.nombre.trim()) { setAgendaMsg("Poné al menos el nombre"); return; }
+    setAgendando(true); setAgendaMsg("");
+    const r = await fetch("/api/bandeja/agendar", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contacto: sel.contacto, ...agenda }),
+    });
+    setAgendando(false);
+    if (r.ok) {
+      setAgendaMsg("✅ Agendado en Captación");
+      setAgenda({ nombre: "", rubro: "", email: "", provincia: "", notas: "" });
+      setTimeout(() => { setAgendarOpen(false); setAgendaMsg(""); }, 1200);
+    } else {
+      setAgendaMsg((await r.json().catch(() => ({}))).error ?? "No se pudo agendar");
+    }
   }
 
   async function cambiarSegmento(seg: Segmento) {
@@ -225,7 +247,38 @@ export default function BandejaPage() {
                     <option value="empresarial">🏢 Empresa</option>
                   </select>
                 )}
+                <button onClick={() => { setAgendarOpen(o => !o); setAgendaMsg(""); }}
+                  title="Agendar en Captación"
+                  className={`shrink-0 flex items-center gap-1 text-xs px-2 py-1 rounded-lg border ${agendarOpen ? "bg-emerald-50 border-emerald-300 text-emerald-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"} ${sel.canal === "whatsapp" ? "" : "ml-auto"}`}>
+                  <UserPlus size={13} /> Agendar
+                </button>
               </div>
+
+              {/* Formulario para agendar el contacto como prospecto */}
+              {agendarOpen && (
+                <div className="p-3 border-b bg-emerald-50/40 shrink-0 space-y-2">
+                  <p className="text-xs text-gray-500">Guardá este contacto en <b>Captación</b> (teléfono: {sel.contacto}).</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input value={agenda.nombre} onChange={e => setAgenda({ ...agenda, nombre: e.target.value })}
+                      placeholder="Nombre / comercio *" className="text-sm border rounded-lg px-2 py-1.5 outline-none" />
+                    <input value={agenda.rubro} onChange={e => setAgenda({ ...agenda, rubro: e.target.value })}
+                      placeholder="Rubro (ej: kiosco)" className="text-sm border rounded-lg px-2 py-1.5 outline-none" />
+                    <input value={agenda.email} onChange={e => setAgenda({ ...agenda, email: e.target.value })}
+                      placeholder="Email" className="text-sm border rounded-lg px-2 py-1.5 outline-none" />
+                    <input value={agenda.provincia} onChange={e => setAgenda({ ...agenda, provincia: e.target.value })}
+                      placeholder="Provincia / ciudad" className="text-sm border rounded-lg px-2 py-1.5 outline-none" />
+                  </div>
+                  <input value={agenda.notas} onChange={e => setAgenda({ ...agenda, notas: e.target.value })}
+                    placeholder="Notas (opcional)" className="w-full text-sm border rounded-lg px-2 py-1.5 outline-none" />
+                  <div className="flex items-center gap-2">
+                    <button onClick={agendarProspecto} disabled={agendando}
+                      className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium px-3 py-1.5 rounded-xl">
+                      {agendando ? "Guardando..." : "Agendar en Captación"}
+                    </button>
+                    {agendaMsg && <span className="text-xs text-gray-600">{agendaMsg}</span>}
+                  </div>
+                </div>
+              )}
 
               <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-2 bg-gray-50">
                 {cargandoHilo ? (

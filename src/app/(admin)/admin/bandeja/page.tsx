@@ -141,20 +141,24 @@ export default function BandejaPage() {
     finally { setSubiendo(false); if (fileRef.current) fileRef.current.value = ""; }
   }
 
-  async function agendarProspecto() {
+  async function agendarProspecto(forzar = false) {
     if (!sel || !agenda.nombre.trim()) { setAgendaMsg("Poné al menos el nombre"); return; }
     setAgendando(true); setAgendaMsg("");
     const r = await fetch("/api/bandeja/agendar", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contacto: sel.contacto, ...agenda }),
+      body: JSON.stringify({ contacto: sel.contacto, ...agenda, forzar }),
     });
     setAgendando(false);
+    const d = await r.json().catch(() => ({}));
     if (r.ok) {
       setAgendaMsg("✅ Agendado en Captación");
       setAgenda({ nombre: "", rubro: "", email: "", provincia: "", notas: "" });
       setTimeout(() => { setAgendarOpen(false); setAgendaMsg(""); }, 1200);
+    } else if (d.yaExiste) {
+      if (confirm(`${d.error}\n\n¿Agendarlo igual como un registro nuevo?`)) agendarProspecto(true);
+      else setAgendaMsg("Cancelado: ya estaba agendado.");
     } else {
-      setAgendaMsg((await r.json().catch(() => ({}))).error ?? "No se pudo agendar");
+      setAgendaMsg(d.error ?? "No se pudo agendar");
     }
   }
 
@@ -271,7 +275,7 @@ export default function BandejaPage() {
                   <input value={agenda.notas} onChange={e => setAgenda({ ...agenda, notas: e.target.value })}
                     placeholder="Notas (opcional)" className="w-full text-sm border rounded-lg px-2 py-1.5 outline-none" />
                   <div className="flex items-center gap-2">
-                    <button onClick={agendarProspecto} disabled={agendando}
+                    <button onClick={() => agendarProspecto()} disabled={agendando}
                       className="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium px-3 py-1.5 rounded-xl">
                       {agendando ? "Guardando..." : "Agendar en Captación"}
                     </button>

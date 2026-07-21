@@ -26,6 +26,7 @@ const GRUPOS = [
   { grupo: "Ventas", items: [
     { href: "/admin/cotizador", label: "Cotizador", icon: Calculator },
     { href: "/admin/calculadora-ml", label: "Calculadora ML", icon: Calculator },
+    { href: "/admin/titulos-ml", label: "Títulos ML (IA)", icon: Megaphone },
     { href: "/admin/ordenes", label: "Órdenes", icon: ShoppingBag },
     { href: "/admin/deposito", label: "Depósito", icon: PackageCheck },
     { href: "/admin/ventas", label: "Ventas manuales", icon: Receipt },

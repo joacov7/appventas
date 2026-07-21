@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { Calculator, Info } from "lucide-react";
+import { ProductoPickerML } from "@/components/admin/ProductoPickerML";
 
 const money = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(Math.round(n || 0));
 
@@ -67,6 +68,10 @@ export default function CalculadoraMLPage() {
       <div className="grid md:grid-cols-2 gap-5">
         {/* Entradas */}
         <div className="bg-white rounded-2xl border border-gray-100 p-5 space-y-4">
+          <div>
+            <label className="text-xs text-gray-500">Traer del catálogo (opcional)</label>
+            <div className="mt-1"><ProductoPickerML onSelect={p => setCosto(p.costo)} /></div>
+          </div>
           <Campo label="Tu costo del producto" value={costo} onChange={setCosto} prefix="$" />
           {modo === "precio"
             ? <Campo label="Ganancia que querés (%)" value={margen} onChange={setMargen} suffix="%" />

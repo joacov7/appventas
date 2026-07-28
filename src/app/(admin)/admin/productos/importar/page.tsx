@@ -31,13 +31,15 @@ function parseCSV(texto: string): string[][] {
 export default function ImportarProductosPage() {
   const [filas, setFilas] = useState<Fila[]>([]);
   const [nombreArchivo, setNombreArchivo] = useState("");
+  const [rawText, setRawText] = useState("");
+  const [tipo, setTipo] = useState<"venta" | "costo">("venta");
   const [canal, setCanal] = useState<"minorista" | "mayorista">("mayorista");
   const [importando, setImportando] = useState(false);
   const [progreso, setProgreso] = useState(0);
   const [resultado, setResultado] = useState<{ creados: number; actualizados: number; omitidos: number; errores: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function procesarTexto(texto: string) {
+  function procesarTexto(texto: string, tipoActual: "venta" | "costo" = tipo) {
     setError(null); setResultado(null);
     const rows = parseCSV(texto);
     if (rows.length < 2) { setError("El archivo no tiene datos suficientes."); return; }
@@ -45,7 +47,11 @@ export default function ImportarProductosPage() {
     // Detectar columnas por encabezado.
     const header = rows[0].map(h => h.toLowerCase().trim());
     let idxNombre = header.findIndex(h => h.includes("nombre") || h.includes("producto") || h.includes("descrip"));
-    let idxPrecio = header.findIndex(h => h.includes("venta") || h.includes("precio") || h.includes("$"));
+    // En modo costo priorizamos la columna "costo"; si no, caemos a precio.
+    let idxPrecio = tipoActual === "costo"
+      ? header.findIndex(h => h.includes("costo") || h.includes("coste"))
+      : header.findIndex(h => h.includes("venta") || h.includes("precio") || h.includes("$"));
+    if (idxPrecio === -1) idxPrecio = header.findIndex(h => h.includes("precio") || h.includes("costo") || h.includes("$"));
     let idxCodigo = header.findIndex(h => h.includes("codigo") || h.includes("código") || h.includes("cod") || h.includes("sku"));
     // Si no hay encabezado de código, usamos la primera columna.
     if (idxCodigo === -1) idxCodigo = 0;
@@ -65,8 +71,13 @@ export default function ImportarProductosPage() {
   function onFile(file: File) {
     setNombreArchivo(file.name);
     const reader = new FileReader();
-    reader.onload = () => procesarTexto(String(reader.result));
+    reader.onload = () => { const t = String(reader.result); setRawText(t); procesarTexto(t); };
     reader.readAsText(file, "utf-8");
+  }
+
+  function cambiarTipo(t: "venta" | "costo") {
+    setTipo(t);
+    if (rawText) procesarTexto(rawText, t);
   }
 
   async function importar() {
@@ -78,7 +89,7 @@ export default function ImportarProductosPage() {
       const lote = filas.slice(i, i + CHUNK);
       try {
         const r = await fetch("/api/productos/importar", {
-          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filas: lote, canal }),
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ filas: lote, canal, tipo }),
         });
         const d = await r.json();
         if (r.ok) {
@@ -121,8 +132,22 @@ export default function ImportarProductosPage() {
 
       {filas.length > 0 && !resultado && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-sm text-gray-700 mb-3">Detecté <b>{filas.length} productos</b>. Vista previa:</p>
+          <p className="text-sm text-gray-700 mb-3">Detecté <b>{filas.length} {tipo === "costo" ? "filas" : "productos"}</b>. Vista previa:</p>
 
+          <div className="mb-3">
+            <label className="text-xs text-gray-500">¿Qué importás?</label>
+            <div className="grid grid-cols-2 gap-2 mt-1 max-w-xs">
+              {(["venta", "costo"] as const).map(t => (
+                <button key={t} onClick={() => cambiarTipo(t)}
+                  className={`text-sm py-2 rounded-lg border ${tipo === t ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600"}`}>
+                  {t === "venta" ? "Precio de venta" : "Costos"}
+                </button>
+              ))}
+            </div>
+            {tipo === "costo" && <p className="text-[11px] text-gray-400 mt-1">Los costos se aplican a productos que ya existen (por código). No crea productos nuevos.</p>}
+          </div>
+
+          {tipo === "venta" && (
           <div className="mb-3">
             <label className="text-xs text-gray-500">El precio de la planilla es:</label>
             <div className="grid grid-cols-2 gap-2 mt-1 max-w-xs">
@@ -134,11 +159,12 @@ export default function ImportarProductosPage() {
               ))}
             </div>
           </div>
+          )}
 
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead><tr className="text-left text-xs text-gray-400 border-b">
-                <th className="py-1 pr-3">Código</th><th className="py-1 pr-3">Nombre</th><th className="py-1 text-right">Precio</th>
+                <th className="py-1 pr-3">Código</th><th className="py-1 pr-3">Nombre</th><th className="py-1 text-right">{tipo === "costo" ? "Costo" : "Precio"}</th>
               </tr></thead>
               <tbody>
                 {filas.slice(0, 8).map((f, i) => (
@@ -155,7 +181,7 @@ export default function ImportarProductosPage() {
 
           <button onClick={importar} disabled={importando}
             className="w-full mt-4 flex items-center justify-center gap-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-3 rounded-xl">
-            {importando ? `Importando... ${progreso}/${filas.length}` : `Importar ${filas.length} productos`}
+            {importando ? `Importando... ${progreso}/${filas.length}` : (tipo === "costo" ? `Importar costos de ${filas.length} filas` : `Importar ${filas.length} productos`)}
           </button>
           {importando && (
             <div className="w-full h-2 bg-gray-100 rounded-full mt-3 overflow-hidden">

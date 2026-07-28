@@ -14,9 +14,10 @@ interface FilaImport { codigo?: string | number; nombre: string; precio?: number
 // `canal` indica si el precio de la planilla es minorista o mayorista.
 export async function POST(req: NextRequest) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-  const body = (await req.json()) as { filas: FilaImport[]; canal?: "minorista" | "mayorista" };
+  const body = (await req.json()) as { filas: FilaImport[]; canal?: "minorista" | "mayorista"; tipo?: "venta" | "costo" };
   const filas = body.filas;
   const canal = body.canal === "mayorista" ? "mayorista" : "minorista";
+  const tipo = body.tipo === "costo" ? "costo" : "venta";
   if (!Array.isArray(filas) || filas.length === 0) {
     return NextResponse.json({ error: "No hay filas para importar" }, { status: 400 });
   }
@@ -24,6 +25,31 @@ export async function POST(req: NextRequest) {
 
   let creados = 0, actualizados = 0, omitidos = 0;
   const errores: string[] = [];
+
+  // ── Modo COSTO: solo actualiza el costo de productos ya existentes (por código/nombre).
+  if (tipo === "costo") {
+    for (const f of filas) {
+      const nombre = String(f.nombre ?? "").trim();
+      const codigo = f.codigo != null ? String(f.codigo).trim().replace(/\.0$/, "") : "";
+      const costoNum = Number(String(f.precio ?? "").toString().replace(/[^\d.,]/g, "").replace(/\./g, "").replace(",", "."));
+      if (!nombre && !codigo) { omitidos++; continue; }
+      const sku = codigo || slugify(nombre).slice(0, 40);
+      try {
+        const varEx = await prisma.productVariant.findUnique({ where: { sku } });
+        if (!varEx) { omitidos++; continue; } // no creamos productos al importar costos
+        if (!(Number.isFinite(costoNum) && costoNum > 0)) { omitidos++; continue; }
+        await (prisma as any).$executeRawUnsafe(
+          `INSERT INTO product_pricing (product_id, costo, updated_at) VALUES ($1, $2, NOW())
+           ON CONFLICT (product_id) DO UPDATE SET costo = $2, updated_at = NOW()`,
+          varEx.productId, costoNum
+        );
+        actualizados++;
+      } catch (e: any) {
+        errores.push(`${nombre || codigo}: ${e?.message ?? "error"}`);
+      }
+    }
+    return NextResponse.json({ ok: true, creados: 0, actualizados, omitidos, errores: errores.slice(0, 10) });
+  }
 
   for (const f of filas) {
     const nombre = String(f.nombre ?? "").trim();

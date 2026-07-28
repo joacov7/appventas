@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import {
   BookOpen, Settings, Package, Eye, Download, Printer,
   Plus, Trash2, GripVertical, Check, X, Search, ChevronUp, ChevronDown,
-  Globe, FileText, Palette,
+  Globe, FileText, Palette, MessageCircle,
 } from "lucide-react";
 import { MediaUpload } from "@/components/ui/MediaUpload";
 
@@ -52,6 +52,7 @@ interface CatalogConfig {
   productosSeleccionados: number[];
   ordenProductos: number[];
   productosPorPagina: number;
+  incluirAclaraciones: boolean;
 }
 
 const DEFAULT_CONFIG: CatalogConfig = {
@@ -64,6 +65,7 @@ const DEFAULT_CONFIG: CatalogConfig = {
   colorPrincipal: "#1a1a1a", colorSecundario: "#10b981",
   moneda: "ARS", formato: "A4", orientacion: "vertical",
   productosSeleccionados: [], ordenProductos: [], productosPorPagina: 9,
+  incluirAclaraciones: true,
 };
 
 const DEFAULT_CONFIG_USA: CatalogConfig = {
@@ -223,6 +225,25 @@ function CatalogPreviewPage({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── Página de aclaraciones (última hoja del PDF) ─────────────────────────────
+function AclaracionesPDFPage({ cfg, tipo, items }: { cfg: CatalogConfig; tipo: "ar" | "usa"; items: { titulo: string; texto: string }[] }) {
+  return (
+    <div style={{ background: "white", width: "100%", padding: "40px" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24, color: cfg.colorPrincipal }}>
+        {tipo === "usa" ? "Terms & Conditions" : "Aclaraciones y condiciones"}
+      </h2>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        {items.map((it, i) => (
+          <div key={i}>
+            <p style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>{it.titulo}</p>
+            <p style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{it.texto}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -618,6 +639,8 @@ export default function CatalogosPage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [enviandoBot, setEnviandoBot] = useState(false);
+  const [botMsg, setBotMsg] = useState("");
   const [activePanel, setActivePanel] = useState<"config" | "products" | "preview">("config");
 
   const cfg = tipo === "ar" ? cfgAR : cfgUSA;
@@ -660,9 +683,8 @@ export default function CatalogosPage() {
     setTimeout(() => setSaved(false), 2000);
   }
 
-  async function generatePDF() {
-    setGenerating(true);
-    try {
+  // Construye el PDF y devuelve la instancia jsPDF + nombre de archivo.
+  async function construirPDF(): Promise<{ pdf: any; filename: string }> {
       const { default: jsPDF } = await import("jspdf");
       const { toJpeg } = await import("html-to-image");
 
@@ -737,16 +759,27 @@ export default function CatalogosPage() {
         })
       ));
 
-      // Middle + last pages: products only (no cover)
+      // Middle + last pages: products only (no cover). El footer va en la última
+      // hoja de productos salvo que después venga la de aclaraciones.
+      const habraAclaraciones = cfg.incluirAclaraciones;
       for (let i = 1; i < chunks.length; i++) {
         pageImages.push(await capturePage(
           createElement(CatalogPreviewPage, {
             cfg, tipo,
             products: withCachedImages(chunks[i]),
             showCover: false,
-            showFooter: i === chunks.length - 1,
+            showFooter: i === chunks.length - 1 && !habraAclaraciones,
           })
         ));
+      }
+
+      // Página final: aclaraciones/condiciones (si está activada y hay contenido).
+      if (habraAclaraciones) {
+        const aclar: { titulo: string; texto: string }[] = await fetch("/api/aclaraciones")
+          .then(r => r.json()).then(d => d.items ?? []).catch(() => []);
+        if (aclar.length) {
+          pageImages.push(await capturePage(createElement(AclaracionesPDFPage, { cfg, tipo, items: aclar })));
+        }
       }
 
       // Assemble PDF — each captured image becomes one page sized to fit pdfW
@@ -767,12 +800,47 @@ export default function CatalogosPage() {
       }
 
       const filename = tipo === "usa" ? "wholesale-catalog.pdf" : "catalogo-argentina.pdf";
-      pdf!.save(filename);
+      return { pdf: pdf!, filename };
+  }
+
+  async function generatePDF() {
+    setGenerating(true);
+    try {
+      const { pdf, filename } = await construirPDF();
+      pdf.save(filename);
     } catch (err) {
       console.error("Error generando PDF:", err);
       alert("No se pudo generar el PDF. Revisá la consola para más detalles.");
     } finally {
       setGenerating(false);
+    }
+  }
+
+  // Genera el PDF, lo sube a Cloudinary y lo deja como catálogo que manda el bot.
+  async function enviarPDFalBot() {
+    const cloud = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+    const preset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+    if (!cloud || !preset) { setBotMsg("Falta configurar Cloudinary."); return; }
+    setEnviandoBot(true); setBotMsg("");
+    try {
+      const { pdf } = await construirPDF();
+      const blob: Blob = pdf.output("blob");
+      const form = new FormData();
+      form.append("file", blob, "catalogo.pdf");
+      form.append("upload_preset", preset);
+      const up = await fetch(`https://api.cloudinary.com/v1_1/${cloud}/auto/upload`, { method: "POST", body: form });
+      const data = await up.json();
+      if (!data.secure_url) { setBotMsg("No se pudo subir el PDF."); return; }
+      const r = await fetch("/api/whatsapp/catalogo", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ modo: "drive", drive_url: data.secure_url }),
+      });
+      setBotMsg(r.ok ? "✅ Listo: el bot ahora manda este PDF como catálogo." : "Error al guardar en el bot.");
+    } catch (e) {
+      console.error(e);
+      setBotMsg("No se pudo enviar al bot.");
+    } finally {
+      setEnviandoBot(false);
     }
   }
 
@@ -888,10 +956,19 @@ export default function CatalogosPage() {
           {/* Export buttons */}
           <div className="bg-white rounded-2xl border p-4 space-y-2">
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Exportar</h3>
+            <label className="flex items-center gap-2 text-xs text-gray-600 mb-2 cursor-pointer">
+              <input type="checkbox" checked={cfg.incluirAclaraciones} onChange={e => setCfg({ ...cfg, incluirAclaraciones: e.target.checked })} className="accent-emerald-600" />
+              Incluir página de aclaraciones al final
+            </label>
             <button onClick={generatePDF} disabled={generating}
               className="w-full flex items-center justify-center gap-2 bg-gray-900 hover:bg-gray-800 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium">
               <Download size={15} /> {generating ? "Generando PDF..." : "Generar PDF"}
             </button>
+            <button onClick={enviarPDFalBot} disabled={enviandoBot || generating}
+              className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white py-2.5 rounded-xl text-sm font-medium">
+              <MessageCircle size={15} /> {enviandoBot ? "Enviando..." : "Usar como catálogo del bot"}
+            </button>
+            {botMsg && <p className="text-xs text-gray-500">{botMsg}</p>}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={exportHTML}
                 className="flex items-center justify-center gap-1.5 border rounded-xl py-2 text-xs hover:bg-gray-50">

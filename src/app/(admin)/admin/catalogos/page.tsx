@@ -130,9 +130,9 @@ function ProductCard({ p, cfg, tipo }: { p: Product; cfg: CatalogConfig; tipo: "
 
   return (
     <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white shadow-sm flex flex-col">
-      <div style={{ aspectRatio: "1/1", background: "#f9fafb", overflow: "hidden", position: "relative" }}>
+      <div style={{ height: 210, background: "#f9fafb", overflow: "hidden", position: "relative" }}>
         {p.imagen ? (
-          <div style={{ width: "100%", height: "100%", backgroundImage: `url(${p.imagen})`, backgroundSize: "cover", backgroundPosition: "center" }} />
+          <div style={{ width: "100%", height: "100%", backgroundImage: `url(${p.imagen})`, backgroundSize: "contain", backgroundRepeat: "no-repeat", backgroundPosition: "center" }} />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-gray-300">
             <Package size={40} strokeWidth={1} />
@@ -232,18 +232,16 @@ function CatalogPreviewPage({
 // ─── Página de aclaraciones (última hoja del PDF) ─────────────────────────────
 function AclaracionesPDFPage({ cfg, tipo, items }: { cfg: CatalogConfig; tipo: "ar" | "usa"; items: { titulo: string; texto: string }[] }) {
   return (
-    <div style={{ background: "white", width: "100%", padding: "40px" }}>
-      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 24, color: cfg.colorPrincipal }}>
+    <div style={{ background: "white", width: "100%", padding: "40px 48px 56px" }}>
+      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 20, color: cfg.colorPrincipal }}>
         {tipo === "usa" ? "Terms & Conditions" : "Aclaraciones y condiciones"}
       </h2>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-        {items.map((it, i) => (
-          <div key={i}>
-            <p style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 4 }}>{it.titulo}</p>
-            <p style={{ fontSize: 13, color: "#4b5563", lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{it.texto}</p>
-          </div>
-        ))}
-      </div>
+      {items.map((it, i) => (
+        <div key={i} style={{ marginBottom: 16 }}>
+          <p style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 3 }}>{it.titulo}</p>
+          <p style={{ fontSize: 13.5, color: "#4b5563", lineHeight: 1.5, whiteSpace: "pre-wrap", margin: 0 }}>{it.texto}</p>
+        </div>
+      ))}
     </div>
   );
 }

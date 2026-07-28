@@ -26,6 +26,8 @@ export default function QuitarFondoPage() {
     try {
       const { removeBackground } = await import("@imgly/background-removal");
       const sinFondo = await removeBackground(archivo, {
+        // Servimos el modelo desde nuestro propio dominio (evita fallos de CORS en Safari/iOS).
+        publicPath: `${window.location.origin}/api/imgly/`,
         progress: (key: string, current: number, total: number) => {
           const pct = total ? Math.round((current / total) * 100) : 0;
           setProgreso(key.includes("fetch") ? `Descargando modelo… ${pct}%` : `Procesando… ${pct}%`);

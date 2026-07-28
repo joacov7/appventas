@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser, Info,
 } from "lucide-react";
 
 const GRUPOS = [
@@ -59,6 +59,7 @@ const GRUPOS = [
   ] },
   { grupo: "Sistema", items: [
     { href: "/admin/usuarios", label: "Usuarios y roles", icon: Users },
+    { href: "/admin/aclaraciones", label: "Aclaraciones", icon: Info },
     { href: "/admin/whatsapp", label: "Bot WhatsApp", icon: MessageCircle },
     { href: "/admin/telegram", label: "Avisos Telegram", icon: Bell },
     { href: "/admin/configuracion", label: "Configuración", icon: Settings },

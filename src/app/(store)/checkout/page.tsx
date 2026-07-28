@@ -9,6 +9,7 @@ import { useTiers, getCartTier, applyTier } from "@/hooks/useTiers";
 import { useStoreFlags } from "@/hooks/useStoreFlags";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { Aclaraciones } from "@/components/Aclaraciones";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Truck } from "lucide-react";
@@ -350,6 +351,8 @@ function CheckoutContent() {
               Pedido mínimo: <b>{formatPrice(pedidoMinimo)}</b>. Te faltan {formatPrice(pedidoMinimo - subtotal)}.
             </div>
           )}
+          {modoMayorista && <Aclaraciones titulo="Antes de confirmar, tené en cuenta" compacto />}
+
           <Button type="submit" size="lg" className="w-full" loading={loading}
             disabled={modoMayorista && pedidoMinimo > 0 && subtotal < pedidoMinimo}>
             {modoMayorista ? "Enviar pedido" : "Pagar con Mercado Pago"}

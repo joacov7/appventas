@@ -6,6 +6,16 @@ import {
   getContacto, setSegmento, marcarEsperandoSegmento, botSilenciado,
 } from "@/lib/whatsapp-segmento";
 import { loadBotTextos, loadBotCatalogo, render, type BotTextos } from "@/lib/bot-config";
+import { loadAclaraciones } from "@/lib/services/aclaraciones.service";
+
+// Palabras que disparan el envío de las aclaraciones/condiciones.
+const CONDICIONES_TRIGGERS = /\b(env[ií]os?|despachos?|garant[ií]a|condiciones|aclaraci|compra m[ií]nima|m[ií]nimo|seguro)\b/i;
+
+async function aclaracionesMessage(): Promise<string> {
+  const items = await loadAclaraciones();
+  if (!items.length) return "";
+  return `📋 *Aclaraciones y condiciones*\n\n${items.map(i => `*${i.titulo}*\n${i.texto}`).join("\n\n")}`;
+}
 
 // Nombre de la tienda para el placeholder {tienda}.
 async function nombreTienda(): Promise<string> {
@@ -328,6 +338,12 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
     await setSegmento(waId, "empresarial");
     const pref = esPrimerContacto && !esSaludo ? `${R(textos.bienvenida)}\n\n` : "";
     return `${pref}${R(textos.regalos)}`;
+  }
+
+  // Preguntas por envíos/garantía/condiciones → mandamos las aclaraciones.
+  if (!esSaludo && CONDICIONES_TRIGGERS.test(text)) {
+    const ac = await aclaracionesMessage();
+    if (ac) return ac;
   }
 
   // (b) El propio mensaje puede delatar el segmento ("mayorista", "con logo", …).

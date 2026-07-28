@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { ProductCard } from "@/components/store/ProductCard";
 import { CatalogoControls } from "@/components/store/CatalogoControls";
 import { SearchX } from "lucide-react";
+import { Aclaraciones } from "@/components/Aclaraciones";
 import Link from "next/link";
 
 const PAGE_SIZE = 24;
@@ -184,6 +185,10 @@ export default async function ProductosPage({ searchParams }: Props) {
           )}
         </div>
       )}
+
+      <div className="mt-12">
+        <Aclaraciones />
+      </div>
     </div>
   );
 }

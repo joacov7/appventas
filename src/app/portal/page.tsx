@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ShoppingBag, ClipboardList, ArrowRight } from "lucide-react";
 import { getClienteSesion } from "@/lib/cliente-auth";
 import { PortalHeader } from "./PortalHeader";
+import { Aclaraciones } from "@/components/Aclaraciones";
 
 export default async function PortalHome() {
   const ses = await getClienteSesion();
@@ -46,6 +47,8 @@ export default async function PortalHome() {
         <p className="text-xs text-gray-400">
           Para que tus pedidos queden asociados a tu cuenta, usá el mismo email (<b>{ses?.email}</b>) al finalizar la compra en el catálogo.
         </p>
+
+        <Aclaraciones />
       </main>
     </>
   );

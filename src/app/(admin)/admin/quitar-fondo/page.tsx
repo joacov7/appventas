@@ -42,8 +42,9 @@ export default function QuitarFondoPage() {
       setResultadoUrl(canvas.toDataURL("image/png"));
       setProgreso("");
     } catch (e: any) {
-      console.error(e);
-      setError("No se pudo procesar la imagen. Probá con otra o reintentá.");
+      console.error("[quitar-fondo]", e);
+      const detalle = e?.message || String(e) || "error desconocido";
+      setError(`No se pudo procesar: ${detalle}`);
     } finally {
       setProcesando(false);
     }

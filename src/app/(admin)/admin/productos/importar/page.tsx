@@ -122,6 +122,19 @@ export default function ImportarProductosPage() {
         <p className="text-xs">Detecto solas las columnas <b>Nombre</b>, <b>Precio/Ventas</b> y <b>Código</b>. Cada fila se crea como un producto (las fotos las agregás después).</p>
       </div>
 
+      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        <label className="text-xs text-gray-500">¿Qué importás?</label>
+        <div className="grid grid-cols-2 gap-2 mt-1 max-w-md">
+          {(["venta", "costo"] as const).map(t => (
+            <button key={t} onClick={() => cambiarTipo(t)}
+              className={`text-sm py-2 rounded-lg border ${tipo === t ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600"}`}>
+              {t === "venta" ? "Precio de venta" : "Costos"}
+            </button>
+          ))}
+        </div>
+        {tipo === "costo" && <p className="text-[11px] text-gray-400 mt-2">Actualiza el costo de productos que ya existen (por código). No crea productos nuevos. La planilla debe tener una columna <b>Costo</b>.</p>}
+      </div>
+
       <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-gray-300 rounded-2xl p-8 cursor-pointer hover:bg-gray-50">
         <Upload size={26} className="text-gray-400" />
         <span className="text-sm text-gray-600">{nombreArchivo || "Elegí tu archivo CSV"}</span>
@@ -132,20 +145,7 @@ export default function ImportarProductosPage() {
 
       {filas.length > 0 && !resultado && (
         <div className="bg-white rounded-2xl border border-gray-100 p-4">
-          <p className="text-sm text-gray-700 mb-3">Detecté <b>{filas.length} {tipo === "costo" ? "filas" : "productos"}</b>. Vista previa:</p>
-
-          <div className="mb-3">
-            <label className="text-xs text-gray-500">¿Qué importás?</label>
-            <div className="grid grid-cols-2 gap-2 mt-1 max-w-xs">
-              {(["venta", "costo"] as const).map(t => (
-                <button key={t} onClick={() => cambiarTipo(t)}
-                  className={`text-sm py-2 rounded-lg border ${tipo === t ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-600"}`}>
-                  {t === "venta" ? "Precio de venta" : "Costos"}
-                </button>
-              ))}
-            </div>
-            {tipo === "costo" && <p className="text-[11px] text-gray-400 mt-1">Los costos se aplican a productos que ya existen (por código). No crea productos nuevos.</p>}
-          </div>
+          <p className="text-sm text-gray-700 mb-3">Detecté <b>{filas.length} {tipo === "costo" ? "filas" : "productos"}</b> · importando <b>{tipo === "costo" ? "costos" : "precio de venta"}</b>. Vista previa:</p>
 
           {tipo === "venta" && (
           <div className="mb-3">

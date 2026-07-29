@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Plus, Pencil, Upload, Search, ImageOff } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { DeleteButton } from "./DeleteButton";
-import { ToggleVisible } from "./ToggleVisible";
+import { ToggleVisible, ToggleFeatured } from "./ToggleVisible";
 import { HerramientasCatalogo } from "./HerramientasCatalogo";
 
 async function getProducts(q?: string, foto?: string, estado?: string) {
@@ -122,7 +122,7 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              {["Producto", "Categoría", "Variantes", "Stock total", "Precio desde", "Estado", "Visible", ""].map((h) => (
+              {["Producto", "Categoría", "Variantes", "Stock total", "Precio desde", "Destacado", "Visible", ""].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium text-gray-500">{h}</th>
               ))}
             </tr>
@@ -167,9 +167,10 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
                       : "—"}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge variant={product.featured ? "info" : "default"}>
-                      {product.featured ? "Destacado" : "Normal"}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <ToggleFeatured id={product.id} featured={product.featured} />
+                      <span className={`text-xs ${product.featured ? "text-amber-600" : "text-gray-400"}`}>{product.featured ? "Destacado" : "Normal"}</span>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">

@@ -927,7 +927,7 @@ function Reportes({ campanas }: { campanas: Campana[] }) {
       )}
 
       <div className="bg-white rounded-2xl border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               {["Campaña","Estado","Invertido","Leads","Ventas","Ingresos","ROAS","CPL","CTR"].map(h => (
@@ -953,7 +953,7 @@ function Reportes({ campanas }: { campanas: Campana[] }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );
@@ -1051,7 +1051,7 @@ function LeadsPanel({ campanas }: { campanas: Campana[] }) {
       )}
 
       <div className="bg-white border rounded-2xl overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
           <thead className="bg-gray-50 border-b">
             <tr>
               {["Nombre","Contacto","Fuente","Campaña","Estado","Valor","Fecha"].map(h => (
@@ -1082,7 +1082,7 @@ function LeadsPanel({ campanas }: { campanas: Campana[] }) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );

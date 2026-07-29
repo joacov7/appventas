@@ -497,7 +497,7 @@ export function ComboForm({ initialData }: Props) {
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-2">Precio por medio de pago</h3>
                 <div className="rounded-xl border border-gray-100 overflow-hidden">
-                  <table className="w-full text-sm">
+                  <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
                     <thead>
                       <tr className="bg-gray-50 text-gray-500 text-xs">
                         <th className="text-left px-3 py-2 font-medium">Medio</th>
@@ -524,7 +524,7 @@ export function ComboForm({ initialData }: Props) {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table></div>
                 </div>
               </div>
             )}

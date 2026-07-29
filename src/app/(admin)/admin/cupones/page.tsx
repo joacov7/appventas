@@ -126,7 +126,7 @@ export default function CuponesPage() {
         ) : coupons.length === 0 ? (
           <div className="py-12 text-center text-gray-400">No hay cupones aún.</div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 {["Código", "Descuento", "Mín.", "Usos", "Vence", "Estado"].map((h) => (
@@ -162,7 +162,7 @@ export default function CuponesPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

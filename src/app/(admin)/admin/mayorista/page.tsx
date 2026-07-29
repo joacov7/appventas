@@ -281,7 +281,7 @@ export default function MayoristaPage() {
           ) : tiers.length === 0 ? (
             <p className="text-center text-sm text-gray-400 py-10">Todavía no hay tiers. Agregá uno arriba.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto"><table className="w-full text-sm min-w-[560px]">
               <thead>
                 <tr className="bg-gray-50 text-xs text-gray-500">
                   <th className="px-5 py-3 text-left font-medium">{isQty ? "Cantidad mínima" : "Monto mínimo"}</th>
@@ -369,7 +369,7 @@ export default function MayoristaPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </table></div>
           )}
         </div>
       )}

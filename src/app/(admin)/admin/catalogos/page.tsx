@@ -309,7 +309,7 @@ function PremiumBlock({ p, cfg, tipo, densidad }: { p: Product; cfg: CatalogConf
       </div>
       <div style={{ flex: densidad === 1 ? "1 1 50%" : "1 1 45%", display: "flex", flexDirection: "column", gap: 8 }}>
         {imgs.length ? imgs.map((src, i) => (
-          <div key={i} style={{ flex: 1, minHeight: densidad === 1 ? 300 : densidad === 2 ? 220 : 150, backgroundColor: "#f3f4f6", backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", borderRadius: 6 }} />
+          <div key={i} style={{ flex: 1, minHeight: densidad === 1 ? 300 : densidad === 2 ? 220 : 150, backgroundColor: "#f3f4f6", backgroundImage: `url(${src})`, backgroundSize: "contain", backgroundPosition: "center", backgroundRepeat: "no-repeat", borderRadius: 6 }} />
         )) : <div style={{ flex: 1, background: "#f3f4f6", borderRadius: 6, minHeight: 150 }} />}
       </div>
     </div>

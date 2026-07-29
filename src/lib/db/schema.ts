@@ -30,7 +30,8 @@ type Ambito =
   | "deposito"
   | "ordenes"
   | "usuarios"
-  | "clientes";
+  | "clientes"
+  | "premium";
 
 // Cada entrada es una sentencia DDL idempotente. Se ejecutan en orden para
 // respetar dependencias (una tabla referenciada antes de la que la referencia).
@@ -493,6 +494,15 @@ const DDL: Record<Ambito, string[]> = {
       rol TEXT NOT NULL DEFAULT 'deposito',
       activo BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+  ],
+
+  // ─── Características por producto (catálogo premium) ──────────────────────
+  premium: [
+    `CREATE TABLE IF NOT EXISTS producto_caracteristicas (
+      product_id TEXT PRIMARY KEY,
+      items JSONB NOT NULL DEFAULT '[]',
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
   ],
 

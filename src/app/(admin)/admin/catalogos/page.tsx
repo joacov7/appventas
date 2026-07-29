@@ -6,6 +6,7 @@ import {
   BookOpen, Settings, Package, Eye, Download, Printer,
   Plus, Trash2, GripVertical, Check, X, Search, ChevronUp, ChevronDown,
   Globe, FileText, Palette, MessageCircle,
+  Leaf, Award, Shield, Scissors, Sparkles, Gem, Flame, Star,
 } from "lucide-react";
 import { MediaUpload } from "@/components/ui/MediaUpload";
 
@@ -13,7 +14,8 @@ import { MediaUpload } from "@/components/ui/MediaUpload";
 interface Product {
   id: number; nombre: string; slug: string; descripcion: string | null;
   precio: number | null; sku: string | null; imagen: string | null;
-  categoria: string | null; stock: number | null;
+  imagenes?: string[]; categoria: string | null; stock: number | null;
+  caracteristicas?: string[];
 }
 interface CatalogConfig {
   // Empresa
@@ -53,6 +55,9 @@ interface CatalogConfig {
   ordenProductos: number[];
   productosPorPagina: number;
   incluirAclaraciones: boolean;
+  estilo: "grid" | "premium";
+  premiumPorPagina: number;      // 1 | 2 | 3
+  pedidoMinimoUnidades: string;  // texto global, ej: "10 unidades"
 }
 
 const DEFAULT_CONFIG: CatalogConfig = {
@@ -66,6 +71,7 @@ const DEFAULT_CONFIG: CatalogConfig = {
   moneda: "ARS", formato: "A4", orientacion: "vertical",
   productosSeleccionados: [], ordenProductos: [], productosPorPagina: 9,
   incluirAclaraciones: true,
+  estilo: "grid", premiumPorPagina: 3, pedidoMinimoUnidades: "",
 };
 
 const DEFAULT_CONFIG_USA: CatalogConfig = {
@@ -246,12 +252,92 @@ function AclaracionesPDFPage({ cfg, tipo, items }: { cfg: CatalogConfig; tipo: "
   );
 }
 
+// ─── Estilo Premium (1 / 2 / 3 productos por página) ──────────────────────────
+const GOLD = "#b8892b";
+const PREMIUM_ICONS = [Leaf, Award, Shield, Scissors, Sparkles, Gem, Flame, Star];
+
+function PremiumBlock({ p, cfg, tipo, densidad }: { p: Product; cfg: CatalogConfig; tipo: "ar" | "usa"; densidad: number }) {
+  const esMayorista = cfg.tipoPrecio === "mayorista";
+  const precioCustom = cfg.preciosCustom?.[p.id] ?? null;
+  const precioMayorista = precioCustom ?? (p.precio ? p.precio * (1 - cfg.descuentoMayorista / 100) : null);
+  const precioMostrar = esMayorista ? precioMayorista : p.precio;
+
+  const baseImgs = (p.imagenes && p.imagenes.length ? p.imagenes : (p.imagen ? [p.imagen] : []));
+  const imgs = baseImgs.slice(0, densidad === 1 ? 3 : 1);
+  const feats = (p.caracteristicas ?? []).slice(0, densidad === 1 ? 8 : densidad === 2 ? 5 : 3);
+
+  const compact = densidad >= 3;
+  const titleSize = densidad === 1 ? 34 : densidad === 2 ? 24 : 19;
+  const priceSize = densidad === 1 ? 34 : densidad === 2 ? 26 : 20;
+  const pad = densidad === 1 ? "40px 44px" : densidad === 2 ? "26px 36px" : "18px 30px";
+  const minH = densidad === 1 ? 1040 : densidad === 2 ? 500 : 328;
+
+  return (
+    <div style={{ display: "flex", gap: densidad === 1 ? 40 : 28, padding: pad, minHeight: minH, boxSizing: "border-box", borderBottom: densidad > 1 ? "1px solid #ececec" : "none", background: "#fafafa" }}>
+      <div style={{ flex: densidad === 1 ? "1 1 46%" : "1 1 55%", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+        {p.categoria && <p style={{ color: GOLD, fontSize: compact ? 10 : 12, fontWeight: 700, letterSpacing: 1.6, textTransform: "uppercase", margin: "0 0 6px" }}>{p.categoria}</p>}
+        <h2 style={{ fontSize: titleSize, fontWeight: 800, color: "#1f2937", lineHeight: 1.08, margin: "0 0 6px" }}>{p.nombre}</h2>
+        {cfg.mostrarCodigo && p.sku && <p style={{ color: "#9ca3af", fontSize: compact ? 11 : 13, margin: "0 0 8px" }}>{tipo === "usa" ? "CODE" : "CÓDIGO"}: {p.sku}</p>}
+        <div style={{ height: 2, width: 64, background: GOLD, margin: compact ? "6px 0 10px" : "8px 0 16px" }} />
+        {feats.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: compact ? 5 : 9, marginBottom: compact ? 10 : 18 }}>
+            {feats.map((f, i) => {
+              const Ic = PREMIUM_ICONS[i % PREMIUM_ICONS.length];
+              return (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <Ic size={compact ? 14 : 18} color={GOLD} strokeWidth={1.6} />
+                  <span style={{ fontSize: compact ? 12 : 14, color: "#374151" }}>{f}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {cfg.mostrarPrecios && precioMostrar != null && (
+          <div style={{ marginBottom: cfg.pedidoMinimoUnidades ? (compact ? 8 : 14) : 0 }}>
+            <p style={{ fontSize: compact ? 10 : 12, fontWeight: 700, letterSpacing: 1, color: "#6b7280", textTransform: "uppercase", margin: "0 0 2px" }}>{esMayorista ? (cfg.etiquetaMayorista || "Mayorista") : (tipo === "usa" ? "Price" : "Precio")}</p>
+            {esMayorista && cfg.mostrarPrecioTachado && p.precio && <span style={{ fontSize: 12, color: "#9ca3af", textDecoration: "line-through", marginRight: 8 }}>{fmt(p.precio, cfg.moneda)}</span>}
+            <p style={{ fontSize: priceSize, fontWeight: 800, color: GOLD, lineHeight: 1.05, margin: 0 }}>{fmt(precioMostrar, cfg.moneda)}</p>
+          </div>
+        )}
+        {cfg.pedidoMinimoUnidades && (
+          <div>
+            <div style={{ height: 2, width: 64, background: GOLD, margin: compact ? "4px 0 8px" : "6px 0 12px" }} />
+            <p style={{ fontSize: compact ? 10 : 12, fontWeight: 700, letterSpacing: 1, color: "#6b7280", textTransform: "uppercase", margin: "0 0 2px" }}>{tipo === "usa" ? "Minimum Order" : "Pedido mínimo"}</p>
+            <p style={{ fontSize: compact ? 13 : 16, color: "#1f2937", fontWeight: 700, margin: 0 }}>{cfg.pedidoMinimoUnidades}</p>
+          </div>
+        )}
+      </div>
+      <div style={{ flex: densidad === 1 ? "1 1 50%" : "1 1 45%", display: "flex", flexDirection: "column", gap: 8 }}>
+        {imgs.length ? imgs.map((src, i) => (
+          <div key={i} style={{ flex: 1, minHeight: densidad === 1 ? 300 : densidad === 2 ? 220 : 150, backgroundColor: "#f3f4f6", backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center", backgroundRepeat: "no-repeat", borderRadius: 6 }} />
+        )) : <div style={{ flex: 1, background: "#f3f4f6", borderRadius: 6, minHeight: 150 }} />}
+      </div>
+    </div>
+  );
+}
+
+function PremiumPage({ items, cfg, tipo, densidad, showCover, pageNum }: {
+  items: Product[]; cfg: CatalogConfig; tipo: "ar" | "usa"; densidad: number; showCover: boolean; pageNum: number;
+}) {
+  return (
+    <div style={{ background: "#fafafa", width: "100%" }}>
+      {showCover && <CoverPage cfg={cfg} tipo={tipo} />}
+      {items.map((p, i) => <PremiumBlock key={i} p={p} cfg={cfg} tipo={tipo} densidad={densidad} />)}
+      <div style={{ padding: "12px 36px", borderTop: "1px solid #e5e7eb", display: "flex", justifyContent: "flex-end", gap: 14, fontSize: 11, letterSpacing: 1.5, color: "#9ca3af", textTransform: "uppercase" }}>
+        <span>{cfg.empresa || "Regionales por Mayor"}</span>
+        <span>{String(pageNum).padStart(2, "0")}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Preview ──────────────────────────────────────────────────────────────────
 function CatalogPreview({ cfg, products, tipo }: { cfg: CatalogConfig; products: Product[]; tipo: "ar" | "usa" }) {
   const selected = cfg.ordenProductos.length
     ? cfg.ordenProductos.map(id => products.find(p => p.id === id)).filter(Boolean) as Product[]
     : products.filter(p => cfg.productosSeleccionados.includes(p.id));
 
+  const premium = cfg.estilo === "premium";
   return (
     <div id="catalog-preview" className="bg-white rounded-2xl overflow-hidden border shadow-lg" style={{ maxWidth: 800, margin: "0 auto" }}>
       <CoverPage cfg={cfg} tipo={tipo} />
@@ -266,19 +352,23 @@ function CatalogPreview({ cfg, products, tipo }: { cfg: CatalogConfig; products:
         </div>
       )}
 
-      {/* Products grid */}
-      <div className="p-8">
-        <h2 className="text-xl font-bold mb-6" style={{ color: cfg.colorPrincipal }}>
-          {tipo === "usa" ? "Our Products" : "Nuestros Productos"}
-        </h2>
-        {selected.length === 0 ? (
-          <p className="text-gray-400 text-sm py-8 text-center">Seleccioná productos para incluir en el catálogo</p>
-        ) : (
+      {selected.length === 0 ? (
+        <p className="text-gray-400 text-sm py-12 text-center">Seleccioná productos para incluir en el catálogo</p>
+      ) : premium ? (
+        // Estilo premium: bloques (respeta la densidad elegida)
+        <div>
+          {selected.map((p) => <PremiumBlock key={p.id} p={p} cfg={cfg} tipo={tipo} densidad={cfg.premiumPorPagina} />)}
+        </div>
+      ) : (
+        <div className="p-8">
+          <h2 className="text-xl font-bold mb-6" style={{ color: cfg.colorPrincipal }}>
+            {tipo === "usa" ? "Our Products" : "Nuestros Productos"}
+          </h2>
           <div className="grid grid-cols-3 gap-4">
             {selected.map((p) => <ProductCard key={p.id} p={p} cfg={cfg} tipo={tipo} />)}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="px-8 py-4 border-t flex items-center justify-between text-xs text-gray-400" style={{ background: cfg.colorPrincipal + "08" }}>
@@ -315,6 +405,41 @@ function ConfigPanel({ cfg, onChange, products }: { cfg: CatalogConfig; onChange
 
   return (
     <div className="space-y-6">
+      {/* Estilo del catálogo */}
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Estilo</h3>
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          {([["grid", "Grilla"], ["premium", "Premium"]] as const).map(([e, l]) => (
+            <button key={e} onClick={() => set("estilo", e)}
+              className={`py-2 rounded-lg text-sm font-medium border ${cfg.estilo === e ? "bg-gray-900 text-white border-gray-900" : "text-gray-600 border-gray-200 hover:border-gray-400"}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        {cfg.estilo === "premium" ? (
+          <>
+            <label className="text-xs font-medium text-gray-600 block mb-1">Productos por página</label>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {[1, 2, 3].map(n => (
+                <button key={n} onClick={() => set("premiumPorPagina", n)}
+                  className={`py-1.5 rounded-lg text-sm font-medium border ${cfg.premiumPorPagina === n ? "bg-amber-500 text-white border-amber-500" : "text-gray-600 border-gray-200 hover:border-gray-400"}`}>
+                  {n}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-400 mb-3">Las características salen del campo “Características” de cada producto. El pedido mínimo es un texto global.</p>
+          </>
+        ) : (
+          <div className="mb-3">
+            <label className="text-xs font-medium text-gray-600 block mb-1">Productos por página (grilla)</label>
+            <input type="number" min={1} max={12} value={cfg.productosPorPagina}
+              onChange={e => set("productosPorPagina", Math.max(1, Number(e.target.value) || 9))}
+              className="w-full border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
+          </div>
+        )}
+        {input("Pedido mínimo (texto, ej: 10 unidades)", "pedidoMinimoUnidades", "10 unidades")}
+      </div>
+
       {/* Empresa */}
       <div>
         <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Empresa</h3>
@@ -648,10 +773,12 @@ export default function CatalogosPage() {
     Promise.all([
       fetch("/api/catalogos").then(r => r.ok ? r.json() : {}),
       fetch("/api/productos").then(r => r.ok ? r.json() : []),
-    ]).then(([configs, prods]) => {
+      fetch("/api/productos/caracteristicas").then(r => r.ok ? r.json() : {}).catch(() => ({})),
+    ]).then(([configs, prods, caracs]) => {
       const c = configs as Record<string, any>;
       if (c.ar) setCfgAR({ ...DEFAULT_CONFIG, ...c.ar, preciosCustom: c.ar.preciosCustom ?? {} });
       if (c.usa) setCfgUSA({ ...DEFAULT_CONFIG_USA, ...c.usa, preciosCustom: c.usa.preciosCustom ?? {} });
+      const cmap = (caracs ?? {}) as Record<string, string[]>;
       // Extract products from response format
       const list = Array.isArray(prods) ? prods : (prods.products ?? prods.data ?? []);
       setProducts(list.map((p: any) => ({
@@ -663,8 +790,10 @@ export default function CatalogosPage() {
           : p.precio != null ? Number(p.precio) : null,
         sku: p.sku ?? null,
         imagen: p.imageUrls?.[0] ?? p.imageUrl ?? p.imagen ?? null,
+        imagenes: Array.isArray(p.imageUrls) ? p.imageUrls : (p.imagen ? [p.imagen] : []),
         categoria: p.category?.name ?? p.categoria ?? null,
         stock: p.stock != null ? Number(p.stock) : null,
+        caracteristicas: cmap[p.id] ?? [],
       })));
       setLoading(false);
     });
@@ -696,17 +825,23 @@ export default function CatalogosPage() {
         ? cfg.ordenProductos.map(id => products.find(p => p.id === id)).filter(Boolean) as typeof products
         : products.filter(p => cfg.productosSeleccionados.includes(p.id));
 
+      // En premium usamos varias fotos por producto; cacheamos todas.
+      const urls = new Set<string>();
+      for (const p of selected) {
+        if (p.imagen) urls.add(p.imagen);
+        for (const u of (p.imagenes ?? [])) urls.add(u);
+      }
       const imageCache: Record<string, string> = {};
-      await Promise.all(selected.map(async (p) => {
-        if (!p.imagen || !p.imagen.startsWith("http")) return;
+      await Promise.all(Array.from(urls).map(async (u) => {
+        if (!u || !u.startsWith("http")) return;
         try {
-          const res = await fetch(`/api/imagen-proxy?url=${encodeURIComponent(p.imagen)}`);
+          const res = await fetch(`/api/imagen-proxy?url=${encodeURIComponent(u)}`);
           if (!res.ok) return;
           const blob = await res.blob();
-          imageCache[p.imagen] = await new Promise<string>((resolve) => {
+          imageCache[u] = await new Promise<string>((resolve) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result as string);
-            reader.onerror = () => resolve(p.imagen!);
+            reader.onerror = () => resolve(u);
             reader.readAsDataURL(blob);
           });
         } catch { /* use original url */ }
@@ -730,23 +865,39 @@ export default function CatalogosPage() {
         return dataUrl;
       }
 
-      // Inject cached data URLs into a product list copy
+      // Inject cached data URLs into a product list copy (imagen + imagenes)
       function withCachedImages(prods: typeof selected) {
         return prods.map(p => ({
           ...p,
           imagen: (p.imagen && imageCache[p.imagen]) ? imageCache[p.imagen] : p.imagen,
+          imagenes: (p.imagenes ?? []).map(u => imageCache[u] ?? u),
         }));
       }
 
-      const pageSize = cfg.productosPorPagina ?? 9;
+      const esPremium = cfg.estilo === "premium";
+      const pageSize = esPremium ? Math.max(1, cfg.premiumPorPagina || 3) : (cfg.productosPorPagina ?? 9);
       const chunks: (typeof selected)[] = [];
       for (let i = 0; i < selected.length; i += pageSize) {
         chunks.push(selected.slice(i, i + pageSize));
       }
 
-      // Build pages: first page has cover + quiénes somos + first chunk, rest are product-only
       const pageImages: string[] = [];
+      const habraAclaraciones = cfg.incluirAclaraciones;
 
+      if (esPremium) {
+        // Estilo premium: portada aparte + N productos por página.
+        pageImages.push(await capturePage(createElement(CoverPage, { cfg, tipo })));
+        for (let i = 0; i < chunks.length; i++) {
+          pageImages.push(await capturePage(
+            createElement(PremiumPage, {
+              cfg, tipo, densidad: pageSize,
+              items: withCachedImages(chunks[i]),
+              showCover: false, pageNum: i + 2,
+            })
+          ));
+        }
+      } else {
+      // Build pages: first page has cover + quiénes somos + first chunk, rest are product-only
       // Page 1: full cover + first chunk
       pageImages.push(await capturePage(
         createElement(CatalogPreviewPage, {
@@ -759,7 +910,6 @@ export default function CatalogosPage() {
 
       // Middle + last pages: products only (no cover). El footer va en la última
       // hoja de productos salvo que después venga la de aclaraciones.
-      const habraAclaraciones = cfg.incluirAclaraciones;
       for (let i = 1; i < chunks.length; i++) {
         pageImages.push(await capturePage(
           createElement(CatalogPreviewPage, {
@@ -769,6 +919,7 @@ export default function CatalogosPage() {
             showFooter: i === chunks.length - 1 && !habraAclaraciones,
           })
         ));
+      }
       }
 
       // Página final: aclaraciones/condiciones (si está activada y hay contenido).

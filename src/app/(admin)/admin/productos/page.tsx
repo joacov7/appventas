@@ -4,15 +4,16 @@ import Link from "next/link";
 import { Plus, Pencil, Upload, Search, ImageOff } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { DeleteButton } from "./DeleteButton";
+import { ToggleVisible } from "./ToggleVisible";
 import { HerramientasCatalogo } from "./HerramientasCatalogo";
 
-async function getProducts(q?: string, foto?: string) {
+async function getProducts(q?: string, foto?: string, estado?: string) {
   try {
     const { prisma } = await import("@/lib/prisma");
     const termino = q?.trim();
     return await prisma.product.findMany({
       where: {
-        active: true,
+        ...(estado === "visible" ? { active: true } : estado === "oculto" ? { active: false } : {}),
         ...(foto === "sin" ? { imageUrls: { isEmpty: true } } : foto === "con" ? { imageUrls: { isEmpty: false } } : {}),
         ...(termino ? {
           OR: [
@@ -26,23 +27,27 @@ async function getProducts(q?: string, foto?: string) {
         category: { select: { name: true } },
         variants: { where: { active: true } },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ active: "desc" }, { createdAt: "desc" }],
     });
   } catch {
     return [];
   }
 }
 
-async function contarSinFoto() {
+async function getConteos() {
   try {
     const { prisma } = await import("@/lib/prisma");
-    return await prisma.product.count({ where: { active: true, imageUrls: { isEmpty: true } } });
-  } catch { return 0; }
+    const [sinFoto, ocultos] = await Promise.all([
+      prisma.product.count({ where: { active: true, imageUrls: { isEmpty: true } } }),
+      prisma.product.count({ where: { active: false } }),
+    ]);
+    return { sinFoto, ocultos };
+  } catch { return { sinFoto: 0, ocultos: 0 }; }
 }
 
-export default async function ProductosAdminPage({ searchParams }: { searchParams: Promise<{ q?: string; foto?: string }> }) {
-  const { q, foto } = await searchParams;
-  const [products, sinFoto] = await Promise.all([getProducts(q, foto), contarSinFoto()]);
+export default async function ProductosAdminPage({ searchParams }: { searchParams: Promise<{ q?: string; foto?: string; estado?: string }> }) {
+  const { q, foto, estado } = await searchParams;
+  const [products, { sinFoto, ocultos }] = await Promise.all([getProducts(q, foto, estado), getConteos()]);
 
   return (
     <div>
@@ -77,11 +82,27 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
         {(q || foto) && <Link href="/admin/productos" className="text-sm text-gray-400 hover:text-gray-700">Limpiar</Link>}
       </form>
 
-      {/* Filtro por foto */}
+      {/* Filtros */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        {([["", "Todos"], ["con", "Con foto"], ["sin", "Sin foto"]] as const).map(([val, label]) => {
+        {([["", "Todos"], ["visible", "Visibles"], ["oculto", "Ocultos"]] as const).map(([val, label]) => {
           const params = new URLSearchParams();
           if (q) params.set("q", q);
+          if (foto) params.set("foto", foto);
+          if (val) params.set("estado", val);
+          const activo = (estado ?? "") === val;
+          const qs = params.toString();
+          return (
+            <Link key={label} href={`/admin/productos${qs ? `?${qs}` : ""}`}
+              className={`text-xs px-3 py-1.5 rounded-full border ${activo ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+              {label}{val === "oculto" && ocultos > 0 ? ` (${ocultos})` : ""}
+            </Link>
+          );
+        })}
+        <span className="mx-1 h-4 w-px bg-gray-200" />
+        {([["", "Con y sin foto"], ["con", "Con foto"], ["sin", "Sin foto"]] as const).map(([val, label]) => {
+          const params = new URLSearchParams();
+          if (q) params.set("q", q);
+          if (estado) params.set("estado", estado);
           if (val) params.set("foto", val);
           const activo = (foto ?? "") === val;
           const qs = params.toString();
@@ -101,7 +122,7 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              {["Producto", "Categoría", "Variantes", "Stock total", "Precio desde", "Estado", ""].map((h) => (
+              {["Producto", "Categoría", "Variantes", "Stock total", "Precio desde", "Estado", "Visible", ""].map((h) => (
                 <th key={h} className="text-left px-4 py-3 font-medium text-gray-500">{h}</th>
               ))}
             </tr>
@@ -111,9 +132,9 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
               const totalStock = product.variants.reduce((acc, v) => acc + v.stock, 0);
               const minPrice = Math.min(...product.variants.map((v) => Number(v.price)));
               return (
-                <tr key={product.id} className="hover:bg-gray-50">
+                <tr key={product.id} className={product.active ? "hover:bg-gray-50" : "bg-gray-50/70 hover:bg-gray-100"}>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
+                    <div className={`flex items-center gap-3 ${product.active ? "" : "opacity-60"}`}>
                       {product.imageUrls?.[0] ? (
                         <img src={product.imageUrls[0]} alt={product.name}
                           className="w-11 h-11 rounded-lg object-cover border border-gray-100 shrink-0" />
@@ -149,6 +170,12 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
                     <Badge variant={product.featured ? "info" : "default"}>
                       {product.featured ? "Destacado" : "Normal"}
                     </Badge>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <ToggleVisible id={product.id} active={product.active} />
+                      <span className={`text-xs ${product.active ? "text-emerald-600" : "text-gray-400"}`}>{product.active ? "Sí" : "Oculto"}</span>
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">

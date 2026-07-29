@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser, Info,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser, Info, Tags,
 } from "lucide-react";
 
 const GRUPOS = [
@@ -16,6 +16,7 @@ const GRUPOS = [
   ] },
   { grupo: "Catálogo", items: [
     { href: "/admin/productos", label: "Productos", icon: Package },
+    { href: "/admin/categorias", label: "Categorías", icon: Tags },
     { href: "/admin/fabricantes", label: "Fabricantes", icon: Factory },
     { href: "/admin/personalizados", label: "Personalizados (mockup)", icon: Wand2 },
     { href: "/admin/quitar-fondo", label: "Quitar fondo", icon: Eraser },

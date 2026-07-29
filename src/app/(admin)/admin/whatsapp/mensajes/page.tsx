@@ -43,6 +43,9 @@ export default function MensajesBotPage() {
   // A dónde manda el catálogo (página web o link de Drive provisorio).
   const [catalogo, setCatalogo] = useState<{ modo: "web" | "drive"; drive_url: string }>({ modo: "web", drive_url: "" });
   const [catGuardado, setCatGuardado] = useState("");
+  // Modo IA conversacional.
+  const [ia, setIa] = useState<{ activo: boolean; instrucciones: string }>({ activo: false, instrucciones: "" });
+  const [iaGuardado, setIaGuardado] = useState("");
 
   useEffect(() => {
     fetch("/api/whatsapp/textos").then(r => r.json()).then(d => {
@@ -59,6 +62,9 @@ export default function MensajesBotPage() {
     fetch("/api/whatsapp/catalogo").then(r => r.json()).then(d => {
       if (d?.modo) setCatalogo({ modo: d.modo, drive_url: d.drive_url ?? "" });
     }).catch(() => {});
+    fetch("/api/whatsapp/ia").then(r => r.json()).then(d => {
+      if (typeof d?.activo === "boolean") setIa({ activo: d.activo, instrucciones: d.instrucciones ?? "" });
+    }).catch(() => {});
     cargarPresupuesto();
   }, []);
 
@@ -68,6 +74,14 @@ export default function MensajesBotPage() {
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(catalogo),
     });
     setCatGuardado(r.ok ? "✅ Guardado" : "Error");
+  }
+
+  async function guardarIA() {
+    setIaGuardado("");
+    const r = await fetch("/api/whatsapp/ia", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(ia),
+    });
+    setIaGuardado(r.ok ? "✅ Guardado" : "Error");
   }
 
   function cargarPresupuesto() {
@@ -153,6 +167,24 @@ export default function MensajesBotPage() {
           <p className="text-xs text-amber-600 mt-2">⚠️ Sin link cargado, el bot manda igual a la página web.</p>
         )}
         <p className="text-[11px] text-gray-400 mt-2">Tip: en Drive, compartí la carpeta como “Cualquier persona con el enlace” para que se vea sin permisos.</p>
+      </div>
+
+      {/* Modo IA conversacional */}
+      <div className="bg-white rounded-2xl border border-gray-100 p-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input type="checkbox" checked={ia.activo} onChange={e => setIa({ ...ia, activo: e.target.checked })} className="accent-emerald-600" />
+          <span className="text-sm font-medium text-gray-800">🤖 Modo IA conversacional</span>
+        </label>
+        <p className="text-xs text-gray-500 mt-1 mb-3">Cuando el cliente escribe algo que no cae en un flujo, en vez de repetir el menú la IA responde con contexto (historial + info del negocio). No inventa precios y ofrece derivar a una persona.</p>
+        <label className="text-xs text-gray-500">Instrucciones / tono (opcional)</label>
+        <textarea value={ia.instrucciones} onChange={e => setIa({ ...ia, instrucciones: e.target.value })} rows={3}
+          placeholder="Ej: Sé breve y amable. Tuteá con voseo. Sugerí el mate imperial cuando pregunten por regalos."
+          className="w-full mt-1 text-sm border rounded-xl px-3 py-2 outline-none resize-y" />
+        <div className="flex items-center gap-3 mt-3">
+          <button onClick={guardarIA} className="bg-gray-800 hover:bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-xl">Guardar</button>
+          {iaGuardado && <span className="text-xs text-gray-500">{iaGuardado}</span>}
+        </div>
+        <p className="text-[11px] text-gray-400 mt-2">Requiere tener configurada la IA en Admin → Inteligencia Artificial.</p>
       </div>
 
       {/* Plantilla de abordaje (API) */}

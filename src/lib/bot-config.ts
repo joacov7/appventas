@@ -115,6 +115,38 @@ export async function saveBotCatalogo(cfg: BotCatalogo): Promise<void> {
   );
 }
 
+// ─── Modo IA conversacional ──────────────────────────────────────────────────
+// Cuando el mensaje no cae en ningún flujo, en vez de responder el menú, la IA
+// contesta con contexto (historial + info del negocio). Editable desde el admin.
+export interface BotIA {
+  activo: boolean;
+  instrucciones: string; // tono/personalidad y reglas extra para la IA
+}
+
+export const IA_DEFAULT: BotIA = { activo: false, instrucciones: "" };
+
+export async function loadBotIA(): Promise<BotIA> {
+  try {
+    await ensureSchema("config");
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT config FROM catalog_config WHERE tipo = 'bot_ia'`);
+    const c = rows[0]?.config ?? {};
+    return { activo: !!c.activo, instrucciones: typeof c.instrucciones === "string" ? c.instrucciones : "" };
+  } catch {
+    return IA_DEFAULT;
+  }
+}
+
+export async function saveBotIA(cfg: BotIA): Promise<void> {
+  await ensureSchema("config");
+  const limpio: BotIA = { activo: !!cfg.activo, instrucciones: String(cfg.instrucciones ?? "").trim() };
+  await (prisma as any).$executeRawUnsafe(
+    `INSERT INTO catalog_config (tipo, config) VALUES ('bot_ia', $1::jsonb)
+     ON CONFLICT (tipo) DO UPDATE SET config = $1::jsonb, updated_at = NOW()`,
+    JSON.stringify(limpio)
+  );
+}
+
 // Reemplaza los placeholders del texto.
 export function render(texto: string, vars: { link: string; tienda: string }): string {
   return (texto ?? "")

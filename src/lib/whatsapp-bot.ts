@@ -5,7 +5,7 @@ import {
   type Segmento, detectarSegmento, interpretarRespuestaSegmento, preguntaSegmento,
   getContacto, setSegmento, marcarEsperandoSegmento, botSilenciado,
 } from "@/lib/whatsapp-segmento";
-import { loadBotTextos, loadBotCatalogo, render, type BotTextos } from "@/lib/bot-config";
+import { loadBotTextos, loadBotCatalogo, loadBotIA, render, type BotTextos } from "@/lib/bot-config";
 import { loadAclaraciones } from "@/lib/services/aclaraciones.service";
 
 // Palabras que disparan el envío de las aclaraciones/condiciones.
@@ -15,6 +15,47 @@ async function aclaracionesMessage(): Promise<string> {
   const items = await loadAclaraciones();
   if (!items.length) return "";
   return `📋 *Aclaraciones y condiciones*\n\n${items.map(i => `*${i.titulo}*\n${i.texto}`).join("\n\n")}`;
+}
+
+// Respuesta natural con IA: se usa cuando el mensaje no cae en ningún flujo.
+// Toma el historial reciente + info del negocio y contesta con contexto.
+// Devuelve null si la IA está apagada o falla (para caer al menú de siempre).
+async function respuestaIA(waId: string, texto: string, seg: Segmento, tienda: string): Promise<string | null> {
+  try {
+    const ia = await loadBotIA();
+    if (!ia.activo) return null;
+
+    const [{ aiComplete }, aclar, cat] = await Promise.all([
+      import("@/lib/ai"),
+      loadAclaraciones(),
+      loadBotCatalogo(),
+    ]);
+    const destino = cat.modo === "drive" && cat.drive_url ? cat.drive_url : `${APP_URL}/productos`;
+
+    const sys = [
+      `Sos el asistente de ventas de ${tienda}, una tienda de mates y productos regionales que atiende por WhatsApp.`,
+      `El cliente es del segmento: ${seg}.`,
+      `Catálogo / tienda online: ${destino}`,
+      aclar.length ? `Condiciones del negocio: ${aclar.map(a => `${a.titulo}: ${a.texto}`).join(" | ")}` : "",
+      `Reglas: contestá corto, cálido y en español rioplatense (voseo), como un vendedor por WhatsApp. NO inventes precios ni stock: si preguntan por el precio de un producto puntual, decí que se lo confirmás y ofrecé el catálogo. Si es algo que no podés resolver, ofrecé derivar a una persona del equipo. No prometas plazos ni condiciones que no figuren arriba.`,
+      ia.instrucciones || "",
+    ].filter(Boolean).join("\n");
+
+    // Historial reciente (el mensaje actual ya quedó registrado como entrante).
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT direccion, texto FROM whatsapp_mensajes WHERE wa_id = $1 ORDER BY creado_en DESC LIMIT 10`, waId);
+    const historial = rows.reverse()
+      .filter(r => r.direccion === "entrante" || r.direccion === "saliente")
+      .map(r => ({ role: (r.direccion === "entrante" ? "user" : "assistant") as "user" | "assistant", content: String(r.texto ?? "") }));
+    if (!historial.length || historial[historial.length - 1].content !== texto) {
+      historial.push({ role: "user", content: texto });
+    }
+
+    const out = await aiComplete({ system: sys, messages: historial, temperature: 0.7, maxTokens: 300 });
+    return out?.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 // Nombre de la tienda para el placeholder {tienda}.
@@ -397,8 +438,10 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
   } else if (PRICE_TRIGGERS.test(text)) {
     response = R(textos.consultar);
   } else {
-    // No es producto ni comando reconocido: menú amable (o acuse si es empresa).
-    response = segEfectivo === "empresarial" ? R(textos.cotizacion_recibida) : R(textos.menu);
+    // No es producto ni comando reconocido: primero probamos con la IA (si está
+    // activa); si no, menú amable (o acuse si es empresa).
+    const ia = !esSaludo ? await respuestaIA(waId, text, segEfectivo, tienda) : null;
+    response = ia ?? (segEfectivo === "empresarial" ? R(textos.cotizacion_recibida) : R(textos.menu));
   }
 
   if (esPrimerContacto && !esSaludo) response = `${R(textos.bienvenida)}\n\n${response}`;

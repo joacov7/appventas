@@ -1,18 +1,19 @@
 export const dynamic = "force-dynamic";
 
 import Link from "next/link";
-import { Plus, Pencil, Upload, Search } from "lucide-react";
+import { Plus, Pencil, Upload, Search, ImageOff } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { DeleteButton } from "./DeleteButton";
 import { HerramientasCatalogo } from "./HerramientasCatalogo";
 
-async function getProducts(q?: string) {
+async function getProducts(q?: string, foto?: string) {
   try {
     const { prisma } = await import("@/lib/prisma");
     const termino = q?.trim();
     return await prisma.product.findMany({
       where: {
         active: true,
+        ...(foto === "sin" ? { imageUrls: { isEmpty: true } } : foto === "con" ? { imageUrls: { isEmpty: false } } : {}),
         ...(termino ? {
           OR: [
             { name: { contains: termino, mode: "insensitive" } },
@@ -32,9 +33,16 @@ async function getProducts(q?: string) {
   }
 }
 
-export default async function ProductosAdminPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
-  const products = await getProducts(q);
+async function contarSinFoto() {
+  try {
+    const { prisma } = await import("@/lib/prisma");
+    return await prisma.product.count({ where: { active: true, imageUrls: { isEmpty: true } } });
+  } catch { return 0; }
+}
+
+export default async function ProductosAdminPage({ searchParams }: { searchParams: Promise<{ q?: string; foto?: string }> }) {
+  const { q, foto } = await searchParams;
+  const [products, sinFoto] = await Promise.all([getProducts(q, foto), contarSinFoto()]);
 
   return (
     <div>
@@ -66,8 +74,26 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
             className="w-full text-sm border border-gray-200 rounded-xl pl-9 pr-3 py-2 outline-none focus:ring-2 focus:ring-emerald-400" />
         </div>
         <button type="submit" className="text-sm bg-gray-800 hover:bg-gray-900 text-white font-medium px-4 py-2 rounded-xl">Buscar</button>
-        {q && <Link href="/admin/productos" className="text-sm text-gray-400 hover:text-gray-700">Limpiar</Link>}
+        {(q || foto) && <Link href="/admin/productos" className="text-sm text-gray-400 hover:text-gray-700">Limpiar</Link>}
       </form>
+
+      {/* Filtro por foto */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        {([["", "Todos"], ["con", "Con foto"], ["sin", "Sin foto"]] as const).map(([val, label]) => {
+          const params = new URLSearchParams();
+          if (q) params.set("q", q);
+          if (val) params.set("foto", val);
+          const activo = (foto ?? "") === val;
+          const qs = params.toString();
+          return (
+            <Link key={label} href={`/admin/productos${qs ? `?${qs}` : ""}`}
+              className={`text-xs px-3 py-1.5 rounded-full border ${activo ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-600 border-gray-200 hover:bg-gray-50"}`}>
+              {label}{val === "sin" && sinFoto > 0 ? ` (${sinFoto})` : ""}
+            </Link>
+          );
+        })}
+      </div>
+
       {q && <p className="text-xs text-gray-500 mb-2">{products.length} resultado(s) para “{q}”.</p>}
 
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
@@ -87,14 +113,26 @@ export default async function ProductosAdminPage({ searchParams }: { searchParam
               return (
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3">
-                    <div>
-                      <p className="font-medium text-gray-900">{product.name}</p>
+                    <div className="flex items-center gap-3">
+                      {product.imageUrls?.[0] ? (
+                        <img src={product.imageUrls[0]} alt={product.name}
+                          className="w-11 h-11 rounded-lg object-cover border border-gray-100 shrink-0" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center shrink-0" title="Sin foto">
+                          <ImageOff size={16} className="text-amber-500" />
+                        </div>
+                      )}
+                      <div>
+                      <p className="font-medium text-gray-900">{product.name}
+                        {!product.imageUrls?.[0] && <span className="ml-2 text-[10px] font-medium text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full align-middle">Sin foto</span>}
+                      </p>
                       {(() => {
                         const cod = product.variants.find(v => v.sku)?.sku;
                         return cod
                           ? <p className="text-xs text-gray-500">Cód: <span className="font-mono">{cod}</span></p>
                           : <p className="text-xs text-gray-400">{product.slug}</p>;
                       })()}
+                      </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 text-gray-600">{product.category?.name ?? "—"}</td>

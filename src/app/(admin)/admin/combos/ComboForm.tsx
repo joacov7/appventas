@@ -133,7 +133,8 @@ export function ComboForm({ initialData }: Props) {
 
   function getSuggested(seg: "minorista" | "mayorista" | "distribuidor"): number | null {
     if (!costoRealTotal || !config) return null;
-    return costoRealTotal / (1 - config.margenes[seg] / 100);
+    // Recargo sobre el costo: costo × (1 + %). Ej: costo 98.000 + 20% = 117.600.
+    return costoRealTotal * (1 + config.margenes[seg] / 100);
   }
 
   const precioEfectivo: number | null = precioManual
@@ -384,7 +385,7 @@ export function ComboForm({ initialData }: Props) {
                     <div key={seg} className="bg-gray-50 rounded-xl p-3 space-y-0.5">
                       <p className="text-xs font-medium text-gray-500 capitalize">{seg}</p>
                       <p className="text-base font-bold text-gray-900">{fmt(sug)}</p>
-                      <p className="text-xs text-gray-400">Margen {config.margenes[seg]}%</p>
+                      <p className="text-xs text-gray-400">Recargo {config.margenes[seg]}%</p>
                       {ganancia != null && (
                         <p className="text-xs text-emerald-600">+{fmt(ganancia)} ({pct?.toFixed(1)}%)</p>
                       )}

@@ -51,7 +51,8 @@ function fmt(n: number | null) {
 }
 
 function calcSuggested(costo: number, margen: number) {
-  return costo / (1 - margen / 100);
+  // Recargo sobre el costo: costo × (1 + %). Ej: 1000 + 20% = 1200.
+  return costo * (1 + margen / 100);
 }
 
 function roundOptions(price: number) {
@@ -221,7 +222,7 @@ export function PricingPanel({ productId }: { productId: string }) {
               <div key={key} className="bg-gray-50 rounded-xl p-3 space-y-1">
                 <p className="text-xs font-medium text-gray-500">{label}</p>
                 <p className="text-base font-bold text-gray-900">{fmt(effective)}</p>
-                <p className="text-xs text-gray-400">Margen {margin}%</p>
+                <p className="text-xs text-gray-400">Recargo {margin}%</p>
                 {ganancia != null && (
                   <p className="text-xs text-emerald-600">+{fmt(ganancia)} ({pct?.toFixed(1)}%)</p>
                 )}

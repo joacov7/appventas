@@ -151,11 +151,11 @@ export async function calcularPresupuesto(entrada: EntradaPresupuesto): Promise<
     let bajoPiso = false;
     let avisoLinea: string | undefined;
     if (p.costo != null && p.costo > 0) {
-      const piso = p.costo / (1 - MARGEN_PISO_PCT / 100);
+      const piso = p.costo * (1 + MARGEN_PISO_PCT / 100);
       if (base < piso) {
         base = redondear(piso);
         bajoPiso = true;
-        avisoLinea = `Se ajustó al margen mínimo del ${MARGEN_PISO_PCT}%`;
+        avisoLinea = `Se ajustó al recargo mínimo del ${MARGEN_PISO_PCT}%`;
       }
     }
 

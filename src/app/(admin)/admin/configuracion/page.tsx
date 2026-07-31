@@ -109,7 +109,7 @@ export default function ConfiguracionPage() {
                 <span>1%</span><span>80%</span>
               </div>
               <p className="text-xs text-gray-400 mt-0.5">
-                Ej: costo $1000 → precio {seg} ${Math.round(1000 / (1 - margenes[seg] / 100)).toLocaleString("es-AR")}
+                Ej: costo $1000 → precio {seg} ${Math.round(1000 * (1 + margenes[seg] / 100)).toLocaleString("es-AR")} (recargo)
               </p>
             </div>
           ))}

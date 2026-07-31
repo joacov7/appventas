@@ -16,7 +16,7 @@ export function calcularSugerencia(
   mercadoMin: number | null, prom: number | null
 ): SugerenciaPrecio {
   if (miPrecio == null || !prom || !mercadoMin) return null;
-  const piso = costo != null ? costo / (1 - MARGEN_PISO_PCT / 100) : null;
+  const piso = costo != null ? costo * (1 + MARGEN_PISO_PCT / 100) : null;
   const margenDe = (precio: number) =>
     costo != null && precio > 0 ? ((precio - costo) / precio) * 100 : null;
 

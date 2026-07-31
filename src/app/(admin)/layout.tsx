@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser, Info, Tags,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser, Info, Tags, Film,
 } from "lucide-react";
 
 const GRUPOS = [
@@ -48,6 +48,7 @@ const GRUPOS = [
   ] },
   { grupo: "Marketing e Inteligencia", items: [
     { href: "/admin/marketing", label: "Marketing", icon: CalendarDays },
+    { href: "/admin/videos", label: "Videos para redes", icon: Film },
     { href: "/admin/captacion/meta", label: "Meta Ads", icon: Megaphone },
     { href: "/admin/inteligencia", label: "Inteligencia", icon: TrendingDown },
     { href: "/admin/analytics", label: "Analytics", icon: BarChart2 },

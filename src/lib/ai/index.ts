@@ -8,6 +8,9 @@ import { OpenAICompatibleProvider } from "./providers/openai-compatible";
 
 export * from "./types";
 export { loadConfig, saveConfig, toMasked, applyEdits, defaultConfig } from "./config";
+export { AIBudgetExceededError, loadPresupuestoIA, savePresupuestoIA, resumenGastoIA } from "./gasto";
+
+import { registrarGastoIA, verificarPresupuestoIA } from "./gasto";
 
 export class AINotConfiguredError extends Error {}
 
@@ -45,10 +48,14 @@ export async function getAI(providerOverride?: string): Promise<AIClient> {
   return {
     provider: nombre,
     async complete(input: AICompleteInput): Promise<AICompleteResult> {
+      // Tope mensual: corta antes de gastar si está superado.
+      await verificarPresupuestoIA();
       if (cfg.debug) {
         console.log(`[AI:${nombre}] →`, JSON.stringify({ system: input.system?.slice(0, 120), msgs: input.messages.length }));
       }
       const result = await provider.complete(input);
+      // Registra el gasto (best-effort).
+      await registrarGastoIA(input.feature ?? "otros", result);
       if (cfg.debug) {
         console.log(`[AI:${nombre}] ← ${result.model} · ${result.ms}ms · ~$${result.costUsd?.toFixed(4) ?? "?"} · ${result.usage?.outputTokens ?? "?"} tok`);
       }

@@ -15,6 +15,8 @@ export interface AICompleteInput {
   fast?: boolean;
   /** Pide salida JSON (best-effort según el proveedor) */
   json?: boolean;
+  /** Etiqueta de la función que hace la llamada (para el registro de gasto) */
+  feature?: string;
 }
 
 export interface AICompleteResult {

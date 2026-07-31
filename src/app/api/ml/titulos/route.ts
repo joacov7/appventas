@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
       system: SYSTEM,
       messages: [{ role: "user", content: userMsg }],
       temperature: 0.8,
-      maxTokens: 400,
+      maxTokens: 400, feature: "titulos-ml",
     });
 
     // Intentar parsear el array JSON; si no, extraer líneas.

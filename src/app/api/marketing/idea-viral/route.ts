@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
-import { aiComplete, AINotConfiguredError } from "@/lib/ai";
+import { aiComplete, AINotConfiguredError, AIBudgetExceededError } from "@/lib/ai";
 
 // Arma un resumen compacto del catálogo (precio, costo→margen, stock) para que
 // la IA elija la mejor oportunidad.
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
   const user = `Catálogo:\n${catalogo}\n\n${evitar ? `Ya propusiste esto, dame algo DISTINTO (otro producto o ángulo): ${evitar}\n\n` : ""}Proponé UNA idea viral concreta.`;
 
   try {
-    const texto = await aiComplete({ system: SYSTEM, messages: [{ role: "user", content: user }], temperature: 0.95, maxTokens: 700 });
+    const texto = await aiComplete({ system: SYSTEM, messages: [{ role: "user", content: user }], temperature: 0.95, maxTokens: 700, feature: "idea-viral" });
     const m = texto.match(/\{[\s\S]*\}/);
     let d: any = {};
     if (m) { try { d = JSON.parse(m[0]); } catch { /* fallback */ } }
@@ -71,6 +71,9 @@ export async function POST(req: NextRequest) {
       hashtags: Array.isArray(d.hashtags) ? d.hashtags.map((x: any) => String(x).replace(/^#/, "")).filter(Boolean).slice(0, 12) : [],
     });
   } catch (e) {
+    if (e instanceof AIBudgetExceededError) {
+      return NextResponse.json({ error: "Alcanzaste el límite mensual de gasto de IA. Subilo en Admin → Inteligencia Artificial." }, { status: 402 });
+    }
     if (e instanceof AINotConfiguredError) {
       return NextResponse.json({ error: "La IA no está configurada. Cargala en Admin → Inteligencia Artificial." }, { status: 400 });
     }

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const user = `Producto: ${nombre.trim()}${precio ? `\nPrecio: $${precio}` : ""}${detalles?.trim() ? `\nExtra: ${detalles.trim()}` : ""}\n\nGenerá el hook, la caption y los hashtags para un Reel.`;
 
   try {
-    const texto = await aiComplete({ system: SYSTEM, messages: [{ role: "user", content: user }], temperature: 0.85, maxTokens: 400 });
+    const texto = await aiComplete({ system: SYSTEM, messages: [{ role: "user", content: user }], temperature: 0.85, maxTokens: 400, feature: "reel-copy" });
     let data: any = {};
     const m = texto.match(/\{[\s\S]*\}/);
     if (m) { try { data = JSON.parse(m[0]); } catch { /* fallback abajo */ } }

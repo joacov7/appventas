@@ -31,7 +31,8 @@ type Ambito =
   | "ordenes"
   | "usuarios"
   | "clientes"
-  | "premium";
+  | "premium"
+  | "ia";
 
 // Cada entrada es una sentencia DDL idempotente. Se ejecutan en orden para
 // respetar dependencias (una tabla referenciada antes de la que la referencia).
@@ -495,6 +496,20 @@ const DDL: Record<Ambito, string[]> = {
       activo BOOLEAN NOT NULL DEFAULT TRUE,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )`,
+  ],
+
+  // ─── Registro de gasto de IA ─────────────────────────────────────────────
+  ia: [
+    `CREATE TABLE IF NOT EXISTS ai_gasto (
+      id SERIAL PRIMARY KEY,
+      feature TEXT,
+      model TEXT,
+      costo_usd NUMERIC(12,6) NOT NULL DEFAULT 0,
+      input_tokens INT,
+      output_tokens INT,
+      creado_en TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ai_gasto_creado ON ai_gasto(creado_en)`,
   ],
 
   // ─── Características por producto (catálogo premium) ──────────────────────

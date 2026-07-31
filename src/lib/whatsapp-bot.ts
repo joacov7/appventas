@@ -51,7 +51,7 @@ async function respuestaIA(waId: string, texto: string, seg: Segmento, tienda: s
       historial.push({ role: "user", content: texto });
     }
 
-    const out = await aiComplete({ system: sys, messages: historial, temperature: 0.7, maxTokens: 300 });
+    const out = await aiComplete({ system: sys, messages: historial, temperature: 0.7, maxTokens: 300, feature: "bot-ia" });
     return out?.trim() || null;
   } catch {
     return null;

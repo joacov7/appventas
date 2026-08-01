@@ -139,7 +139,7 @@ function normalizarDestino(to: string): string {
 // Envía la plantilla de abordaje a un número, con las variables ({{1}}, {{2}}…).
 export async function enviarPlantillaAbordaje(
   to: string, params: string[], tipo?: AbordajeTipo
-): Promise<{ ok: boolean; error?: string }> {
+): Promise<{ ok: boolean; error?: string; wamId?: string }> {
   const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
   if (!accessToken || !phoneNumberId) return { ok: false, error: "WhatsApp no configurado (falta token/phone id)." };
 
@@ -166,8 +166,9 @@ export async function enviarPlantillaAbordaje(
       const txt = await res.text().catch(() => "");
       return { ok: false, error: `Meta respondió ${res.status}: ${txt.slice(0, 300)}` };
     }
+    const data = await res.json().catch(() => ({}));
     await registrarUsoAbordaje(1);
-    return { ok: true };
+    return { ok: true, wamId: data?.messages?.[0]?.id };
   } catch (e: any) {
     return { ok: false, error: e?.message ?? "error de conexión" };
   }

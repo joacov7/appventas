@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
   // interrumpe cuando el prospecto responda (lo atendés vos).
   try {
     await (prisma as any).$executeRawUnsafe(
-      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'saliente', $2)`,
-      destino, "📤 Abordaje (plantilla) enviado");
+      `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto, wam_id, estado) VALUES ($1, 'saliente', $2, $3, 'sent')`,
+      destino, "📤 Abordaje (plantilla) enviado", r.wamId ?? null);
     await (prisma as any).$executeRawUnsafe(
       `UPDATE prospectos SET estado = CASE WHEN estado = 'nuevo' THEN 'contactado' ELSE estado END,
          contactado_en = COALESCE(contactado_en, now()) WHERE id = $1`, Number(prospectoId));

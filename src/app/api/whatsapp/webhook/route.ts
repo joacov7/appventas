@@ -23,6 +23,17 @@ async function registrarEstados(statuses: any[]): Promise<void> {
     if (estado === "failed") {
       await (prisma as any).$executeRawUnsafe(
         `UPDATE whatsapp_mensajes SET estado = 'failed' WHERE wam_id = $1`, id).catch(() => {});
+      // Si el mensaje que falló es un abordaje, marcamos al prospecto como
+      // "sin WhatsApp" (matcheando por los últimos 8 dígitos del teléfono).
+      const dest = String(s?.recipient_id ?? "").replace(/\D/g, "");
+      if (dest.length >= 8) {
+        await ensureSchema("captacion").catch(() => {});
+        await (prisma as any).$executeRawUnsafe(
+          `UPDATE prospectos SET sin_whatsapp = true
+             WHERE right(regexp_replace(telefono, '\\D', '', 'g'), 8) = $1
+             AND EXISTS (SELECT 1 FROM whatsapp_mensajes m WHERE m.wam_id = $2 AND m.texto LIKE '📤 Abordaje%')`,
+          dest.slice(-8), id).catch(() => {});
+      }
       continue;
     }
     const rango = RANGO[estado];

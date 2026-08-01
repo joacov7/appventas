@@ -22,6 +22,7 @@ type Prospecto = {
   mensaje_abordaje: string | null;
   puntaje: string | null;
   puntos: number | null;
+  sin_whatsapp?: boolean;
   creado_en: string;
 };
 
@@ -486,8 +487,8 @@ export default function CaptacionPage() {
   async function abordarLote(lista: Prospecto[], tipo: string) {
     setMenuLoteOpen(false);
     const et = TIPOS_ABORDAJE.find(t => t.clave === tipo)?.etiqueta ?? tipo;
-    const conTel = lista.filter(p => p.telefono);
-    if (!conTel.length) { alert("Ninguno de los prospectos filtrados tiene teléfono."); return; }
+    const conTel = lista.filter(p => p.telefono && !p.sin_whatsapp);
+    if (!conTel.length) { alert("Ninguno de los prospectos filtrados tiene teléfono (o están marcados sin WhatsApp)."); return; }
     if (!confirm(`Enviar el abordaje "${et}" a ${conTel.length} prospecto(s) por WhatsApp (desde el número del bot)?\n\nSe respeta el tope de gasto mensual.`)) return;
     setAbordandoLote(true);
     try {
@@ -758,9 +759,9 @@ export default function CaptacionPage() {
                   Con teléfono
                 </button>
                 <button onClick={() => setPSoloCelular(v => !v)}
-                  title="Oculta las líneas fijas (probablemente sin WhatsApp)"
+                  title="Oculta los que NO muestran marcador de celular. Ojo: es una estimación (los números de Google suelen venir sin el 15/9), puede esconder celulares reales."
                   className={`px-3 py-2 rounded-xl text-sm font-medium transition-colors ${pSoloCelular ? "bg-emerald-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}>
-                  📱 Solo celular
+                  📱 ¿Solo celular?
                 </button>
                 {["A", "B", "C"].map(l => (
                   <button key={l} onClick={() => setPPuntajeFiltro(v => v === l ? "" : l)}
@@ -810,7 +811,7 @@ export default function CaptacionPage() {
                 )}
                 {/* Abordar en lote a los prospectos filtrados con teléfono */}
                 {(() => {
-                  const conTel = filtrados.filter(p => p.telefono);
+                  const conTel = filtrados.filter(p => p.telefono && !p.sin_whatsapp);
                   return conTel.length > 0 ? (
                     <div className="relative ml-auto">
                       <button onClick={() => setMenuLoteOpen(v => !v)} disabled={abordandoLote}
@@ -852,15 +853,17 @@ export default function CaptacionPage() {
                         {p.telefono && (
                           <>
                             <span className="text-xs text-gray-500 flex items-center gap-1"><Phone size={11} /> {p.telefono}</span>
-                            {esProbableFijo(p.telefono) && (
-                              <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded-full" title="No tiene marcador de celular: probablemente es línea fija, sin WhatsApp">📞 posible fija</span>
-                            )}
-                            {!esProbableFijo(p.telefono) && (
+                            {p.sin_whatsapp ? (
+                              <span className="text-[10px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full" title="Un abordaje no se pudo entregar: probablemente este número no tiene WhatsApp">❌ sin WhatsApp</span>
+                            ) : (
                               <a href={waLink(p.telefono)} target="_blank" rel="noopener noreferrer"
                                 onClick={() => registrarEnvioWhatsapp(p)}
                                 className="flex items-center gap-1.5 bg-[#25D366] hover:bg-[#1ebe5d] text-white text-xs font-medium px-3 py-1 rounded-full transition-colors">
                                 <MessageCircle size={12} fill="white" strokeWidth={0} /> WhatsApp
                               </a>
+                            )}
+                            {esProbableFijo(p.telefono) && !p.sin_whatsapp && (
+                              <span className="text-[10px] bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded-full" title="Estimación: el número no muestra marcador de celular. Puede tener WhatsApp igual — probá el abordaje.">📞 ¿fijo?</span>
                             )}
                             <div className="relative">
                               <button onClick={() => setMenuAbordaje(menuAbordaje === p.id ? null : p.id)} disabled={enviandoWa !== null}

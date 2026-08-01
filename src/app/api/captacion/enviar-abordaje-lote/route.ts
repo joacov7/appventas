@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const ids = prospectoIds.map((x: any) => Number(x)).filter((n: number) => Number.isFinite(n)).slice(0, 300);
   const rows: any[] = await (prisma as any).$queryRawUnsafe(
-    `SELECT id, nombre, telefono, estado FROM prospectos WHERE id = ANY($1::int[])`, ids);
+    `SELECT id, nombre, telefono, estado FROM prospectos WHERE id = ANY($1::int[]) AND (sin_whatsapp IS NOT TRUE)`, ids);
 
   let enviados = 0, sinTelefono = 0, cortadoPorPresupuesto = 0, errores = 0, pendientes = 0;
 
@@ -50,8 +50,8 @@ export async function POST(req: NextRequest) {
     if (i < rows.length - 1) await dormir(PAUSA_MS); // espacia el próximo envío
     try {
       await (prisma as any).$executeRawUnsafe(
-        `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'saliente', $2)`,
-        destino, "📤 Abordaje (plantilla) enviado");
+        `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto, wam_id, estado) VALUES ($1, 'saliente', $2, $3, 'sent')`,
+        destino, "📤 Abordaje (plantilla) enviado", r.wamId ?? null);
       await (prisma as any).$executeRawUnsafe(
         `UPDATE prospectos SET estado = CASE WHEN estado = 'nuevo' THEN 'contactado' ELSE estado END,
            contactado_en = COALESCE(contactado_en, now()) WHERE id = $1`, p.id);

@@ -254,6 +254,7 @@ const DDL: Record<Ambito, string[]> = {
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntaje TEXT`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS enriquecido_en TIMESTAMPTZ`,
     `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS puntos INT`,
+    `ALTER TABLE prospectos ADD COLUMN IF NOT EXISTS sin_whatsapp BOOLEAN DEFAULT FALSE`,
     `CREATE INDEX IF NOT EXISTS idx_prospectos_puntos ON prospectos(puntos DESC NULLS LAST)`,
     // Historial de interacciones por prospecto (quién/cuándo/qué se le dijo).
     `CREATE TABLE IF NOT EXISTS prospecto_interacciones (

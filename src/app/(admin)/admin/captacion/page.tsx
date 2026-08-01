@@ -115,7 +115,9 @@ export default function CaptacionPage() {
   const [manualError, setManualError] = useState("");
   // Filtros de la lista de resultados
   const [pTexto, setPTexto] = useState("");
-  const [pRubroFiltro, setPRubroFiltro] = useState("");
+  const [pRubrosFiltro, setPRubrosFiltro] = useState<string[]>([]);
+  const [rubrosPanelOpen, setRubrosPanelOpen] = useState(false);
+  const [abordandoLote, setAbordandoLote] = useState(false);
   const [pZonaFiltro, setPZonaFiltro] = useState("");
   const [pSoloContacto, setPSoloContacto] = useState(false);
   const [pSoloCelular, setPSoloCelular] = useState(false);
@@ -480,6 +482,33 @@ export default function CaptacionPage() {
     finally { setEnviandoWa(null); }
   }
 
+  const [menuLoteOpen, setMenuLoteOpen] = useState(false);
+  async function abordarLote(lista: Prospecto[], tipo: string) {
+    setMenuLoteOpen(false);
+    const et = TIPOS_ABORDAJE.find(t => t.clave === tipo)?.etiqueta ?? tipo;
+    const conTel = lista.filter(p => p.telefono);
+    if (!conTel.length) { alert("Ninguno de los prospectos filtrados tiene teléfono."); return; }
+    if (!confirm(`Enviar el abordaje "${et}" a ${conTel.length} prospecto(s) por WhatsApp (desde el número del bot)?\n\nSe respeta el tope de gasto mensual.`)) return;
+    setAbordandoLote(true);
+    try {
+      const r = await fetch("/api/captacion/enviar-abordaje-lote", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prospectoIds: conTel.map(p => p.id), tipo }),
+      });
+      const d = await r.json();
+      if (r.ok) {
+        const ids = new Set(conTel.map(p => p.id));
+        setProspectos(prev => prev.map(x => ids.has(x.id) && x.estado === "nuevo" ? { ...x, estado: "contactado" } : x));
+        let msg = `✅ Abordaje enviado a ${d.enviados}.`;
+        if (d.sinTelefono) msg += `\n${d.sinTelefono} sin teléfono (omitidos).`;
+        if (d.errores) msg += `\n${d.errores} con error.`;
+        if (d.cortadoPorPresupuesto) msg += `\n⚠️ ${d.cortadoPorPresupuesto} quedaron sin enviar: se alcanzó el tope de gasto mensual.`;
+        alert(msg);
+      } else alert(d.error ?? "No se pudo enviar el lote");
+    } catch { alert("Error de conexión"); }
+    finally { setAbordandoLote(false); }
+  }
+
   return (
     <div className="max-w-5xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
@@ -693,11 +722,28 @@ export default function CaptacionPage() {
                     className="w-full border rounded-xl pl-9 pr-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>
                 {rubrosDisponibles.length > 1 && (
-                  <select value={pRubroFiltro} onChange={e => setPRubroFiltro(e.target.value)}
-                    className="border rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
-                    <option value="">Todos los rubros</option>
-                    {rubrosDisponibles.sort().map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  <div className="relative">
+                    <button onClick={() => setRubrosPanelOpen(v => !v)}
+                      className="border rounded-xl px-3 py-2 text-sm bg-white hover:bg-gray-50">
+                      {pRubrosFiltro.length ? `Rubros (${pRubrosFiltro.length})` : "Todos los rubros"} ▾
+                    </button>
+                    {rubrosPanelOpen && (
+                      <div className="absolute z-30 mt-1 w-64 max-h-72 overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-lg p-2">
+                        <div className="flex justify-between items-center px-1 pb-1 mb-1 border-b">
+                          <button onClick={() => setPRubrosFiltro(rubrosDisponibles)} className="text-xs text-emerald-600 hover:underline">Todos</button>
+                          <button onClick={() => setPRubrosFiltro([])} className="text-xs text-gray-400 hover:underline">Ninguno</button>
+                        </div>
+                        {rubrosDisponibles.sort().map(r => (
+                          <label key={r} className="flex items-center gap-2 px-1 py-1 text-sm text-gray-700 hover:bg-gray-50 rounded cursor-pointer">
+                            <input type="checkbox" checked={pRubrosFiltro.includes(r)}
+                              onChange={e => setPRubrosFiltro(prev => e.target.checked ? [...prev, r] : prev.filter(x => x !== r))}
+                              className="accent-emerald-600" />
+                            <span className="truncate">{r}</span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
                 {zonasDisponibles.length > 1 && (
                   <select value={pZonaFiltro} onChange={e => setPZonaFiltro(e.target.value)}
@@ -730,7 +776,7 @@ export default function CaptacionPage() {
             const q = pTexto.trim().toLowerCase();
             const filtrados = prospectos.filter(p =>
               (!q || p.nombre.toLowerCase().includes(q)) &&
-              (!pRubroFiltro || p.rubro === pRubroFiltro) &&
+              (pRubrosFiltro.length === 0 || (!!p.rubro && pRubrosFiltro.includes(p.rubro))) &&
               (!pZonaFiltro || p.provincia === pZonaFiltro) &&
               (!pSoloContacto || !!p.telefono) &&
               (!pSoloCelular || (!!p.telefono && !esProbableFijo(p.telefono))) &&
@@ -748,7 +794,7 @@ export default function CaptacionPage() {
           ) : filtrados.length === 0 ? (
             <div className="text-center py-12 text-gray-400">
               <p className="text-sm">Ningún prospecto coincide con los filtros.</p>
-              <button onClick={() => { setPTexto(""); setPRubroFiltro(""); setPZonaFiltro(""); setPSoloContacto(false); setPSoloCelular(false); setPPuntajeFiltro(""); }}
+              <button onClick={() => { setPTexto(""); setPRubrosFiltro([]); setPZonaFiltro(""); setPSoloContacto(false); setPSoloCelular(false); setPPuntajeFiltro(""); }}
                 className="text-xs text-emerald-600 hover:underline mt-2">Limpiar filtros</button>
             </div>
           ) : (
@@ -761,6 +807,29 @@ export default function CaptacionPage() {
                     <button onClick={() => verZona("")} className="hover:text-emerald-900 font-bold">✕</button>
                   </span>
                 )}
+                {/* Abordar en lote a los prospectos filtrados con teléfono */}
+                {(() => {
+                  const conTel = filtrados.filter(p => p.telefono);
+                  return conTel.length > 0 ? (
+                    <div className="relative ml-auto">
+                      <button onClick={() => setMenuLoteOpen(v => !v)} disabled={abordandoLote}
+                        className="text-xs bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-medium px-3 py-1.5 rounded-xl">
+                        {abordandoLote ? "Enviando…" : `📤 Abordar en lote (${conTel.length}) ▾`}
+                      </button>
+                      {menuLoteOpen && (
+                        <div className="absolute right-0 z-30 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-1">
+                          <p className="text-[11px] text-gray-400 px-3 py-1">Enviar plantilla a los {conTel.length} filtrados:</p>
+                          {TIPOS_ABORDAJE.map(t => (
+                            <button key={t.clave} onClick={() => abordarLote(filtrados, t.clave)}
+                              className="block w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-emerald-50">
+                              {t.etiqueta}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
               </div>
               {[...filtrados].sort((a, b) => (b.puntos ?? prioridadProspecto(b)) - (a.puntos ?? prioridadProspecto(a))).map((p) => (
                 <div key={p.id} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">

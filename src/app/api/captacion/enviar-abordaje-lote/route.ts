@@ -25,9 +25,18 @@ export async function POST(req: NextRequest) {
   const rows: any[] = await (prisma as any).$queryRawUnsafe(
     `SELECT id, nombre, telefono, estado FROM prospectos WHERE id = ANY($1::int[])`, ids);
 
-  let enviados = 0, sinTelefono = 0, cortadoPorPresupuesto = 0, errores = 0;
+  let enviados = 0, sinTelefono = 0, cortadoPorPresupuesto = 0, errores = 0, pendientes = 0;
 
-  for (const p of rows) {
+  // Pausa entre envíos: evita disparar todo de golpe (Meta puede marcarlo como
+  // spam). ~1,2s entre plantillas.
+  const PAUSA_MS = 1200;
+  const dormir = (ms: number) => new Promise(res => setTimeout(res, ms));
+  const inicio = Date.now();
+
+  for (let i = 0; i < rows.length; i++) {
+    const p = rows[i];
+    // Corte por tiempo para no ser matado por el servidor a mitad de lote.
+    if (Date.now() - inicio > 50_000) { pendientes = rows.length - i; break; }
     // Chequea el tope antes de cada envío.
     const presu = await presupuestoAbordaje();
     if (!presu.disponible) { cortadoPorPresupuesto = rows.length - enviados - sinTelefono - errores; break; }
@@ -38,6 +47,7 @@ export async function POST(req: NextRequest) {
     const r = await enviarPlantillaAbordaje(destino, [String(p.nombre)], tipoValido);
     if (!r.ok) { errores++; continue; }
     enviados++;
+    if (i < rows.length - 1) await dormir(PAUSA_MS); // espacia el próximo envío
     try {
       await (prisma as any).$executeRawUnsafe(
         `INSERT INTO whatsapp_mensajes (wa_id, direccion, texto) VALUES ($1, 'saliente', $2)`,
@@ -50,5 +60,5 @@ export async function POST(req: NextRequest) {
     } catch { /* no crítico */ }
   }
 
-  return NextResponse.json({ ok: true, enviados, sinTelefono, cortadoPorPresupuesto, errores });
+  return NextResponse.json({ ok: true, enviados, sinTelefono, cortadoPorPresupuesto, errores, pendientes });
 }

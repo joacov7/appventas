@@ -503,6 +503,7 @@ export default function CaptacionPage() {
         if (d.sinTelefono) msg += `\n${d.sinTelefono} sin teléfono (omitidos).`;
         if (d.errores) msg += `\n${d.errores} con error.`;
         if (d.cortadoPorPresupuesto) msg += `\n⚠️ ${d.cortadoPorPresupuesto} quedaron sin enviar: se alcanzó el tope de gasto mensual.`;
+        if (d.pendientes) msg += `\n⏳ ${d.pendientes} quedaron para una próxima tanda (lote muy grande). Volvé a tocar 'Abordar en lote' para seguir.`;
         alert(msg);
       } else alert(d.error ?? "No se pudo enviar el lote");
     } catch { alert("Error de conexión"); }

@@ -110,7 +110,7 @@ export async function POST(req: NextRequest) {
       // IMPORTANTE: esperar el procesamiento. En serverless (Vercel) la función
       // se congela al responder y mataría el envío de la respuesta a Meta.
       try {
-        await handleIncomingMessage(waId, text);
+        await handleIncomingMessage(waId, text, message.id);
       } catch (e) {
         console.error("[WA Bot] handleIncomingMessage error:", e);
       }

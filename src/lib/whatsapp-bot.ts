@@ -32,13 +32,18 @@ async function respuestaIA(waId: string, texto: string, seg: Segmento, tienda: s
     ]);
     const destino = cat.modo === "drive" && cat.drive_url ? cat.drive_url : `${APP_URL}/productos`;
 
+    const persona = ia.nombre
+      ? `Te llamás ${ia.nombre} y sos el asistente de ${tienda}.`
+      : `Sos el asistente de ${tienda}.`;
     const sys = [
-      `Sos el asistente de ventas de ${tienda}, una tienda de mates y productos regionales que atiende por WhatsApp.`,
+      `${persona} Es una tienda de mates y productos regionales que atiende por WhatsApp.`,
+      `Personalidad: cálido, cercano y con buena onda, como alguien del equipo que te atiende bien. Español rioplatense (voseo), mensajes cortos, algún emoji con medida.`,
+      `Importante: sos un ASISTENTE VIRTUAL, no una persona real. No mientas sobre eso: si te preguntan si sos un bot/persona, respondé con naturalidad que sos el asistente virtual de la tienda y que podés derivar a alguien del equipo cuando haga falta.`,
       `El cliente es del segmento: ${seg}.`,
       `Catálogo / tienda online: ${destino}`,
       aclar.length ? `Condiciones del negocio: ${aclar.map(a => `${a.titulo}: ${a.texto}`).join(" | ")}` : "",
-      `Reglas: contestá corto, cálido y en español rioplatense (voseo), como un vendedor por WhatsApp. NO inventes precios ni stock: si preguntan por el precio de un producto puntual, decí que se lo confirmás y ofrecé el catálogo. Si es algo que no podés resolver, ofrecé derivar a una persona del equipo. No prometas plazos ni condiciones que no figuren arriba.`,
-      ia.instrucciones || "",
+      `Reglas: NO inventes precios ni stock: si preguntan por el precio de un producto puntual, decí que se lo confirmás y ofrecé el catálogo. Si es algo que no podés resolver, ofrecé derivar a una persona del equipo. No prometas plazos ni condiciones que no figuren arriba.`,
+      ia.instrucciones ? `Instrucciones extra del dueño: ${ia.instrucciones}` : "",
     ].filter(Boolean).join("\n");
 
     // Historial reciente (el mensaje actual ya quedó registrado como entrante).
@@ -448,14 +453,41 @@ export async function computarRespuesta(waId: string, texto: string, esPrimerCon
   return response;
 }
 
-export async function handleIncomingMessage(waId: string, messageText: string) {
+// Muestra "escribiendo…" en el chat del cliente (best-effort). Requiere el id
+// del mensaje entrante. También lo marca como leído.
+async function mostrarEscribiendo(messageId: string): Promise<void> {
+  try {
+    const { accessToken, phoneNumberId } = await loadWhatsAppConfig();
+    if (!accessToken || !phoneNumberId || !messageId) return;
+    await fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messaging_product: "whatsapp", status: "read", message_id: messageId, typing_indicator: { type: "text" } }),
+    });
+  } catch { /* no crítico */ }
+}
+
+export async function handleIncomingMessage(waId: string, messageText: string, messageId?: string) {
   const text = messageText.trim();
   const esPrimerContacto = await esNuevoContacto(waId);
   await logMessage(waId, "entrante", text);
   // Si un humano está atendiendo esta charla, el bot no interrumpe (pero el
   // mensaje queda registrado y el aviso a Telegram se dispara igual).
   if (await botSilenciado(waId)) return;
+
   const response = await computarRespuesta(waId, text, esPrimerContacto);
+
+  // Demora "humana": muestra "escribiendo…" y espera un rato proporcional al
+  // largo de la respuesta (para no contestar como un robot al instante).
+  try {
+    const ia = await loadBotIA();
+    if (ia.demora) {
+      if (messageId) await mostrarEscribiendo(messageId);
+      const espera = Math.min(6000, 1200 + response.length * 35);
+      await new Promise(res => setTimeout(res, espera));
+    }
+  } catch { /* si falla, responde sin demora */ }
+
   await logMessage(waId, "saliente", response);
   await sendWhatsAppMessage(waId, response);
 }

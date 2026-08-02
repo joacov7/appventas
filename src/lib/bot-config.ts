@@ -121,9 +121,11 @@ export async function saveBotCatalogo(cfg: BotCatalogo): Promise<void> {
 export interface BotIA {
   activo: boolean;
   instrucciones: string; // tono/personalidad y reglas extra para la IA
+  nombre: string;        // nombre del asistente (ej: "Sofi")
+  demora: boolean;       // simular "escribiendo…" antes de responder
 }
 
-export const IA_DEFAULT: BotIA = { activo: false, instrucciones: "" };
+export const IA_DEFAULT: BotIA = { activo: false, instrucciones: "", nombre: "", demora: false };
 
 export async function loadBotIA(): Promise<BotIA> {
   try {
@@ -131,7 +133,12 @@ export async function loadBotIA(): Promise<BotIA> {
     const rows: any[] = await (prisma as any).$queryRawUnsafe(
       `SELECT config FROM catalog_config WHERE tipo = 'bot_ia'`);
     const c = rows[0]?.config ?? {};
-    return { activo: !!c.activo, instrucciones: typeof c.instrucciones === "string" ? c.instrucciones : "" };
+    return {
+      activo: !!c.activo,
+      instrucciones: typeof c.instrucciones === "string" ? c.instrucciones : "",
+      nombre: typeof c.nombre === "string" ? c.nombre : "",
+      demora: !!c.demora,
+    };
   } catch {
     return IA_DEFAULT;
   }
@@ -139,7 +146,12 @@ export async function loadBotIA(): Promise<BotIA> {
 
 export async function saveBotIA(cfg: BotIA): Promise<void> {
   await ensureSchema("config");
-  const limpio: BotIA = { activo: !!cfg.activo, instrucciones: String(cfg.instrucciones ?? "").trim() };
+  const limpio: BotIA = {
+    activo: !!cfg.activo,
+    instrucciones: String(cfg.instrucciones ?? "").trim(),
+    nombre: String(cfg.nombre ?? "").trim().slice(0, 40),
+    demora: !!cfg.demora,
+  };
   await (prisma as any).$executeRawUnsafe(
     `INSERT INTO catalog_config (tipo, config) VALUES ('bot_ia', $1::jsonb)
      ON CONFLICT (tipo) DO UPDATE SET config = $1::jsonb, updated_at = NOW()`,

@@ -44,7 +44,7 @@ export default function MensajesBotPage() {
   const [catalogo, setCatalogo] = useState<{ modo: "web" | "drive"; drive_url: string }>({ modo: "web", drive_url: "" });
   const [catGuardado, setCatGuardado] = useState("");
   // Modo IA conversacional.
-  const [ia, setIa] = useState<{ activo: boolean; instrucciones: string }>({ activo: false, instrucciones: "" });
+  const [ia, setIa] = useState<{ activo: boolean; instrucciones: string; nombre: string; demora: boolean }>({ activo: false, instrucciones: "", nombre: "", demora: false });
   const [iaGuardado, setIaGuardado] = useState("");
 
   useEffect(() => {
@@ -63,7 +63,7 @@ export default function MensajesBotPage() {
       if (d?.modo) setCatalogo({ modo: d.modo, drive_url: d.drive_url ?? "" });
     }).catch(() => {});
     fetch("/api/whatsapp/ia").then(r => r.json()).then(d => {
-      if (typeof d?.activo === "boolean") setIa({ activo: d.activo, instrucciones: d.instrucciones ?? "" });
+      if (typeof d?.activo === "boolean") setIa({ activo: d.activo, instrucciones: d.instrucciones ?? "", nombre: d.nombre ?? "", demora: !!d.demora });
     }).catch(() => {});
     cargarPresupuesto();
   }, []);
@@ -176,6 +176,21 @@ export default function MensajesBotPage() {
           <span className="text-sm font-medium text-gray-800">🤖 Modo IA conversacional</span>
         </label>
         <p className="text-xs text-gray-500 mt-1 mb-3">Cuando el cliente escribe algo que no cae en un flujo, en vez de repetir el menú la IA responde con contexto (historial + info del negocio). No inventa precios y ofrece derivar a una persona.</p>
+
+        <div className="grid sm:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="text-xs text-gray-500">Nombre del asistente</label>
+            <input value={ia.nombre} onChange={e => setIa({ ...ia, nombre: e.target.value })}
+              placeholder="Ej: Sofi"
+              className="w-full mt-1 text-sm border rounded-xl px-3 py-2 outline-none" />
+            <p className="text-[11px] text-gray-400 mt-1">Se presenta como asistente cálido con ese nombre (sin fingir ser una persona real).</p>
+          </div>
+          <label className="flex items-start gap-2 text-sm text-gray-700 mt-5">
+            <input type="checkbox" checked={ia.demora} onChange={e => setIa({ ...ia, demora: e.target.checked })} className="accent-emerald-600 mt-0.5" />
+            <span>Demora “escribiendo…”<br /><span className="text-[11px] text-gray-400">Espera unos segundos y muestra que está escribiendo, en vez de responder al instante.</span></span>
+          </label>
+        </div>
+
         <label className="text-xs text-gray-500">Instrucciones / tono (opcional)</label>
         <textarea value={ia.instrucciones} onChange={e => setIa({ ...ia, instrucciones: e.target.value })} rows={3}
           placeholder="Ej: Sé breve y amable. Tuteá con voseo. Sugerí el mate imperial cuando pregunten por regalos."

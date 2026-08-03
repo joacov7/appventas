@@ -159,6 +159,91 @@ export async function saveBotIA(cfg: BotIA): Promise<void> {
   );
 }
 
+// ─── Política de Ventas (agente / asistente) ─────────────────────────────────
+// Reglas con las que el asistente vende. Todo editable desde el admin.
+export interface PoliticaVentas {
+  activa: boolean;
+  permite_descuento: boolean;   // si el asistente puede ofrecer descuentos solo
+  escalar_monto: number;        // deriva al humano si el pedido supera esto (ARS)
+  medios_pago: string;
+  envio: string;
+  minimo_mayorista: string;
+  descuento_volumen: string;    // texto (el dueño lo maneja a mano)
+  cierre: "preparar_y_avisar" | "solo_avisar";
+  extra: string;
+}
+
+export const POLITICA_DEFAULT: PoliticaVentas = {
+  activa: true,
+  permite_descuento: false,
+  escalar_monto: 200000,
+  medios_pago: "Transferencia bancaria",
+  envio: "El envío corre por cuenta del comprador. Se despacha una vez confirmado el pago.",
+  minimo_mayorista: "10 unidades surtidas",
+  descuento_volumen: "Hay descuentos por compras de más de 50 unidades, pero los coordina el equipo (no los ofrezcas vos).",
+  cierre: "preparar_y_avisar",
+  extra: "",
+};
+
+export async function loadPoliticaVentas(): Promise<PoliticaVentas> {
+  try {
+    await ensureSchema("config");
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT config FROM catalog_config WHERE tipo = 'politica_ventas'`);
+    const c = rows[0]?.config;
+    if (!c) return POLITICA_DEFAULT;
+    return {
+      activa: c.activa !== false,
+      permite_descuento: !!c.permite_descuento,
+      escalar_monto: Number(c.escalar_monto) || 0,
+      medios_pago: typeof c.medios_pago === "string" ? c.medios_pago : POLITICA_DEFAULT.medios_pago,
+      envio: typeof c.envio === "string" ? c.envio : POLITICA_DEFAULT.envio,
+      minimo_mayorista: typeof c.minimo_mayorista === "string" ? c.minimo_mayorista : POLITICA_DEFAULT.minimo_mayorista,
+      descuento_volumen: typeof c.descuento_volumen === "string" ? c.descuento_volumen : "",
+      cierre: c.cierre === "solo_avisar" ? "solo_avisar" : "preparar_y_avisar",
+      extra: typeof c.extra === "string" ? c.extra : "",
+    };
+  } catch { return POLITICA_DEFAULT; }
+}
+
+export async function savePoliticaVentas(p: PoliticaVentas): Promise<void> {
+  await ensureSchema("config");
+  const limpio: PoliticaVentas = {
+    activa: p.activa !== false,
+    permite_descuento: !!p.permite_descuento,
+    escalar_monto: Math.max(0, Number(p.escalar_monto) || 0),
+    medios_pago: String(p.medios_pago ?? "").trim(),
+    envio: String(p.envio ?? "").trim(),
+    minimo_mayorista: String(p.minimo_mayorista ?? "").trim(),
+    descuento_volumen: String(p.descuento_volumen ?? "").trim(),
+    cierre: p.cierre === "solo_avisar" ? "solo_avisar" : "preparar_y_avisar",
+    extra: String(p.extra ?? "").trim(),
+  };
+  await (prisma as any).$executeRawUnsafe(
+    `INSERT INTO catalog_config (tipo, config) VALUES ('politica_ventas', $1::jsonb)
+     ON CONFLICT (tipo) DO UPDATE SET config = $1::jsonb, updated_at = NOW()`,
+    JSON.stringify(limpio));
+}
+
+// Arma el bloque de política para el prompt del asistente.
+export function politicaVentasPrompt(p: PoliticaVentas): string {
+  if (!p.activa) return "";
+  const lineas = [
+    `POLÍTICA DE VENTAS (respetala siempre):`,
+    p.permite_descuento ? `- Podés ofrecer descuentos con criterio.` : `- NO ofrezcas descuentos por tu cuenta.`,
+    p.minimo_mayorista ? `- Pedido mínimo mayorista: ${p.minimo_mayorista}.` : "",
+    p.descuento_volumen ? `- Volumen: ${p.descuento_volumen}` : "",
+    p.medios_pago ? `- Medios de pago: ${p.medios_pago}.` : "",
+    p.envio ? `- Envío: ${p.envio}` : "",
+    p.escalar_monto > 0 ? `- Si el pedido supera $${p.escalar_monto.toLocaleString("es-AR")} o es un reclamo/caso raro, derivá al equipo humano.` : "",
+    p.cierre === "preparar_y_avisar"
+      ? `- Cierre: cuando el cliente quiere comprar, tomá el pedido (productos y cantidades), confirmá los datos y avisá que el equipo lo prepara y le pasa los datos de pago. NO cierres el pago vos.`
+      : `- Cierre: cuando el cliente quiere comprar, tomá los datos y avisá al equipo para que cierre; no confirmes el pedido vos.`,
+    p.extra ? `- ${p.extra}` : "",
+  ].filter(Boolean);
+  return lineas.join("\n");
+}
+
 // Reemplaza los placeholders del texto.
 export function render(texto: string, vars: { link: string; tienda: string }): string {
   return (texto ?? "")

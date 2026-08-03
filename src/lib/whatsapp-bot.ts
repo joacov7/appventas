@@ -5,7 +5,7 @@ import {
   type Segmento, detectarSegmento, interpretarRespuestaSegmento, preguntaSegmento,
   getContacto, setSegmento, marcarEsperandoSegmento, botSilenciado,
 } from "@/lib/whatsapp-segmento";
-import { loadBotTextos, loadBotCatalogo, loadBotIA, render, type BotTextos } from "@/lib/bot-config";
+import { loadBotTextos, loadBotCatalogo, loadBotIA, loadPoliticaVentas, politicaVentasPrompt, render, type BotTextos } from "@/lib/bot-config";
 import { loadAclaraciones } from "@/lib/services/aclaraciones.service";
 
 // Palabras que disparan el envío de las aclaraciones/condiciones.
@@ -25,12 +25,14 @@ async function respuestaIA(waId: string, texto: string, seg: Segmento, tienda: s
     const ia = await loadBotIA();
     if (!ia.activo) return null;
 
-    const [{ aiComplete }, aclar, cat] = await Promise.all([
+    const [{ aiComplete }, aclar, cat, politica] = await Promise.all([
       import("@/lib/ai"),
       loadAclaraciones(),
       loadBotCatalogo(),
+      loadPoliticaVentas(),
     ]);
     const destino = cat.modo === "drive" && cat.drive_url ? cat.drive_url : `${APP_URL}/productos`;
+    const polTxt = politicaVentasPrompt(politica);
 
     const persona = ia.nombre
       ? `Te llamás ${ia.nombre} y sos el asistente de ${tienda}.`
@@ -42,6 +44,7 @@ async function respuestaIA(waId: string, texto: string, seg: Segmento, tienda: s
       `El cliente es del segmento: ${seg}.`,
       `Catálogo / tienda online: ${destino}`,
       aclar.length ? `Condiciones del negocio: ${aclar.map(a => `${a.titulo}: ${a.texto}`).join(" | ")}` : "",
+      polTxt,
       `Reglas: NO inventes precios ni stock: si preguntan por el precio de un producto puntual, decí que se lo confirmás y ofrecé el catálogo. Si es algo que no podés resolver, ofrecé derivar a una persona del equipo. No prometas plazos ni condiciones que no figuren arriba.`,
       ia.instrucciones ? `Instrucciones extra del dueño: ${ia.instrucciones}` : "",
     ].filter(Boolean).join("\n");

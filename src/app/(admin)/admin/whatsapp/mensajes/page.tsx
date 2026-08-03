@@ -191,7 +191,20 @@ export default function MensajesBotPage() {
           </label>
         </div>
 
-        <label className="text-xs text-gray-500">Instrucciones / tono (opcional)</label>
+        <div className="flex items-center justify-between">
+          <label className="text-xs text-gray-500">Instrucciones / tono (opcional)</label>
+          <button type="button"
+            onClick={() => setIa(prev => ({
+              ...prev,
+              nombre: prev.nombre || "Sofi",
+              instrucciones: `Sos cálida, cercana y con buena onda, como alguien del equipo que sabe de mates y atiende joya. Tuteás con voseo argentino, mensajes cortos y claros, 1 o 2 emojis como mucho (🧉 tu preferido).
+Si sabés el nombre del cliente, saludalo por su nombre. Mostrá entusiasmo genuino cuando preguntan por productos e invitá siempre a ver el catálogo.
+Si es mayorista o empresa, resaltá los beneficios (precios por mayor, personalización con logo). No presiones: acompañá y asesorá.
+Si no sabés algo o piden un precio puntual, decí con simpatía que lo confirmás con el equipo. Cerrá las charlas dejando la puerta abierta ("cualquier cosa me escribís 🧉").
+Nunca te hagas pasar por humana: si te preguntan, aclarás con naturalidad que sos la asistente virtual de la tienda.`,
+            }))}
+            className="text-[11px] text-emerald-600 hover:text-emerald-800">Usar personalidad sugerida</button>
+        </div>
         <textarea value={ia.instrucciones} onChange={e => setIa({ ...ia, instrucciones: e.target.value })} rows={3}
           placeholder="Ej: Sé breve y amable. Tuteá con voseo. Sugerí el mate imperial cuando pregunten por regalos."
           className="w-full mt-1 text-sm border rounded-xl px-3 py-2 outline-none resize-y" />

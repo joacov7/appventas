@@ -381,6 +381,8 @@ const DDL: Record<Ambito, string[]> = {
     // Silencio del bot cuando un humano toma la conversación + control de recordatorios.
     `ALTER TABLE whatsapp_contactos ADD COLUMN IF NOT EXISTS humano_hasta TIMESTAMPTZ`,
     `ALTER TABLE whatsapp_contactos ADD COLUMN IF NOT EXISTS recordado_en TIMESTAMPTZ`,
+    // Etapa del embudo de ventas (pipeline).
+    `ALTER TABLE whatsapp_contactos ADD COLUMN IF NOT EXISTS etapa TEXT`,
   ],
 
   // ─── Agentes (ejecuciones, cola de aprobaciones, briefings) ──────────────

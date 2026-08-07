@@ -11,10 +11,15 @@ type Params = { params: Promise<{ id: string }> };
 export async function PATCH(req: NextRequest, { params }: Params) {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
   const { id } = await params;
-  const { name } = await req.json();
-  if (!name?.trim()) return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
-  const data: any = { name: name.trim() };
-  data.slug = `${slugify(name).slice(0, 50)}-${id.slice(-4)}`;
+  const { name, imageUrl } = await req.json();
+  const data: any = {};
+  if (typeof name === "string") {
+    if (!name.trim()) return NextResponse.json({ error: "El nombre es obligatorio" }, { status: 400 });
+    data.name = name.trim();
+    data.slug = `${slugify(name).slice(0, 50)}-${id.slice(-4)}`;
+  }
+  if (imageUrl !== undefined) data.imageUrl = imageUrl || null;
+  if (Object.keys(data).length === 0) return NextResponse.json({ ok: true });
   const cat = await prisma.category.update({ where: { id }, data });
   return NextResponse.json(cat);
 }

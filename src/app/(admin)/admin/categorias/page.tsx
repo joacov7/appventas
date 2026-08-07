@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Tags, Plus, Trash2, Check, Pencil } from "lucide-react";
+import { Tags, Plus, Trash2, Check, Pencil, ImagePlus } from "lucide-react";
+import { MediaUpload } from "@/components/ui/MediaUpload";
 
-interface Categoria { id: string; name: string; productos: number }
+interface Categoria { id: string; name: string; productos: number; imageUrl?: string | null }
 
 export default function CategoriasPage() {
   const [cats, setCats] = useState<Categoria[]>([]);
@@ -38,6 +39,14 @@ export default function CategoriasPage() {
       method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: editName.trim() }),
     });
     if (r.ok) { setEditId(null); cargar(); } else setMsg("No se pudo renombrar");
+  }
+
+  const [imgId, setImgId] = useState<string | null>(null);
+  async function guardarImagen(id: string, url: string | null) {
+    await fetch(`/api/categorias/${id}`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ imageUrl: url }),
+    });
+    cargar();
   }
 
   async function borrar(c: Categoria) {
@@ -77,23 +86,38 @@ export default function CategoriasPage() {
       ) : (
         <div className="bg-white rounded-2xl border border-gray-100 divide-y divide-gray-50">
           {cats.map(c => (
-            <div key={c.id} className="p-3 flex items-center gap-3">
-              {editId === c.id ? (
-                <>
-                  <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
-                    onKeyDown={e => { if (e.key === "Enter") guardarNombre(c.id); if (e.key === "Escape") setEditId(null); }}
-                    className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none" />
-                  <button onClick={() => guardarNombre(c.id)} className="text-emerald-600 hover:text-emerald-800"><Check size={16} /></button>
-                </>
-              ) : (
-                <>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-800">{c.name}</p>
-                    <p className="text-xs text-gray-400">{c.productos} producto(s)</p>
-                  </div>
-                  <button onClick={() => { setEditId(c.id); setEditName(c.name); }} className="text-gray-400 hover:text-gray-700" title="Renombrar"><Pencil size={15} /></button>
-                  <button onClick={() => borrar(c)} className="text-gray-400 hover:text-red-500" title="Borrar"><Trash2 size={15} /></button>
-                </>
+            <div key={c.id} className="p-3">
+              <div className="flex items-center gap-3">
+                {/* Miniatura de la categoría (imagen del círculo en la home) */}
+                <button onClick={() => setImgId(imgId === c.id ? null : c.id)} title="Cambiar imagen"
+                  className="w-11 h-11 rounded-full overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center shrink-0 hover:ring-2 hover:ring-emerald-300">
+                  {c.imageUrl ? <img src={c.imageUrl} alt={c.name} className="w-full h-full object-cover" /> : <ImagePlus size={16} className="text-gray-400" />}
+                </button>
+                {editId === c.id ? (
+                  <>
+                    <input value={editName} onChange={e => setEditName(e.target.value)} autoFocus
+                      onKeyDown={e => { if (e.key === "Enter") guardarNombre(c.id); if (e.key === "Escape") setEditId(null); }}
+                      className="flex-1 text-sm border rounded-lg px-2 py-1.5 outline-none" />
+                    <button onClick={() => guardarNombre(c.id)} className="text-emerald-600 hover:text-emerald-800"><Check size={16} /></button>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-gray-800">{c.name}</p>
+                      <p className="text-xs text-gray-400">{c.productos} producto(s){c.imageUrl ? "" : " · sin imagen"}</p>
+                    </div>
+                    <button onClick={() => { setEditId(c.id); setEditName(c.name); }} className="text-gray-400 hover:text-gray-700" title="Renombrar"><Pencil size={15} /></button>
+                    <button onClick={() => borrar(c)} className="text-gray-400 hover:text-red-500" title="Borrar"><Trash2 size={15} /></button>
+                  </>
+                )}
+              </div>
+              {/* Panel para subir/cambiar la imagen de la categoría */}
+              {imgId === c.id && (
+                <div className="mt-3 pl-14 space-y-2">
+                  <p className="text-xs text-gray-500">Imagen del círculo en la home (cuadrada, fondo claro queda mejor):</p>
+                  <MediaUpload urls={c.imageUrl ? [c.imageUrl] : []} onChange={(urls) => guardarImagen(c.id, urls[urls.length - 1] ?? null)} />
+                  {c.imageUrl && <button onClick={() => guardarImagen(c.id, null)} className="text-xs text-red-500 hover:underline">Quitar imagen (vuelve a usar la foto de un producto)</button>}
+                </div>
               )}
             </div>
           ))}

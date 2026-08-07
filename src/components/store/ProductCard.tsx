@@ -51,12 +51,12 @@ export function ProductCard({ product }: ProductCardProps) {
       className="group relative flex flex-col bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm hover:shadow-md transition-shadow"
     >
       {/* Imagen */}
-      <div className="relative aspect-square overflow-hidden bg-gray-50">
+      <div className="relative aspect-square overflow-hidden bg-white">
         <Image
           src={mainImage}
           alt={product.name}
           fill
-          className="object-cover group-hover:scale-105 transition-transform duration-300"
+          className="object-contain p-2 group-hover:scale-105 transition-transform duration-300"
           sizes="(max-width: 768px) 50vw, (max-width: 1200px) 33vw, 25vw"
         />
 

@@ -11,7 +11,7 @@ export async function GET() {
       include: { _count: { select: { products: true } } },
     });
     return NextResponse.json(categories.map(c => ({
-      id: c.id, name: c.name, slug: c.slug, description: c.description,
+      id: c.id, name: c.name, slug: c.slug, description: c.description, imageUrl: c.imageUrl ?? null,
       productos: (c as any)._count?.products ?? 0,
     })));
   } catch {

@@ -1,15 +1,23 @@
+export const dynamic = "force-dynamic";
+
 import { NextRequest, NextResponse } from "next/server";
 import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
+import { ensureSchema } from "@/lib/db/schema";
+
+async function ensureTables() {
+  await ensureSchema("inteligencia");
+}
 
 export async function GET() {
   if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
-
+  await ensureTables();
   const rows = await (prisma as any).$queryRawUnsafe(
     `SELECT t.id, t.nombre, t.url, t.plataforma, t.activa, t.ultimo_scrape,
-            COUNT(p.id)::int AS total_productos
+            COUNT(p.id)::int AS total_productos,
+            COUNT(CASE WHEN p.precio < p.precio_anterior THEN 1 END)::int AS bajadas
      FROM tiendas_competidoras t
-     LEFT JOIN productos_competidores p ON p.tienda_id = t.id
+     LEFT JOIN productos_competidores p ON p.tienda_id = t.id AND p.disponible = true
      GROUP BY t.id ORDER BY t.creado_en DESC`
   );
   return NextResponse.json(rows);
@@ -21,17 +29,21 @@ export async function POST(req: NextRequest) {
   let { nombre, url } = await req.json();
   if (!url?.trim()) return NextResponse.json({ error: "URL requerida" }, { status: 400 });
 
-  // Normalizar URL (sacar trailing slash, forzar https)
   url = url.trim().replace(/\/$/, "");
   if (!url.startsWith("http")) url = "https://" + url;
+  // Guardar solo la raíz del dominio: la API de estas plataformas vive ahí,
+  // pegar la URL con path (ej. /productos) rompía el scrape
+  try { url = new URL(url).origin; } catch {}
 
-  // Detectar plataforma
-  let plataforma = "otro";
-  if (url.includes("mitiendanube.com") || url.includes("mitienda.com")) plataforma = "tiendanube";
+  // Detect platform from URL hints (auto-detect will override on scrape)
+  let plataforma = "desconocido";
+  if (url.includes("mitiendanube.com") || url.includes("tiendanube.com")) plataforma = "tiendanube";
   else if (url.includes("empretienda.com.ar")) plataforma = "empretienda";
+  else if (url.includes("myshopify.com")) plataforma = "shopify";
+  else if (url.includes("mercadolibre.com")) plataforma = "mercadolibre";
 
   if (!nombre?.trim()) {
-    try { nombre = new URL(url).hostname.split(".")[0].replace(/-/g, " "); } catch { nombre = url; }
+    try { nombre = new URL(url).hostname.replace(/^www\./, "").split(".")[0].replace(/-/g, " "); } catch { nombre = url; }
   }
 
   const rows = await (prisma as any).$queryRawUnsafe(

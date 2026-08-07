@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 import { formatPrice, formatCuotas } from "@/lib/utils";
 import { useCartStore } from "@/store/cartStore";
 import { useViewers } from "@/hooks/useViewers";
+import { useStoreFlags } from "@/hooks/useStoreFlags";
 import type { ProductPublic } from "@/types/product";
 
 interface ProductCardProps {
@@ -19,6 +20,7 @@ const LOW_STOCK_THRESHOLD = 5;
 export function ProductCard({ product }: ProductCardProps) {
   const addItem = useCartStore((s) => s.addItem);
   const viewers = useViewers(product.id);
+  const { modoMayorista } = useStoreFlags();
 
   const mainVariant = product.variants[0];
   const minPrice = Math.min(...product.variants.map((v) => v.price));
@@ -75,10 +77,15 @@ export function ProductCard({ product }: ProductCardProps) {
           </div>
         )}
 
-        {/* Viewers */}
-        {hasStock && (
+        {/* Viewers (oculto en modo mayorista) */}
+        {hasStock && !modoMayorista && (
           <div className="absolute bottom-2 right-2 flex items-center gap-1 bg-black/50 text-white text-xs px-2 py-0.5 rounded-full backdrop-blur-sm">
             <Eye size={10} /> {viewers} viendo
+          </div>
+        )}
+        {product.imageUrls.length > 1 && (
+          <div className="absolute bottom-2 left-2 bg-black/50 text-white text-[10px] font-medium px-1.5 py-0.5 rounded-md">
+            1 / {product.imageUrls.length}
           </div>
         )}
       </div>
@@ -106,8 +113,8 @@ export function ProductCard({ product }: ProductCardProps) {
             </Button>
           </div>
 
-          {/* Cuotas */}
-          {cuotas && hasStock && (
+          {/* Cuotas (ocultas en modo mayorista) */}
+          {cuotas && hasStock && !modoMayorista && (
             <p className="text-xs text-gray-500">
               {cuotas.cuotas}x {cuotas.valorCuota}{" "}
               <span className="text-emerald-600 font-medium">sin interés</span>

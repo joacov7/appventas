@@ -195,3 +195,20 @@ VALUES ('prod_001', 'Producto de ejemplo', 'producto-de-ejemplo', 'Descripción 
 
 INSERT INTO "product_variants" ("id", "productId", "name", "sku", "price", "stock", "active")
 VALUES ('var_001', 'prod_001', 'Unidad', 'SKU-001', 1500.00, 10, true);
+
+-- VIROLAS (personalización láser)
+CREATE TABLE IF NOT EXISTS virolas (
+  id           SERIAL PRIMARY KEY,
+  nombre       TEXT NOT NULL,
+  slug         TEXT NOT NULL UNIQUE,
+  descripcion  TEXT,
+  material     TEXT NOT NULL DEFAULT 'madera',
+  diametro_mm  INT  NOT NULL DEFAULT 35,
+  precio_base  NUMERIC(10,2) NOT NULL DEFAULT 0,
+  image_url    TEXT,
+  diseno_base  TEXT,
+  activa       BOOLEAN NOT NULL DEFAULT true,
+  posicion     INT NOT NULL DEFAULT 0,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

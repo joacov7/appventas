@@ -32,7 +32,8 @@ export default async function OrdenesPage() {
     <div>
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Órdenes</h1>
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[600px]">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
               {["ID", "Email", "Items", "Total", "Estado", "Fecha"].map((h) => (
@@ -65,6 +66,7 @@ export default async function OrdenesPage() {
             ))}
           </tbody>
         </table>
+        </div>
         {orders.length === 0 && (
           <div className="text-center py-12 text-gray-400">No hay órdenes aún.</div>
         )}

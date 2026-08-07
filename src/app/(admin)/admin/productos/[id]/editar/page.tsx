@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/Button";
 import { MediaUpload } from "@/components/ui/MediaUpload";
 import Link from "next/link";
 import { slugify } from "@/lib/utils";
+import { PricingPanel } from "@/components/admin/PricingPanel";
+import { FabricantePanel } from "@/components/admin/FabricantePanel";
 
 interface Variant {
   id?: string;
@@ -38,10 +40,16 @@ export default function EditarProductoPage() {
   const [featured, setFeatured] = useState(false);
   const [imageUrls, setImageUrls] = useState<string[]>([]);
   const [variants, setVariants] = useState<Variant[]>([]);
+  const [caracteristicas, setCaracteristicas] = useState("");
 
   useEffect(() => {
     fetch("/api/categorias").then((r) => r.json()).then(setCategories).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    fetch(`/api/productos/${id}/caracteristicas`).then(r => r.json())
+      .then(d => setCaracteristicas((d.items ?? []).join("\n"))).catch(() => {});
+  }, [id]);
 
   useEffect(() => {
     setLoading(true);
@@ -103,6 +111,12 @@ export default function EditarProductoPage() {
         const data = await res.json();
         throw new Error(data.detail ?? JSON.stringify(data.error));
       }
+
+      // Características (catálogo premium): una por línea.
+      await fetch(`/api/productos/${id}/caracteristicas`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: caracteristicas.split("\n").map(s => s.trim()).filter(Boolean) }),
+      }).catch(() => {});
 
       // Actualizar variantes nuevas o existentes
       for (const v of variants) {
@@ -169,6 +183,14 @@ export default function EditarProductoPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
             <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3}
               className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Características (catálogo premium)</label>
+            <textarea value={caracteristicas} onChange={(e) => setCaracteristicas(e.target.value)} rows={5}
+              placeholder={"Una por línea, ej:\n100% Calabaza natural\nCuero genuino seleccionado\nVirola de alpaca cincelada"}
+              className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-400" />
+            <p className="text-xs text-gray-400 mt-1">Aparecen como lista con íconos en el catálogo Premium.</p>
           </div>
 
           <div>
@@ -239,6 +261,12 @@ export default function EditarProductoPage() {
           Guardar cambios
         </Button>
       </form>
+
+      <div className="mt-6">
+        <FabricantePanel productId={id} />
+      </div>
+
+      <PricingPanel productId={id} />
     </div>
   );
 }

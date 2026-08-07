@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import { z } from "zod";
+import { ensureSchema } from "@/lib/db/schema";
+import { getClienteSesion } from "@/lib/cliente-auth";
+
+async function getTiersFromDB(): Promise<{ min_qty: number; descuento_pct: number }[]> {
+  try {
+    return await (prisma as any).$queryRawUnsafe(
+      `SELECT min_qty, descuento_pct::float FROM precio_tiers WHERE activo = true ORDER BY min_qty ASC`
+    );
+  } catch {
+    return [];
+  }
+}
+
+function getTierDiscount(tiers: { min_qty: number; descuento_pct: number }[], qty: number): number {
+  const applicable = tiers.filter((t) => qty >= t.min_qty).sort((a, b) => b.min_qty - a.min_qty);
+  return applicable[0]?.descuento_pct ?? 0;
+}
 
 const shippingSchema = z.object({
   fullName: z.string().min(1),
@@ -18,17 +35,19 @@ const createOrderSchema = z.object({
       z.object({
         variantId: z.string(),
         quantity: z.number().int().positive(),
-        unitPrice: z.number().positive(),
+        unitPrice: z.number().nonnegative(),
       })
     )
     .min(1),
   shippingAddress: shippingSchema,
   guestEmail: z.string().email().optional(),
   notes: z.string().optional(),
+  canal: z.string().optional(), // "mayorista" = solicitud de pedido (no bloquea stock)
 });
 
 export async function POST(req: NextRequest) {
   try {
+    await ensureSchema("ordenes");
     const session = await auth();
     const body = createOrderSchema.parse(await req.json());
 
@@ -38,6 +57,22 @@ export async function POST(req: NextRequest) {
       where: { id: { in: variantIds } },
     });
 
+    const esMayorista = body.canal === "mayorista";
+
+    // Pedido mayorista: solo clientes registrados y aprobados. El email se toma
+    // de la sesión (no del formulario), así el pedido queda ligado a la cuenta.
+    let emailPedido = body.guestEmail ?? null;
+    if (esMayorista) {
+      const ses = await getClienteSesion();
+      if (!ses) {
+        return NextResponse.json(
+          { error: "Necesitás iniciar sesión como mayorista para hacer un pedido." },
+          { status: 401 }
+        );
+      }
+      emailPedido = ses.email;
+    }
+
     for (const item of body.items) {
       const variant = variants.find((v) => v.id === item.variantId);
       if (!variant) {
@@ -46,7 +81,8 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
-      if (variant.stock < item.quantity) {
+      // El pedido mayorista es una SOLICITUD: no se bloquea por stock (lo coordina el vendedor).
+      if (!esMayorista && variant.stock < item.quantity) {
         return NextResponse.json(
           { error: `Stock insuficiente para "${variant.name}"` },
           { status: 409 }
@@ -54,27 +90,37 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const subtotal = body.items.reduce(
-      (acc, i) => acc + i.unitPrice * i.quantity,
-      0
-    );
-    const total = subtotal; // podés agregar shipping después
+    const priceTiers = await getTiersFromDB();
+
+    // Precio SIEMPRE desde la base — nunca confiar en el unitPrice del cliente.
+    // Redondeamos y evitamos NaN (variantes sin precio) para no romper el Decimal.
+    const itemsWithPrice = body.items.map((item) => {
+      const variant = variants.find((v) => v.id === item.variantId)!;
+      const basePrice = Number(variant.price) || 0;
+      const pct = getTierDiscount(priceTiers, item.quantity);
+      const bruto = pct > 0 ? basePrice * (1 - pct / 100) : basePrice;
+      const effectivePrice = Math.round(bruto * 100) / 100;
+      return { ...item, effectivePrice };
+    });
+
+    const subtotal = Math.round(itemsWithPrice.reduce((acc, i) => acc + i.effectivePrice * i.quantity, 0) * 100) / 100;
+    const total = subtotal;
 
     const order = await prisma.order.create({
       data: {
         userId: session?.user?.id ?? null,
-        guestEmail: body.guestEmail ?? null,
+        guestEmail: emailPedido,
         shippingAddress: body.shippingAddress,
         notes: body.notes,
         subtotal: subtotal.toString(),
         total: total.toString(),
         items: {
-          create: body.items.map((item) => ({
+          create: itemsWithPrice.map((item) => ({
             variantId: item.variantId,
             productId: variants.find((v) => v.id === item.variantId)!.productId,
             quantity: item.quantity,
-            unitPrice: item.unitPrice.toString(),
-            subtotal: (item.unitPrice * item.quantity).toString(),
+            unitPrice: item.effectivePrice.toString(),
+            subtotal: (item.effectivePrice * item.quantity).toString(),
           })),
         },
       },
@@ -87,6 +133,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.issues }, { status: 400 });
     }
     console.error("[ORDER_ERROR]", error);
-    return NextResponse.json({ error: "Error al crear la orden" }, { status: 500 });
+    const msg = error instanceof Error ? error.message : "Error al crear la orden";
+    return NextResponse.json({ error: `Error al crear la orden: ${msg}` }, { status: 500 });
   }
 }

@@ -24,7 +24,8 @@ export default function LoginPage() {
     });
 
     if (res.ok) {
-      router.push("/admin");
+      const data = await res.json().catch(() => ({}));
+      router.push(data.rol === "deposito" ? "/admin/deposito" : "/admin");
     } else {
       const data = await res.json();
       setError(data.error ?? "Credenciales incorrectas");
@@ -41,7 +42,7 @@ export default function LoginPage() {
               <Store size={28} className="text-emerald-600" />
             </div>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">AppVentas</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Regionales por Mayor</h1>
           <p className="text-sm text-gray-500">Panel de administración</p>
         </div>
 

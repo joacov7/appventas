@@ -21,6 +21,7 @@ interface Virola {
   diametroMm: number;
   precioBase: string;
   imageUrl: string | null;
+  disenoBase: string | null;
 }
 
 export default function PersonalizarPage() {

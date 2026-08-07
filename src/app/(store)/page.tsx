@@ -28,7 +28,21 @@ async function getHomeData() {
         orderBy: { position: "asc" },
       }),
     ]);
-    return { featuredProducts, categories, heroSlides };
+
+    // Imagen representativa por categoría: la propia, o la 1ª foto de un producto.
+    const categoriasConImagen = await Promise.all(categories.map(async (c) => {
+      let imagen: string | null = c.imageUrl ?? null;
+      if (!imagen) {
+        const p = await prisma.product.findFirst({
+          where: { active: true, categoryId: c.id, imageUrls: { isEmpty: false } },
+          orderBy: { featured: "desc" }, select: { imageUrls: true },
+        }).catch(() => null);
+        imagen = p?.imageUrls?.[0] ?? null;
+      }
+      return { id: c.id, name: c.name, slug: c.slug, imagen };
+    }));
+
+    return { featuredProducts, categories: categoriasConImagen, heroSlides };
   } catch {
     return { featuredProducts: [], categories: [], heroSlides: [] };
   }
@@ -46,7 +60,7 @@ export default async function HomePage() {
         <section className="bg-gradient-to-br from-emerald-50 to-teal-50 py-16 px-4">
           <div className="max-w-4xl mx-auto text-center space-y-5">
             <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 leading-tight">
-              Bienvenido a <span className="text-emerald-600">AppVentas</span>
+              Bienvenido a <span className="text-emerald-600">Regionales por Mayor</span>
             </h1>
             <p className="text-lg text-gray-600 max-w-xl mx-auto">
               Encontrá los mejores productos con envío a todo el país.
@@ -61,18 +75,21 @@ export default async function HomePage() {
         </section>
       )}
 
-      {/* Categorías */}
+      {/* Categorías (círculos con foto) */}
       {categories.length > 0 && (
         <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Categorías</h2>
-          <div className="flex flex-wrap gap-3">
-            {categories.map((cat) => (
-              <Link
-                key={cat.id}
-                href={`/productos?category=${cat.slug}`}
-                className="px-4 py-2 rounded-xl border border-gray-200 text-sm font-medium text-gray-700 hover:border-emerald-400 hover:text-emerald-700 transition-colors bg-white"
-              >
-                {cat.name}
+          <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Nuestras categorías</h2>
+          <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-x-4 gap-y-6">
+            {categories.map((cat: any) => (
+              <Link key={cat.id} href={`/productos?category=${cat.slug}`} className="group flex flex-col items-center gap-2">
+                <div className="aspect-square w-full rounded-full overflow-hidden border-2 border-gray-100 group-hover:border-emerald-400 transition-colors bg-gray-50 flex items-center justify-center">
+                  {cat.imagen ? (
+                    <img src={cat.imagen} alt={cat.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                  ) : (
+                    <span className="text-3xl">🧉</span>
+                  )}
+                </div>
+                <span className="text-xs sm:text-sm font-medium text-gray-700 text-center group-hover:text-emerald-700 leading-tight">{cat.name}</span>
               </Link>
             ))}
           </div>

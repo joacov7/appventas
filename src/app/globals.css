@@ -17,3 +17,15 @@ body {
   color: #171717;
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Evita el scroll horizontal en celulares sin romper position: sticky
+   (overflow-x: clip no crea un contenedor de scroll como overflow: hidden). */
+html, body {
+  overflow-x: clip;
+  max-width: 100%;
+}
+
+/* Ningún medio se pasa del ancho de su contenedor. */
+img, video, canvas {
+  max-width: 100%;
+}

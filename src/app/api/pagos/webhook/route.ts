@@ -26,7 +26,8 @@ const ORDER_STATUS_MAP: Record<TransactionStatus, OrderStatus> = {
 
 function verifyWebhookSignature(req: NextRequest, rawBody: string): boolean {
   const webhookSecret = process.env.MP_WEBHOOK_SECRET;
-  if (!webhookSecret) return true; // en dev sin secret configurado
+  // Sin secret: solo permitir en desarrollo — en producción rechazar (fail-closed)
+  if (!webhookSecret) return process.env.NODE_ENV !== "production";
 
   const xSignature = req.headers.get("x-signature");
   const xRequestId = req.headers.get("x-request-id");

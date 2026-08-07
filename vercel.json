@@ -1,0 +1,28 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/briefing",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/agentes",
+      "schedule": "30 11 * * *"
+    },
+    {
+      "path": "/api/cron/carritos-abandonados",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/suscripciones",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/jefe",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/whatsapp-pendientes",
+      "schedule": "0 21 * * *"
+    }
+  ]
+}

@@ -5,8 +5,11 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCartStore } from "@/store/cartStore";
+import { useTiers, getCartTier, applyTier } from "@/hooks/useTiers";
+import { useStoreFlags } from "@/hooks/useStoreFlags";
 import { formatPrice } from "@/lib/utils";
 import { Button } from "@/components/ui/Button";
+import { Aclaraciones } from "@/components/Aclaraciones";
 import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Truck } from "lucide-react";
@@ -45,20 +48,39 @@ function CheckoutContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const couponCode = searchParams.get("cupon");
+  const refCode = searchParams.get("ref");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<ShippingOption | null>(null);
   const [couponDiscount, setCouponDiscount] = useState(0);
+  const [refDiscount, setRefDiscount] = useState(0);
+  const [validatedRefCode, setValidatedRefCode] = useState<string | null>(null);
 
+  const { modoMayorista, pedidoMinimo } = useStoreFlags();
+  const tiersRaw = useTiers();
+  const tiers = modoMayorista ? [] : tiersRaw; // sin descuentos por monto en mayorista
   const subtotal = getTotalPrice();
+  const cartQty = items.reduce((acc, i) => acc + i.quantity, 0);
+  const cartTier = getCartTier(tiers, cartQty, subtotal);
+  const tierDiscount = cartTier ? subtotal * (cartTier.descuento_pct / 100) : 0;
   const shippingCost = selectedShipping ? Number(selectedShipping.price) : 0;
-  const total = subtotal - couponDiscount + shippingCost;
+  const total = subtotal - couponDiscount - refDiscount - tierDiscount + shippingCost;
 
-  const { register, handleSubmit, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
   });
+
+  // En modo mayorista, exigimos cuenta de cliente (logueado y aprobado).
+  const [clienteEmail, setClienteEmail] = useState<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!modoMayorista) return;
+    fetch("/api/portal/me").then(r => r.json()).then(d => setClienteEmail(d.email ?? null)).catch(() => setClienteEmail(null));
+  }, [modoMayorista]);
+  useEffect(() => {
+    if (clienteEmail) setValue("email", clienteEmail);
+  }, [clienteEmail, setValue]);
 
   useEffect(() => {
     fetch("/api/envios").then((r) => r.json()).then((opts: ShippingOption[]) => {
@@ -76,7 +98,58 @@ function CheckoutContent() {
     }).then((r) => r.json()).then((d) => { if (d.discount) setCouponDiscount(d.discount); });
   }, [couponCode, subtotal]);
 
+  useEffect(() => {
+    if (!refCode) return;
+    fetch(`/api/referidos?codigo=${refCode}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.valid) {
+          setValidatedRefCode(d.codigo);
+          setRefDiscount(subtotal * (d.descuentoPct / 100));
+        }
+      });
+  }, [refCode, subtotal]);
+
+  // ── Modo mayorista: arma un PEDIDO (sin pago ni envío online) ──
+  async function enviarPedidoMayorista(data: FormData) {
+    if (items.length === 0) return;
+    if (pedidoMinimo > 0 && subtotal < pedidoMinimo) {
+      setError(`El pedido mínimo es ${formatPrice(pedidoMinimo)}. Agregá más productos.`);
+      return;
+    }
+    setLoading(true); setError(null);
+    try {
+      // Un pedido mayorista es una solicitud: no validamos stock (lo coordina el vendedor).
+      const orderRes = await fetch("/api/ordenes", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: applyTier(i.price, cartTier) })),
+          shippingAddress: {
+            fullName: data.fullName, phone: data.phone,
+            street: data.street, city: data.city, province: data.province, postalCode: data.postalCode,
+          },
+          guestEmail: data.email,
+          notes: `[PEDIDO MAYORISTA] ${data.notes ?? ""}`.trim(),
+          canal: "mayorista",
+        }),
+      });
+      if (!orderRes.ok) {
+        const e = (await orderRes.json().catch(() => ({}))).error;
+        throw new Error(typeof e === "string" ? e : "No se pudo enviar el pedido. Revisá los datos e intentá de nuevo.");
+      }
+      const order = await orderRes.json();
+      fetch("/api/ordenes/notificar", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ orderId: order.id }),
+      }).catch(() => {});
+      clearCart();
+      router.push(`/checkout/gracias?id=${order.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error inesperado");
+    } finally { setLoading(false); }
+  }
+
   async function onSubmit(data: FormData) {
+    if (modoMayorista) return enviarPedidoMayorista(data);
     if (items.length === 0) return;
     if (!selectedShipping && shippingOptions.length > 0) {
       setError("Seleccioná una opción de envío");
@@ -102,7 +175,7 @@ function CheckoutContent() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: i.price })),
+          items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity, unitPrice: applyTier(i.price, cartTier) })),
           shippingAddress: {
             fullName: data.fullName, phone: data.phone,
             street: data.street, city: data.city,
@@ -129,6 +202,25 @@ function CheckoutContent() {
       if (!prefRes.ok) throw new Error("Error al crear preferencia de pago");
       const { initPoint, sandboxInitPoint } = await prefRes.json();
 
+      // mark abandoned cart as converted
+      fetch("/api/carritos-abandonados", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: data.email }),
+      }).catch(() => {});
+
+      // register referral use
+      if (validatedRefCode) {
+        fetch("/api/referidos", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ codigo: validatedRefCode, emailComprador: data.email, orderId: order.id }),
+        }).catch(() => {});
+      }
+
+      // persist email for referral share on success page
+      sessionStorage.setItem("checkout_email", data.email);
+
       clearCart();
       window.location.href = process.env.NODE_ENV === "production" ? initPoint : (sandboxInitPoint ?? initPoint);
     } catch (err) {
@@ -147,9 +239,33 @@ function CheckoutContent() {
     );
   }
 
+  // Modo mayorista sin sesión: pedimos ingresar/registrarse antes de pedir.
+  if (modoMayorista && clienteEmail === null) {
+    return (
+      <div className="max-w-md mx-auto px-4 py-16 text-center space-y-4">
+        <h1 className="text-2xl font-bold text-gray-900">Ingresá para hacer tu pedido</h1>
+        <p className="text-sm text-gray-500">Los pedidos son exclusivos para clientes mayoristas registrados. Iniciá sesión o creá tu cuenta para continuar.</p>
+        <div className="flex flex-col gap-2 pt-2">
+          <a href="/portal/login" className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl">Iniciar sesión</a>
+          <a href="/portal/registro" className="border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-medium py-2.5 rounded-xl">Crear cuenta mayorista</a>
+        </div>
+        <p className="text-xs text-gray-400">Tu carrito se mantiene mientras ingresás.</p>
+      </div>
+    );
+  }
+  if (modoMayorista && clienteEmail === undefined) {
+    return <div className="max-w-md mx-auto px-4 py-16 text-center text-sm text-gray-400">Cargando…</div>;
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
-      <h1 className="text-2xl font-bold text-gray-900 mb-8">Finalizar compra</h1>
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">{modoMayorista ? "Solicitar pedido mayorista" : "Finalizar compra"}</h1>
+      {modoMayorista && clienteEmail && (
+        <p className="text-xs text-gray-400 mb-1">Comprando como <b>{clienteEmail}</b></p>
+      )}
+      {modoMayorista && (
+        <p className="text-sm text-gray-500 mb-6">Completá tus datos y enviá el pedido. Te contactamos para coordinar el pago y el envío. 🧉</p>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
         <form onSubmit={handleSubmit(onSubmit)} className="lg:col-span-3 space-y-5">
@@ -191,8 +307,8 @@ function CheckoutContent() {
             </div>
           </section>
 
-          {/* Opciones de envío */}
-          {shippingOptions.length > 0 && (
+          {/* Opciones de envío (ocultas en modo mayorista) */}
+          {!modoMayorista && shippingOptions.length > 0 && (
             <section className="bg-white rounded-2xl border border-gray-100 p-6 space-y-3">
               <h2 className="font-semibold text-gray-900">Método de envío</h2>
               {shippingOptions.map((opt) => (
@@ -230,8 +346,16 @@ function CheckoutContent() {
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">{error}</div>
           )}
 
-          <Button type="submit" size="lg" className="w-full" loading={loading}>
-            Pagar con Mercado Pago
+          {modoMayorista && pedidoMinimo > 0 && subtotal < pedidoMinimo && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-700 rounded-xl px-4 py-3 text-sm">
+              Pedido mínimo: <b>{formatPrice(pedidoMinimo)}</b>. Te faltan {formatPrice(pedidoMinimo - subtotal)}.
+            </div>
+          )}
+          {modoMayorista && <Aclaraciones titulo="Antes de confirmar, tené en cuenta" compacto />}
+
+          <Button type="submit" size="lg" className="w-full" loading={loading}
+            disabled={modoMayorista && pedidoMinimo > 0 && subtotal < pedidoMinimo}>
+            {modoMayorista ? "Enviar pedido" : "Pagar con Mercado Pago"}
           </Button>
         </form>
 
@@ -258,16 +382,33 @@ function CheckoutContent() {
                 <span>Subtotal</span>
                 <span>{formatPrice(subtotal)}</span>
               </div>
+              {tierDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600 font-medium">
+                  <span>Dto. mayorista {cartTier?.descuento_pct}%</span>
+                  <span>− {formatPrice(tierDiscount)}</span>
+                </div>
+              )}
               {couponDiscount > 0 && (
                 <div className="flex justify-between text-emerald-600">
-                  <span>Descuento ({couponCode})</span>
+                  <span>Cupón ({couponCode})</span>
                   <span>− {formatPrice(couponDiscount)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-gray-600">
-                <span>Envío</span>
-                <span>{selectedShipping ? (Number(selectedShipping.price) === 0 ? "Gratis" : formatPrice(Number(selectedShipping.price))) : "—"}</span>
-              </div>
+              {refDiscount > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span>Referido ({validatedRefCode})</span>
+                  <span>− {formatPrice(refDiscount)}</span>
+                </div>
+              )}
+              {!modoMayorista && (
+                <div className="flex justify-between text-gray-600">
+                  <span>Envío</span>
+                  <span>{selectedShipping ? (Number(selectedShipping.price) === 0 ? "Gratis" : formatPrice(Number(selectedShipping.price))) : "—"}</span>
+                </div>
+              )}
+              {modoMayorista && (
+                <p className="text-xs text-gray-400">El envío se coordina aparte.</p>
+              )}
               <div className="flex justify-between items-center pt-2 border-t">
                 <span className="font-semibold text-gray-900">Total</span>
                 <span className="text-xl font-bold text-emerald-700">{formatPrice(total)}</span>

@@ -1,0 +1,48 @@
+export const dynamic = "force-dynamic";
+export const maxDuration = 30;
+
+import { NextRequest, NextResponse } from "next/server";
+import { isAdmin } from "@/lib/admin-auth";
+import { aiCompleteCached } from "@/lib/memory";
+
+const SYSTEM = `Sos un experto en publicidad digital y marketing para Facebook e Instagram en Argentina.
+Tu especialidad es vender mates, termos, bombillas y accesorios relacionados.
+Respondés siempre en español argentino informal, con textos atractivos, cercanos y persuasivos.
+Devolvés SIEMPRE un JSON válido con la estructura exacta que te piden.`;
+
+export async function POST(req: NextRequest) {
+  if (!(await isAdmin())) return NextResponse.json({ error: "Sin autorización" }, { status: 401 });
+  try {
+    const { tipo, contexto } = await req.json();
+
+    const prompts: Record<string, string> = {
+      textos: `Generá 3 variantes de texto publicitario para un anuncio de Meta Ads. Contexto: ${contexto ?? "venta de mates artesanales"}. Respondé con JSON: {"variantes": [{"texto": "...", "tono": "emocional|urgencia|beneficio"}]}`,
+      titulos: `Generá 5 títulos cortos (máx 40 chars) para anuncios de Meta Ads. Contexto: ${contexto ?? "mates y accesorios"}. JSON: {"titulos": ["..."]}`,
+      descripciones: `Generá 3 descripciones (máx 90 chars) para anuncios. Contexto: ${contexto ?? "mates y accesorios"}. JSON: {"descripciones": ["..."]}`,
+      cta: `Sugerí los mejores llamados a la acción (CTA) para anuncios de Meta Ads en este contexto: ${contexto ?? "venta de mates"}. JSON: {"ctas": [{"boton": "SHOP_NOW|SEND_MESSAGE|LEARN_MORE|CONTACT_US", "texto": "por qué funciona"}]}`,
+      ab: `Creá 2 variantes A/B completas de un anuncio de Meta Ads para: ${contexto ?? "mates artesanales"}. JSON: {"variantes": [{"nombre": "A", "titulo": "...", "texto": "...", "descripcion": "...", "enfoque": "..."}]}`,
+      ideas_video: `Generá 3 ideas de videos cortos (Reels/Stories) para Meta Ads sobre: ${contexto ?? "mates y cultura del mate"}. JSON: {"ideas": [{"titulo": "...", "duracion": "15s|30s|60s", "concepto": "...", "escenas": ["..."]}]}`,
+      ideas_imagen: `Generá 4 ideas de imágenes/creatividades para anuncios de: ${contexto ?? "mates artesanales"}. JSON: {"ideas": [{"descripcion": "...", "estilo": "lifestyle|producto|texto|comparativo", "fondo": "...", "elementos": ["..."]}]}`,
+      segmentacion: `Recomendá segmentaciones de audiencia para Meta Ads para vender: ${contexto ?? "mates y accesorios"} en Argentina. JSON: {"segmentaciones": [{"nombre": "...", "edad": "...", "intereses": ["..."], "comportamientos": ["..."], "razon": "..."}]}`,
+      presupuesto: `Sugerí estrategias de presupuesto para Meta Ads para: ${contexto ?? "mates artesanales"} con presupuesto mensual de $50.000 ARS. JSON: {"sugerencias": [{"estrategia": "...", "presupuesto_diario": ..., "objetivo": "...", "duracion_dias": ..., "razon": "..."}]}`,
+    };
+
+    const prompt = prompts[tipo] ?? prompts.textos;
+    // Cacheado: si ya se generó para este mismo tipo+contexto, no gasta tokens
+    const { text, cached } = await aiCompleteCached({
+      system: SYSTEM,
+      maxTokens: 1024,
+      fast: true, // tarea simple: usa el modelo rápido si está configurado
+      json: true,
+      messages: [{ role: "user", content: prompt }],
+    }, { ttlHours: 24 * 30 });
+
+    // Extract JSON from response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { raw: text };
+
+    return NextResponse.json({ tipo, result, cached });
+  } catch (e: any) {
+    return NextResponse.json({ error: e?.message }, { status: 500 });
+  }
+}

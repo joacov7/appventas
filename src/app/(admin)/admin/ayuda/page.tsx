@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { HelpCircle, ChevronDown, Search, ScrollText, ExternalLink } from "lucide-react";
-
-// Documento de referencia detallado de los agentes (qué hacen, qué pueden y no).
-const MANUAL_AGENTES_URL = "https://claude.ai/code/artifact/27a3307c-4001-4848-96d0-3bc515b1ce6a";
+import Link from "next/link";
+import { HelpCircle, ChevronDown, Search, ScrollText, ChevronRight } from "lucide-react";
 
 interface Tema { titulo: string; pasos: string[] }
 interface Seccion { grupo: string; temas: Tema[] }
@@ -133,18 +131,17 @@ export default function AyudaPage() {
           className="w-full pl-9 pr-3 py-2.5 text-sm border rounded-xl outline-none" />
       </div>
 
-      <a href={MANUAL_AGENTES_URL} target="_blank" rel="noopener noreferrer"
+      <Link href="/admin/ayuda/manual-agentes"
         className="flex items-center gap-3 p-4 rounded-2xl border border-emerald-200 bg-emerald-50 hover:bg-emerald-100 transition-colors">
         <ScrollText size={22} className="text-emerald-600 shrink-0" />
         <div className="min-w-0 flex-1">
-          <p className="font-semibold text-emerald-900 text-sm flex items-center gap-1.5">
-            Manual completo de agentes <ExternalLink size={13} className="text-emerald-500" />
-          </p>
+          <p className="font-semibold text-emerald-900 text-sm">Manual completo de agentes</p>
           <p className="text-xs text-emerald-700">
             Documento detallado: los 10 agentes, qué pueden y qué no, los 3 modos de autonomía y cómo se ejecutan.
           </p>
         </div>
-      </a>
+        <ChevronRight size={18} className="text-emerald-500 shrink-0" />
+      </Link>
 
       <div className="space-y-5">
         {filtradas.map(s => (

@@ -23,7 +23,16 @@ type Prospecto = {
   puntaje: string | null;
   puntos: number | null;
   sin_whatsapp?: boolean;
+  abordaje_estado?: string | null;
   creado_en: string;
+};
+
+// Estado de entrega del mensaje en frío (abordaje) según WhatsApp.
+const ABORDAJE_ESTADO: Record<string, { label: string; icon: string; cls: string }> = {
+  sent:      { label: "Enviado",   icon: "✓",  cls: "text-gray-400" },
+  delivered: { label: "Entregado", icon: "✓✓", cls: "text-gray-500" },
+  read:      { label: "Leído",     icon: "✓✓", cls: "text-sky-600" },
+  failed:    { label: "Falló",     icon: "✗",  cls: "text-red-500" },
 };
 
 function hora(s: string) {
@@ -853,6 +862,14 @@ export default function CaptacionPage() {
                         {p.telefono && (
                           <>
                             <span className="text-xs text-gray-500 flex items-center gap-1"><Phone size={11} /> {p.telefono}</span>
+                            {p.abordaje_estado && ABORDAJE_ESTADO[p.abordaje_estado] && (
+                              <span
+                                className={`text-[11px] font-semibold ${ABORDAJE_ESTADO[p.abordaje_estado].cls} flex items-center gap-0.5`}
+                                title={`Mensaje en frío — ${ABORDAJE_ESTADO[p.abordaje_estado].label}`}>
+                                {ABORDAJE_ESTADO[p.abordaje_estado].icon}
+                                <span className="hidden sm:inline">{ABORDAJE_ESTADO[p.abordaje_estado].label}</span>
+                              </span>
+                            )}
                             {p.sin_whatsapp ? (
                               <span className="text-[10px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded-full" title="Un abordaje no se pudo entregar: probablemente este número no tiene WhatsApp">❌ sin WhatsApp</span>
                             ) : (

@@ -142,11 +142,34 @@ export async function GET(req: NextRequest) {
   if (zona)   { args.push(`%${zona}%`); cond.push(`provincia ILIKE $${args.length}`); }
   const where = cond.length ? `WHERE ${cond.join(" AND ")}` : "";
   // Mejor puntuados primero (los A arriba de todo); lo sin puntuar, al final por fecha.
-  const rows = await (prisma as any).$queryRawUnsafe(
-    `SELECT * FROM prospectos ${where}
-     ORDER BY puntos DESC NULLS LAST, creado_en DESC LIMIT ${limit} OFFSET ${offset}`,
-    ...args
-  );
+  // `abordaje_estado`: último estado de entrega del mensaje en frío (plantilla)
+  // enviado a ese teléfono — sent/delivered/read/failed —, tomado del historial
+  // de WhatsApp. Se compara por los últimos 10 dígitos (el wa_id se guarda
+  // normalizado y el teléfono del prospecto puede venir con formato).
+  let rows: any[];
+  try {
+    await ensureSchema("whatsapp");
+    rows = await (prisma as any).$queryRawUnsafe(
+      `SELECT p.*, (
+         SELECT m.estado FROM whatsapp_mensajes m
+         WHERE m.direccion = 'saliente' AND m.texto LIKE '📤 Abordaje%'
+           AND p.telefono IS NOT NULL
+           AND right(regexp_replace(m.wa_id, '\\D', '', 'g'), 10)
+             = right(regexp_replace(p.telefono, '\\D', '', 'g'), 10)
+         ORDER BY m.id DESC LIMIT 1
+       ) AS abordaje_estado
+       FROM prospectos p ${where ? where.replace(/\b(estado|provincia)\b/g, "p.$1") : ""}
+       ORDER BY p.puntos DESC NULLS LAST, p.creado_en DESC LIMIT ${limit} OFFSET ${offset}`,
+      ...args
+    );
+  } catch {
+    // Si el historial de WhatsApp no está disponible, devolvemos sin el estado.
+    rows = await (prisma as any).$queryRawUnsafe(
+      `SELECT * FROM prospectos ${where}
+       ORDER BY puntos DESC NULLS LAST, creado_en DESC LIMIT ${limit} OFFSET ${offset}`,
+      ...args
+    );
+  }
   return NextResponse.json(rows);
 }
 

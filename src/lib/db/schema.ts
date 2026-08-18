@@ -508,6 +508,24 @@ const DDL: Record<Ambito, string[]> = {
     `CREATE INDEX IF NOT EXISTS idx_mktev_producto ON market_evidence (product_id, capturado_en DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_mktev_tipo     ON market_evidence (precio_tipo)`,
     `CREATE INDEX IF NOT EXISTS idx_mktev_vence    ON market_evidence (vence_en)`,
+
+    // ─── Registro de acciones de escritura (enforcement + auditoría) ────────
+    // Cada intento de una tool de escritura por un agente: ejecutada / propuesta
+    // / bloqueada (con motivo). Alimenta los topes diarios de las políticas y
+    // deja trazabilidad de por qué una acción se bloqueó o esperó aprobación.
+    `CREATE TABLE IF NOT EXISTS agent_tool_actions (
+      id            BIGSERIAL PRIMARY KEY,
+      tenant_id     TEXT NOT NULL DEFAULT 'default',
+      agent_id      TEXT,
+      agent_run_id  BIGINT,
+      tool          TEXT NOT NULL,
+      modo          TEXT NOT NULL,
+      motivo        TEXT,
+      entity_id     TEXT,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ata_tool_dia ON agent_tool_actions (tool, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_ata_agent    ON agent_tool_actions (agent_id, created_at)`,
   ],
 
   // ─── Memoria compartida de la Empresa IA ─────────────────────────────────

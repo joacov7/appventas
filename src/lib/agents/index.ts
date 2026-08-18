@@ -10,3 +10,8 @@ export {
 export type {
   Recommendation, RecommendationInput, Severidad, EstadoReco, OrigenConfianza, Evidencia,
 } from "./recommendations";
+export {
+  loadPolicies, savePolicies, enforceWrite, registrarAccion, ejecutadasHoy,
+  resolvePolicy, evaluar, POLICIES_DEFAULT,
+} from "./policies";
+export type { PoliciesConfig, ToolPolicy, GlobalPolicy, EvalResult, EvalContext } from "./policies";

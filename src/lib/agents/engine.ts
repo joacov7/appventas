@@ -4,6 +4,8 @@ import { registry } from "@/lib/tools";
 import { getAI } from "@/lib/ai";
 import { recall as memRecall, remember as memRemember } from "@/lib/memory";
 import { createOrMerge, dedupKey } from "./recommendations";
+import { enforceWrite, registrarAccion, loadPolicies } from "./policies";
+import type { PoliciesConfig } from "./policies";
 import type { AgentDef, AgentRunContext, AgentRunResult, AgentTelemetry, AutonomyMode } from "./types";
 
 async function ensureTables() {
@@ -27,6 +29,14 @@ export async function runAgent(def: AgentDef, autonomy: AutonomyMode): Promise<A
     llamadasIA: 0, model: null, costUsd: 0, logs: [], accionesPropuestas: [],
     recomendaciones: 0,
   };
+
+  // Políticas de herramientas (Paso 4). Se cargan una vez por corrida. Sin
+  // config, los defaults son permisivos → el comportamiento no cambia.
+  let policiesCfg: PoliciesConfig | undefined;
+  try { policiesCfg = await loadPolicies(); } catch { /* defaults */ }
+  // Veces que cada tool de escritura corrió/propuso en esta ejecución
+  // (para el límite max_items_per_run).
+  const accionesPorTool = new Map<string, number>();
 
   // Se inserta la corrida al INICIO para tener agent_run_id disponible y poder
   // vincular las recomendaciones que se generen durante la ejecución. Al final
@@ -57,20 +67,53 @@ export async function runAgent(def: AgentDef, autonomy: AutonomyMode): Promise<A
         throw new Error(`El agente no tiene permiso para usar "${name}"`);
       }
       const toolDef = registry.get(name);
-      // Escritura: solo se ejecuta en modo autónomo; si no, se PROPONE.
-      if (toolDef?.sideEffect === "write" && autonomy !== "autonomous") {
-        tel.accionesPropuestas.push({ tool: name, input });
-        try {
-          await (prisma as any).$executeRawUnsafe(
-            `INSERT INTO action_queue (agent_id, tool, input, estado) VALUES ($1,$2,$3::jsonb,'pendiente')`,
-            def.id, name, JSON.stringify(input ?? {})
-          );
-          tel.logs.push(`📝 ${name} encolado en Aprobaciones (modo ${autonomy})`);
-        } catch (e: any) {
-          tel.logs.push(`✗ no se pudo encolar ${name}: ${e?.message ?? "error"}`);
+
+      // ── Escritura: pasa por la capa de políticas (enforcement server-side) ──
+      if (toolDef?.sideEffect === "write") {
+        const entityId = input?.productId ?? input?.clientId ?? input?.to ?? null;
+        const ejecutadasEnRun = accionesPorTool.get(name) ?? 0;
+        const verdict = await enforceWrite({
+          agentId: def.id, tool: name, input, agentAutonomy: autonomy,
+          ejecutadasEnRun, cfg: policiesCfg,
+        });
+
+        // Bloqueada por política → no se ejecuta ni se propone.
+        if (!verdict.allow) {
+          tel.logs.push(`⛔ ${name} bloqueado por política: ${verdict.motivo}`);
+          await registrarAccion({ agentId: def.id, agentRunId: runId ?? undefined, tool: name, modo: "bloqueada", motivo: verdict.motivo, entityId: entityId != null ? String(entityId) : null });
+          return { bloqueada: true, motivo: verdict.motivo } as any;
         }
-        return { propuesta: true } as any;
+
+        // Requiere aprobación (autonomía efectiva ≠ autónomo, o requires_approval).
+        if (verdict.requireApproval) {
+          tel.accionesPropuestas.push({ tool: name, input });
+          try {
+            await (prisma as any).$executeRawUnsafe(
+              `INSERT INTO action_queue (agent_id, tool, input, estado) VALUES ($1,$2,$3::jsonb,'pendiente')`,
+              def.id, name, JSON.stringify(input ?? {})
+            );
+            tel.logs.push(`📝 ${name} encolado en Aprobaciones`);
+          } catch (e: any) {
+            tel.logs.push(`✗ no se pudo encolar ${name}: ${e?.message ?? "error"}`);
+          }
+          accionesPorTool.set(name, ejecutadasEnRun + 1);
+          await registrarAccion({ agentId: def.id, agentRunId: runId ?? undefined, tool: name, modo: "propuesta", entityId: entityId != null ? String(entityId) : null });
+          return { propuesta: true } as any;
+        }
+
+        // Autónomo + permitido + dentro de límites → se ejecuta de verdad.
+        const wres = await registry.execute(name, input);
+        tel.toolsUsados.push(name);
+        accionesPorTool.set(name, ejecutadasEnRun + 1);
+        if (wres.ok) {
+          await registrarAccion({ agentId: def.id, agentRunId: runId ?? undefined, tool: name, modo: "ejecutada", entityId: entityId != null ? String(entityId) : null });
+        } else {
+          tel.logs.push(`✗ ${name}: ${wres.error}`);
+        }
+        return wres.output;
       }
+
+      // ── Lectura: se ejecuta siempre (no toca nada) ──
       const res = await registry.execute(name, input);
       tel.toolsUsados.push(name);
       if (!res.ok) tel.logs.push(`✗ ${name}: ${res.error}`);

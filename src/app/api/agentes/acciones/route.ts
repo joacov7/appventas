@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
 import { registry } from "@/lib/tools";
 import { remember } from "@/lib/memory";
+import { enforceWrite, registrarAccion } from "@/lib/agents/policies";
 
 async function ensureCols() {
   // Asegura que la tabla y TODAS sus columnas existan. Tablas viejas de prod
@@ -80,7 +81,23 @@ export async function POST(req: NextRequest) {
 
   // Aprobar → ejecutar la tool con el input (editado por el usuario si lo mandó).
   const inputFinal = (inputEditado && typeof inputEditado === "object") ? inputEditado : (accion.input ?? {});
+
+  // Enforcement server-side también al aprobar: los límites duros de negocio
+  // (productos/clientes protegidos, margen mínimo, cambio de precio máx, horario,
+  // tope diario) se aplican aunque la acción venga aprobada por un humano.
+  const verdict = await enforceWrite({
+    agentId: accion.agent_id ?? "desconocido", tool: accion.tool,
+    input: inputFinal, agentAutonomy: "autonomous",
+  });
+  if (!verdict.allow) {
+    return NextResponse.json({ error: `Bloqueado por política: ${verdict.motivo}`, motivo: verdict.motivo }, { status: 422 });
+  }
+
   const result = await registry.execute(accion.tool, inputFinal);
+  const entityId = inputFinal?.productId ?? inputFinal?.clientId ?? inputFinal?.to ?? null;
+  if (result.ok) {
+    await registrarAccion({ agentId: accion.agent_id, tool: accion.tool, modo: "ejecutada", entityId: entityId != null ? String(entityId) : null });
+  }
   await (prisma as any).$executeRawUnsafe(
     `UPDATE action_queue SET estado = $2, resultado = $3::jsonb, input = $4::jsonb, resuelto_en = now() WHERE id = $1`,
     Number(id), result.ok ? "ejecutada" : "error", JSON.stringify(result), JSON.stringify(inputFinal)

@@ -1,6 +1,12 @@
 // ─── Agent Engine: contratos ─────────────────────────────────────────────────
 
+import type { RecommendationInput } from "./recommendations";
+
 export type AutonomyMode = "manual" | "assisted" | "autonomous";
+
+// Lo que un handler pasa a ctx.recommend. El engine inyecta agentId y
+// agentRunId automáticamente, así que el handler no los provee.
+export type AgentRecommendInput = Omit<RecommendationInput, "agentId" | "agentRunId">;
 
 export interface AgentDecision {
   resumen: string;
@@ -18,6 +24,7 @@ export interface AgentTelemetry {
   costUsd: number;
   logs: string[];
   accionesPropuestas: { tool: string; input: any }[];
+  recomendaciones: number; // cuántas recomendaciones persistió esta corrida
 }
 
 export interface AgentRunResult {
@@ -41,6 +48,9 @@ export interface AgentRunContext {
   tool<O = any>(name: string, input?: any): Promise<O>;
   /** Llama a la IA (último recurso). Registra costo y modelo. */
   ai(input: { system?: string; messages: { role: "user" | "assistant" | "system"; content: string }[]; maxTokens?: number; fast?: boolean; json?: boolean }): Promise<string>;
+  /** Persiste una recomendación (dedup automática). Es aditivo: si el handler
+   *  no lo usa, el engine deriva recomendaciones desde AgentDecision. */
+  recommend(input: AgentRecommendInput): Promise<void>;
   log(msg: string): void;
 }
 

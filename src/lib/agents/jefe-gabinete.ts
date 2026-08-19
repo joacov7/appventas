@@ -104,7 +104,7 @@ export async function generarResumenJefe(opts?: { tenantId?: string; usarIA?: bo
       `INSERT INTO jefe_resumen
          (tenant_id, fecha, consideradas, seleccionadas, conteos, prioridades, conflictos,
           agentes, uso_ia, costo_ia, generado_por, resultado, resumen)
-       VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13)
+       VALUES ($1,$2::date,$3::jsonb,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13)
        ON CONFLICT (tenant_id, fecha) DO UPDATE SET
          consideradas = EXCLUDED.consideradas, seleccionadas = EXCLUDED.seleccionadas,
          conteos = EXCLUDED.conteos, prioridades = EXCLUDED.prioridades, conflictos = EXCLUDED.conflictos,

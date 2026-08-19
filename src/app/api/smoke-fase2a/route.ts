@@ -72,7 +72,13 @@ export async function GET(req: NextRequest) {
     // 9. Auditoría: la fila jefe_resumen quedó persistida con los campos clave.
     const jr: any[] = await q(`SELECT consideradas, conflictos, conteos, agentes, generado_por, resultado FROM jefe_resumen WHERE tenant_id=$1 ORDER BY generado_en DESC LIMIT 1`, T);
     const row = jr[0];
-    push("9. jefe_resumen persistido (auditable)", !!row && Array.isArray(row.consideradas) && row.generado_por === "reglas", row ? `consideradas=${row.consideradas.length}, conflictos=${(row.conflictos ?? []).length}` : "sin fila");
+    let diag = "";
+    if (!row) {
+      const tot: any[] = await q(`SELECT COUNT(*)::int n FROM jefe_resumen`);
+      const ult: any[] = await q(`SELECT tenant_id, fecha::text FROM jefe_resumen ORDER BY generado_en DESC LIMIT 3`);
+      diag = ` · fecha_usada=${jefe.fecha} · total_filas=${tot[0].n} · ultimas=${JSON.stringify(ult)}`;
+    }
+    push("9. jefe_resumen persistido (auditable)", !!row && Array.isArray(row.consideradas) && row.generado_por === "reglas", row ? `consideradas=${row.consideradas.length}, conflictos=${(row.conflictos ?? []).length}` : `sin fila${diag}`);
   } catch (err: any) {
     push("ERROR", false, err?.message ?? String(err));
   } finally {

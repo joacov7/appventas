@@ -122,7 +122,8 @@ export async function runAgent(def: AgentDef, autonomy: AutonomyMode): Promise<A
     async ai(input) {
       tel.llamadasIA++;
       const client = await getAI();
-      const r = await client.complete(input as any);
+      // Atribuye el gasto al agente y activa su tope mensual propio (Paso 5).
+      const r = await client.complete({ ...(input as any), agentId: def.id, feature: (input as any).feature ?? `agente:${def.id}` });
       tel.model = r.model;
       tel.costUsd += r.costUsd ?? 0;
       tel.logs.push(`🤖 IA ${r.model} · ${r.ms}ms · ~$${(r.costUsd ?? 0).toFixed(5)}`);

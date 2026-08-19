@@ -17,6 +17,9 @@ export interface AICompleteInput {
   json?: boolean;
   /** Etiqueta de la función que hace la llamada (para el registro de gasto) */
   feature?: string;
+  /** Id del agente que origina la llamada. Atribuye el gasto y activa el
+   *  presupuesto por agente (tope mensual propio, además del global). */
+  agentId?: string;
 }
 
 export interface AICompleteResult {

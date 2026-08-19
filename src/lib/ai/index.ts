@@ -8,9 +8,14 @@ import { OpenAICompatibleProvider } from "./providers/openai-compatible";
 
 export * from "./types";
 export { loadConfig, saveConfig, toMasked, applyEdits, defaultConfig } from "./config";
-export { AIBudgetExceededError, loadPresupuestoIA, savePresupuestoIA, resumenGastoIA } from "./gasto";
+export {
+  AIBudgetExceededError, loadPresupuestoIA, savePresupuestoIA, resumenGastoIA,
+  gastoDelMesAgente, resumenPresupuestoAgentes, nivelAlerta, resolverFeature,
+} from "./gasto";
+export type { EstadoPresupuesto, NivelAlerta } from "./gasto";
 
-import { registrarGastoIA, verificarPresupuestoIA } from "./gasto";
+import { registrarGastoIA, verificarPresupuestoIA, verificarPresupuestoAgente } from "./gasto";
+import { resolverFeature } from "./presupuesto.logic";
 
 export class AINotConfiguredError extends Error {}
 
@@ -48,14 +53,16 @@ export async function getAI(providerOverride?: string): Promise<AIClient> {
   return {
     provider: nombre,
     async complete(input: AICompleteInput): Promise<AICompleteResult> {
-      // Tope mensual: corta antes de gastar si está superado.
+      // Tope mensual GLOBAL: corta antes de gastar si está superado.
       await verificarPresupuestoIA();
+      // Tope POR AGENTE (si la llamada viene de un agente con presupuesto propio).
+      if (input.agentId) await verificarPresupuestoAgente(input.agentId);
       if (cfg.debug) {
         console.log(`[AI:${nombre}] →`, JSON.stringify({ system: input.system?.slice(0, 120), msgs: input.messages.length }));
       }
       const result = await provider.complete(input);
-      // Registra el gasto (best-effort).
-      await registrarGastoIA(input.feature ?? "otros", result);
+      // Registra el gasto atribuido (feature explícita > agente:<id> > "otros").
+      await registrarGastoIA(resolverFeature(input), result);
       if (cfg.debug) {
         console.log(`[AI:${nombre}] ← ${result.model} · ${result.ms}ms · ~$${result.costUsd?.toFixed(4) ?? "?"} · ${result.usage?.outputTokens ?? "?"} tok`);
       }

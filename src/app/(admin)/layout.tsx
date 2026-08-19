@@ -6,7 +6,7 @@ import { useState, useEffect } from "react";
 import {
   LayoutDashboard, Package, ShoppingBag, Store, LogOut, Tag, Truck, Images,
   Users, BarChart2, Mail, Layers, Gift, RefreshCw, MessageCircle, TrendingDown,
-  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser, Info, Tags, Film, Target, DollarSign, Handshake, Briefcase, KanbanSquare, ScrollText,
+  CircleDot, BookOpen, Megaphone, Menu, X, Settings, Bot, Brain, Cpu, CheckSquare, Factory, Calculator, CalendarDays, Inbox, Clock, Heart, Receipt, HelpCircle, Wand2, Bell, PackageCheck, Eraser, Info, Tags, Film, Target, DollarSign, Handshake, Briefcase, KanbanSquare, ScrollText, ListChecks,
 } from "lucide-react";
 
 const GRUPOS = [
@@ -59,6 +59,7 @@ const GRUPOS = [
     { href: "/admin/jefe", label: "Jefe de Gabinete", icon: Briefcase },
     { href: "/admin/agentes", label: "Agentes", icon: Bot },
     { href: "/admin/ventas-agente", label: "Gerente de Ventas", icon: Handshake },
+    { href: "/admin/decisiones", label: "Centro de Decisiones", icon: ListChecks },
     { href: "/admin/aprobaciones", label: "Aprobaciones", icon: CheckSquare },
     { href: "/admin/bitacora", label: "Bitácora de agentes", icon: ScrollText },
     { href: "/admin/ia", label: "Inteligencia Artificial", icon: Cpu },

@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
     const tieneConflA = jefe.conflictos.some(c => c.tipo === "evidencia_insuficiente");
     const tieneConflB = jefe.conflictos.some(c => c.tipo === "contradiccion");
     const excluyeConflicto = !idsSel.includes("LOWCONF") && !idsSel.includes("CONFLICT");
-    push("5. Jefe genera resumen (reglas, sin IA)", jefe.resultado === "ok" && !jefe.usoIA, `generado_por=${jefe.usoIA ? "ia" : "reglas"}`);
+    push("5. Jefe genera resumen (reglas, sin IA)", jefe.resultado === "ok" && !jefe.usoIA, `generado_por=${jefe.usoIA ? "ia" : "reglas"}${jefe.persistError ? ` · persistError=${jefe.persistError}` : ""}`);
     push("6. Detecta conflicto A (evidencia insuficiente)", tieneConflA);
     push("7. Detecta conflicto B (contradicción precio/margen)", tieneConflB);
     push("8. Recs en conflicto NO se seleccionan como prioridad", excluyeConflicto, `top=${JSON.stringify(idsSel)}`);

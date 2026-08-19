@@ -73,6 +73,7 @@ export interface ResultadoJefe extends ResumenJefe {
   usoIA: boolean;
   costoIA: number;
   fecha: string;
+  persistError?: string; // diagnóstico: si falló el guardado en jefe_resumen
 }
 
 // Genera (y persiste) el resumen del Jefe para hoy. Idempotente por día (upsert).
@@ -97,23 +98,28 @@ export async function generarResumenJefe(opts?: { tenantId?: string; usarIA?: bo
   }));
   const seleccionadas = analisis.seleccionadas.map(r => ({ id: r.id, titulo: r.titulo, prioridad: r.prioridad, severidad: r.severidad }));
 
-  await (prisma as any).$executeRawUnsafe(
-    `INSERT INTO jefe_resumen
-       (tenant_id, fecha, consideradas, seleccionadas, conteos, prioridades, conflictos,
-        agentes, uso_ia, costo_ia, generado_por, resultado, resumen)
-     VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13)
-     ON CONFLICT (tenant_id, fecha) DO UPDATE SET
-       consideradas = EXCLUDED.consideradas, seleccionadas = EXCLUDED.seleccionadas,
-       conteos = EXCLUDED.conteos, prioridades = EXCLUDED.prioridades, conflictos = EXCLUDED.conflictos,
-       agentes = EXCLUDED.agentes, uso_ia = EXCLUDED.uso_ia, costo_ia = EXCLUDED.costo_ia,
-       generado_por = EXCLUDED.generado_por, resultado = EXCLUDED.resultado, resumen = EXCLUDED.resumen,
-       generado_en = now()`,
-    tenantId, fecha, JSON.stringify(analisis.consideradas), JSON.stringify(seleccionadas),
-    JSON.stringify(analisis.conteos), JSON.stringify(prioridades), JSON.stringify(analisis.conflictos),
-    JSON.stringify(analisis.agentes), usoIA, costoIA, generadoPor, analisis.resultado, resumen
-  ).catch(() => {});
+  let persistError: string | undefined;
+  try {
+    await (prisma as any).$executeRawUnsafe(
+      `INSERT INTO jefe_resumen
+         (tenant_id, fecha, consideradas, seleccionadas, conteos, prioridades, conflictos,
+          agentes, uso_ia, costo_ia, generado_por, resultado, resumen)
+       VALUES ($1,$2,$3::jsonb,$4::jsonb,$5::jsonb,$6::jsonb,$7::jsonb,$8::jsonb,$9,$10,$11,$12,$13)
+       ON CONFLICT (tenant_id, fecha) DO UPDATE SET
+         consideradas = EXCLUDED.consideradas, seleccionadas = EXCLUDED.seleccionadas,
+         conteos = EXCLUDED.conteos, prioridades = EXCLUDED.prioridades, conflictos = EXCLUDED.conflictos,
+         agentes = EXCLUDED.agentes, uso_ia = EXCLUDED.uso_ia, costo_ia = EXCLUDED.costo_ia,
+         generado_por = EXCLUDED.generado_por, resultado = EXCLUDED.resultado, resumen = EXCLUDED.resumen,
+         generado_en = now()`,
+      tenantId, fecha, JSON.stringify(analisis.consideradas), JSON.stringify(seleccionadas),
+      JSON.stringify(analisis.conteos), JSON.stringify(prioridades), JSON.stringify(analisis.conflictos),
+      JSON.stringify(analisis.agentes), usoIA, costoIA, generadoPor, analisis.resultado, resumen
+    );
+  } catch (err: any) {
+    persistError = err?.message ?? String(err);
+  }
 
-  return { ...analisis, resumen, usoIA, costoIA, fecha };
+  return { ...analisis, resumen, usoIA, costoIA, fecha, persistError };
 }
 
 // Último resumen persistido (para el Centro de Decisiones / API).

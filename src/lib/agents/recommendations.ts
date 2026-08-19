@@ -211,6 +211,23 @@ export async function transicionar(
   return { ok: true, recommendation: mapRow(upd[0]) };
 }
 
+// Marca el resultado real tras ejecutar la acción aprobada (post-ejecución).
+// Refleja la verdad ('executed' | 'failed') sin pasar por estados intermedios.
+export async function marcarResultadoAccion(id: number, ok: boolean): Promise<void> {
+  await ensure();
+  await (prisma as any).$executeRawUnsafe(
+    `UPDATE recommendations SET estado = $2, updated_at = now() WHERE id = $1`,
+    id, ok ? "executed" : "failed").catch(() => {});
+}
+
+// Edita el input propuesto de la acción de una recomendación (antes de aprobar).
+export async function editarAccionInput(id: number, actionInput: any): Promise<void> {
+  await ensure();
+  await (prisma as any).$executeRawUnsafe(
+    `UPDATE recommendations SET action_input = $2::jsonb, updated_at = now() WHERE id = $1`,
+    id, JSON.stringify(actionInput ?? null)).catch(() => {});
+}
+
 // Vincula la recomendación con su orden ejecutable (action_queue). Garantiza
 // 1↔1: no piso un vínculo existente (evita doble ejecución).
 export async function vincularAccion(id: number, actionQueueId: number): Promise<boolean> {

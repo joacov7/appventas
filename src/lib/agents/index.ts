@@ -6,6 +6,7 @@ export {
   createOrMerge, transicionar, vincularAccion, listar as listarRecomendaciones,
   fuentesDe, dedupKey, calcularPrioridad, calcularValorEsperado,
   confianzaPorOrigen, puedeTransicionar, ESTADOS_VIVOS,
+  marcarResultadoAccion, editarAccionInput,
 } from "./recommendations";
 export type {
   Recommendation, RecommendationInput, Severidad, EstadoReco, OrigenConfianza, Evidencia,

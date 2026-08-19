@@ -3,6 +3,7 @@ import { ensureSchema } from "@/lib/db/schema";
 import { registry } from "@/lib/tools";
 import { remember } from "@/lib/memory";
 import { enforceWrite, registrarAccion } from "./policies";
+import { registrarResultado } from "./resultados";
 
 // ─── Ejecución de acciones aprobadas (server-side, único punto) ──────────────
 // Compartido por /api/agentes/acciones (Aprobaciones) y por el Centro de
@@ -49,6 +50,20 @@ export async function aprobarAccion(id: number, inputEditado?: any): Promise<Res
   await (prisma as any).$executeRawUnsafe(
     `UPDATE action_queue SET estado = $2, resultado = $3::jsonb, input = $4::jsonb, resuelto_en = now() WHERE id = $1`,
     id, result.ok ? "ejecutada" : "error", JSON.stringify(result), JSON.stringify(inputFinal));
+
+  // Fase 3: registra el RESULTADO (determinístico) vinculado a su recomendación,
+  // si la hay (recommendations.action_queue_id = id).
+  try {
+    const recoRows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT id FROM recommendations WHERE action_queue_id = $1 LIMIT 1`, id);
+    const recoId = recoRows[0]?.id != null ? Number(recoRows[0].id) : null;
+    await registrarResultado({
+      recommendationId: recoId, actionQueueId: id,
+      tipo: result.ok ? "ejecutada" : "error", fuente: "sistema",
+      detalle: { tool: accion.tool },
+    });
+  } catch { /* best-effort */ }
+
   if (result.ok) {
     remember({
       namespace: "decisiones", kind: "accion_aprobada", key: `accion:${id}`,

@@ -549,6 +549,28 @@ const DDL: Record<Ambito, string[]> = {
       UNIQUE (tenant_id, fecha)
     )`,
     `CREATE INDEX IF NOT EXISTS idx_jefe_fecha ON jefe_resumen (tenant_id, fecha DESC)`,
+
+    // ─── Resultados de acciones (Fase 3: Recommendation → Action → Result) ──
+    // Registra lo que REALMENTE pasó tras ejecutar una acción, de forma trazable.
+    // 'ejecutada' se registra solo (determinístico). Los resultados que dependen
+    // de una señal externa (respondió/compró/no respondió/rechazó) se cargan a
+    // mano o por evento (Fase 7). valor_real = resultado económico REAL conocido
+    // (NULL = desconocido); nunca se mezcla con el valor_esperado (estimación).
+    `CREATE TABLE IF NOT EXISTS action_results (
+      id                BIGSERIAL PRIMARY KEY,
+      tenant_id         TEXT NOT NULL DEFAULT 'default',
+      recommendation_id BIGINT,
+      action_queue_id   BIGINT,
+      tipo              TEXT NOT NULL,
+      valor_real        NUMERIC(14,2),
+      detalle           JSONB,
+      fuente            TEXT,   -- 'sistema' | 'usuario' | 'evento'
+      venta_id          TEXT,   -- vínculo explícito con una venta, si corresponde
+      created_at        TIMESTAMPTZ DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ares_reco ON action_results (recommendation_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ares_tipo ON action_results (tipo, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_ares_aq   ON action_results (action_queue_id)`,
   ],
 
   // ─── Memoria compartida de la Empresa IA ─────────────────────────────────

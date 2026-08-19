@@ -18,6 +18,11 @@ export {
 export type { PoliciesConfig, ToolPolicy, GlobalPolicy, EvalResult, EvalContext } from "./policies";
 export { generarResumenJefe, ultimoResumenJefe } from "./jefe-gabinete";
 export {
+  registrarResultado, atribuirVenta, resultadosDe, resumenResultados,
+  TIPOS_RESULTADO, esPositivo, esNegativo, agregarMetricas,
+} from "./resultados";
+export type { TipoResultado, ResultadoRow, MetricasResultados, ResumenResultados } from "./resultados";
+export {
   analizar, deduplicar, detectarConflictos, priorizar, conteosPorSeveridad, textoPlantilla,
 } from "./jefe-gabinete.logic";
 export type { RecoJefe, Conflicto, ResumenJefe } from "./jefe-gabinete.logic";

@@ -15,3 +15,8 @@ export {
   resolvePolicy, evaluar, POLICIES_DEFAULT,
 } from "./policies";
 export type { PoliciesConfig, ToolPolicy, GlobalPolicy, EvalResult, EvalContext } from "./policies";
+export { generarResumenJefe, ultimoResumenJefe } from "./jefe-gabinete";
+export {
+  analizar, deduplicar, detectarConflictos, priorizar, conteosPorSeveridad, textoPlantilla,
+} from "./jefe-gabinete.logic";
+export type { RecoJefe, Conflicto, ResumenJefe } from "./jefe-gabinete.logic";

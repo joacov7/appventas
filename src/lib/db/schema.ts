@@ -526,6 +526,29 @@ const DDL: Record<Ambito, string[]> = {
     )`,
     `CREATE INDEX IF NOT EXISTS idx_ata_tool_dia ON agent_tool_actions (tool, created_at)`,
     `CREATE INDEX IF NOT EXISTS idx_ata_agent    ON agent_tool_actions (agent_id, created_at)`,
+
+    // ─── Resumen del Jefe de Gabinete (coordina/prioriza/resume, NO ejecuta) ─
+    // Auditable: permite reconstruir por qué el Jefe eligió esas 3-5 prioridades.
+    // La selección de prioridades es DETERMINÍSTICA; la IA (si hay) solo redacta.
+    `CREATE TABLE IF NOT EXISTS jefe_resumen (
+      id             BIGSERIAL PRIMARY KEY,
+      tenant_id      TEXT NOT NULL DEFAULT 'default',
+      fecha          DATE NOT NULL,
+      consideradas   JSONB,   -- ids de recomendaciones leídas
+      seleccionadas  JSONB,   -- top 3-5 elegidas (id, titulo, prioridad, severidad)
+      conteos        JSONB,   -- {criticas, importantes, oportunidades}
+      prioridades    JSONB,   -- lista ordenada con su racional
+      conflictos     JSONB,   -- señales contradictorias detectadas + fuentes
+      agentes        JSONB,   -- agentes involucrados
+      uso_ia         BOOLEAN DEFAULT false,
+      costo_ia       REAL DEFAULT 0,
+      generado_por   TEXT,    -- 'reglas' | 'ia'
+      resultado      TEXT,    -- 'ok' | 'sin_datos' | 'error'
+      resumen        TEXT,
+      generado_en    TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (tenant_id, fecha)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_jefe_fecha ON jefe_resumen (tenant_id, fecha DESC)`,
   ],
 
   // ─── Memoria compartida de la Empresa IA ─────────────────────────────────

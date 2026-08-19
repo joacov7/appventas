@@ -3,13 +3,55 @@ import { ensureSchema } from "@/lib/db/schema";
 import { registry } from "@/lib/tools";
 import { getAI } from "@/lib/ai";
 import { recall as memRecall, remember as memRemember } from "@/lib/memory";
-import { createOrMerge, dedupKey } from "./recommendations";
+import { createOrMerge, dedupKey, vincularAccion, transicionar } from "./recommendations";
 import { enforceWrite, registrarAccion, loadPolicies } from "./policies";
 import type { PoliciesConfig } from "./policies";
 import type { AgentDef, AgentRunContext, AgentRunResult, AgentTelemetry, AutonomyMode } from "./types";
 
 async function ensureTables() {
   await ensureSchema("agentes");
+}
+
+// ── Enlace write → recommendation (Paso 2A, SOLO Comercial) ─────────────────
+// Cuando Comercial PROPONE un cambio de precio, además de encolarlo crea/mergea
+// una recomendación accionable (intención) vinculada a esa fila de action_queue
+// (orden ejecutable). Garantiza 1 recomendación → máximo 1 action_queue.
+// Devuelve el id de recomendación (o null si no aplica).
+async function recomendacionComercial(
+  runId: number | null, tool: string, input: any
+): Promise<{ recoId: number; actionQueueId: number | null } | null> {
+  const productId = input?.productId != null ? String(input.productId) : null;
+  if (!productId) return null;
+
+  let precioActual: number | null = null, nombre: string | null = null;
+  try {
+    const v = await prisma.productVariant.findFirst({ where: { productId, active: true }, orderBy: { price: "asc" } });
+    precioActual = v ? Number(v.price) : null;
+  } catch { /* noop */ }
+  try {
+    const p = await prisma.product.findUnique({ where: { id: productId } });
+    nombre = (p as any)?.name ?? null;
+  } catch { /* noop */ }
+
+  const nuevo = Number(input?.precio);
+  let pct: number | null = null, direccion: string | null = null;
+  if (precioActual != null && precioActual > 0 && Number.isFinite(nuevo)) {
+    pct = Math.round(((nuevo - precioActual) / precioActual) * 1000) / 10;
+    direccion = nuevo < precioActual ? "baja" : nuevo > precioActual ? "suba" : "igual";
+  }
+  const titulo = `Ajuste de precio sugerido${nombre ? `: ${nombre}` : ""}`;
+  const descripcion = precioActual != null
+    ? `Precio actual $${precioActual} → sugerido $${nuevo}${pct != null ? ` (${pct > 0 ? "+" : ""}${pct}%)` : ""}.`
+    : `Precio sugerido $${nuevo}.`;
+
+  const { recommendation } = await createOrMerge({
+    agentId: "comercial", agentRunId: runId ?? undefined, tipo: "precio",
+    titulo, descripcion, entityType: "producto", entityId: productId,
+    severidad: "importante", origenConfianza: "inferencia_alta",
+    actionTool: tool, actionInput: input,
+    metadata: { direccion, precioActual, pct, origen: "engine:comercial" },
+  });
+  return { recoId: recommendation.id, actionQueueId: recommendation.action_queue_id };
 }
 
 // Slug corto y estable de un texto, para armar dedup_key de recomendaciones
@@ -87,15 +129,43 @@ export async function runAgent(def: AgentDef, autonomy: AutonomyMode): Promise<A
         // Requiere aprobación (autonomía efectiva ≠ autónomo, o requires_approval).
         if (verdict.requireApproval) {
           tel.accionesPropuestas.push({ tool: name, input });
+
+          // Comercial: crea/mergea la recomendación accionable ANTES de encolar,
+          // y mantiene el vínculo 1:1 con action_queue. Si la recomendación ya
+          // tenía una acción pendiente, se REFRESCA esa fila (no se duplica);
+          // si no, se inserta una nueva y se vincula.
+          let recoComercial: { recoId: number; actionQueueId: number | null } | null = null;
+          if (def.id === "comercial") {
+            try { recoComercial = await recomendacionComercial(runId ?? null, name, input); }
+            catch (e: any) { tel.logs.push(`✗ reco comercial: ${e?.message ?? "error"}`); }
+          }
+
           try {
-            await (prisma as any).$executeRawUnsafe(
-              `INSERT INTO action_queue (agent_id, tool, input, estado) VALUES ($1,$2,$3::jsonb,'pendiente')`,
-              def.id, name, JSON.stringify(input ?? {})
-            );
-            tel.logs.push(`📝 ${name} encolado en Aprobaciones`);
+            if (recoComercial?.actionQueueId) {
+              // Ya hay una orden pendiente vinculada → refrescar su input.
+              await (prisma as any).$executeRawUnsafe(
+                `UPDATE action_queue SET input = $2::jsonb WHERE id = $1 AND estado = 'pendiente'`,
+                recoComercial.actionQueueId, JSON.stringify(input ?? {})
+              );
+              tel.logs.push(`📝 ${name}: orden pendiente actualizada (aq=${recoComercial.actionQueueId})`);
+            } else {
+              const ins: any[] = await (prisma as any).$queryRawUnsafe(
+                `INSERT INTO action_queue (agent_id, tool, input, estado) VALUES ($1,$2,$3::jsonb,'pendiente') RETURNING id`,
+                def.id, name, JSON.stringify(input ?? {})
+              );
+              const aqId = ins[0]?.id != null ? Number(ins[0].id) : null;
+              // Vincula 1:1 la recomendación con su orden ejecutable.
+              if (recoComercial && aqId != null) {
+                await vincularAccion(recoComercial.recoId, aqId);
+                await transicionar(recoComercial.recoId, "pending_approval").catch(() => {});
+              }
+              tel.logs.push(`📝 ${name} encolado en Aprobaciones${aqId ? ` (aq=${aqId})` : ""}`);
+            }
           } catch (e: any) {
             tel.logs.push(`✗ no se pudo encolar ${name}: ${e?.message ?? "error"}`);
           }
+
+          if (recoComercial) tel.recomendaciones++; // evita que el shim duplique
           accionesPorTool.set(name, ejecutadasEnRun + 1);
           await registrarAccion({ agentId: def.id, agentRunId: runId ?? undefined, tool: name, modo: "propuesta", entityId: entityId != null ? String(entityId) : null });
           return { propuesta: true } as any;

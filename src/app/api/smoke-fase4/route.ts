@@ -48,17 +48,17 @@ export async function GET(req: NextRequest) {
     const prot = await enforceWrite({ agentId: "comercial", tool: "aplicar_precio", input: { productId: "PROT-1", precio: 100 }, agentAutonomy: "autonomous", cfg: cfgProt, tenantId: TENANT });
     push("3. Producto protegido bloquea", !prot.allow, prot.motivo);
 
-    // 4-5. Reglas de precio contra un producto REAL (solo lectura del precio).
-    const variante = await prisma.productVariant.findFirst({ where: { active: true }, orderBy: { price: "asc" } }).catch(() => null);
+    // 4-5. Reglas de precio contra un producto REAL con precio > 0 (solo lectura).
+    const variante = await prisma.productVariant.findFirst({ where: { active: true, price: { gt: "0" } }, orderBy: { price: "desc" } }).catch(() => null);
     if (variante) {
       const pid = variante.productId;
       const actual = Number(variante.price);
       const cfgCap: PoliciesConfig = { tools: { aplicar_precio: { max_change_percent: 5 } } };
       const grande = await enforceWrite({ agentId: "comercial", tool: "aplicar_precio", input: { productId: pid, precio: Math.round(actual * 1.5) }, agentAutonomy: "autonomous", cfg: cfgCap, tenantId: TENANT });
       const chico = await enforceWrite({ agentId: "comercial", tool: "aplicar_precio", input: { productId: pid, precio: Math.round(actual * 1.03) }, agentAutonomy: "autonomous", cfg: cfgCap, tenantId: TENANT });
-      push("4. max_change_percent bloquea +50% y permite +3%", !grande.allow && chico.allow, `+50%→${grande.allow ? "permite" : "bloquea"} (${grande.motivo ?? "-"}), +3%→${chico.allow ? "permite" : "bloquea"}`);
+      push("4. max_change_percent bloquea +50% y permite +3%", !grande.allow && chico.allow, `precio_actual=${actual} · +50%→${grande.allow ? "permite" : "bloquea"} (${grande.motivo ?? "-"}), +3%→${chico.allow ? "permite" : "bloquea"}`);
     } else {
-      push("4. max_change_percent (sin producto real, omitido)", true, "no hay variantes activas en la base");
+      push("4. max_change_percent (sin producto con precio>0, omitido)", true, "no hay variantes activas con precio en la base");
     }
 
     // 6. Tope diario: registro 2 acciones y una política de máx 2 bloquea la 3ª.

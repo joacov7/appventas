@@ -5,6 +5,7 @@ import { getAI } from "@/lib/ai";
 import { recall as memRecall, remember as memRemember } from "@/lib/memory";
 import { createOrMerge, dedupKey, vincularAccion, transicionar } from "./recommendations";
 import { enforceWrite, registrarAccion, loadPolicies } from "./policies";
+import { decisionQueBloquea } from "./memoria-estructurada";
 import type { PoliciesConfig } from "./policies";
 import type { AgentDef, AgentRunContext, AgentRunResult, AgentTelemetry, AutonomyMode } from "./types";
 
@@ -124,6 +125,18 @@ export async function runAgent(def: AgentDef, autonomy: AutonomyMode): Promise<A
           tel.logs.push(`⛔ ${name} bloqueado por política: ${verdict.motivo}`);
           await registrarAccion({ agentId: def.id, agentRunId: runId ?? undefined, tool: name, modo: "bloqueada", motivo: verdict.motivo, entityId: entityId != null ? String(entityId) : null });
           return { bloqueada: true, motivo: verdict.motivo } as any;
+        }
+
+        // Memoria de decisiones (Fase 4): si el usuario ya rechazó esta acción
+        // sobre esta entidad y la decisión sigue vigente, no se re-propone.
+        if (def.id === "comercial" && name === "aplicar_precio" && input?.productId) {
+          const bloq = await decisionQueBloquea("producto", String(input.productId), "aplicar_precio").catch(() => null);
+          if (bloq) {
+            const motivo = `decisión previa de ${bloq.actor}${bloq.motivo ? `: ${bloq.motivo}` : ""}`;
+            tel.logs.push(`🧠 ${name} no propuesto — ${motivo}`);
+            await registrarAccion({ agentId: def.id, agentRunId: runId ?? undefined, tool: name, modo: "bloqueada", motivo, entityId: String(input.productId) });
+            return { bloqueada: true, motivo } as any;
+          }
         }
 
         // Requiere aprobación (autonomía efectiva ≠ autónomo, o requires_approval).

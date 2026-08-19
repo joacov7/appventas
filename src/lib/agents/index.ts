@@ -23,6 +23,13 @@ export {
 } from "./resultados";
 export type { TipoResultado, ResultadoRow, MetricasResultados, ResumenResultados } from "./resultados";
 export {
+  MEM_NS, recordarDecision, decisionesDeEntidad, decisionQueBloquea,
+  recordarCliente, perfilCliente, recordarProducto, perfilProducto,
+  recordarProveedor, perfilProveedor, recordarReglaEmpresa, reglasEmpresa,
+  estaVigente, decisionBloqueante, vencimientoEnDias,
+} from "./memoria-estructurada";
+export type { DecisionValue, MemNamespace } from "./memoria-estructurada";
+export {
   analizar, deduplicar, detectarConflictos, priorizar, conteosPorSeveridad, textoPlantilla,
 } from "./jefe-gabinete.logic";
 export type { RecoJefe, Conflicto, ResumenJefe } from "./jefe-gabinete.logic";

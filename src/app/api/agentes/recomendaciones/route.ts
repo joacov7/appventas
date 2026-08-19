@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
 import { ESTADOS_VIVOS, transicionar, marcarResultadoAccion, editarAccionInput } from "@/lib/agents/recommendations";
 import { aprobarAccion, rechazarAccion } from "@/lib/agents/acciones-exec";
+import { recordarDecision } from "@/lib/agents/memoria-estructurada";
 
 const vivosSql = ESTADOS_VIVOS.map(e => `'${e}'`).join(",");
 
@@ -79,6 +80,16 @@ export async function PATCH(req: NextRequest) {
     if (aqId) await rechazarAccion(aqId);
     const t = await transicionar(Number(id), "rejected");
     if (!t.ok) return NextResponse.json({ error: t.error }, { status: 409 });
+    // Aprendizaje (Fase 4): registra la decisión del usuario para que los agentes
+    // no re-propongan esta acción sobre esta entidad mientras esté vigente.
+    if (reco.action_tool && reco.entity_type && reco.entity_id) {
+      await recordarDecision({
+        actor: "usuario", accion: reco.action_tool,
+        entityType: reco.entity_type, entityId: reco.entity_id,
+        motivo: typeof input?.motivo === "string" ? input.motivo : "rechazada en el Centro de Decisiones",
+        vigenciaDias: 30, kind: "rechazo",
+      });
+    }
     return NextResponse.json({ ok: true, estado: "rejected" });
   }
 

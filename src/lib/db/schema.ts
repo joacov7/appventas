@@ -398,6 +398,10 @@ const DDL: Record<Ambito, string[]> = {
       ms INT,
       created_at TIMESTAMPTZ DEFAULT now()
     )`,
+    // Estado del ciclo de vida de la corrida (auditoría): la fila se inserta
+    // 'running' al comenzar y pasa a 'completed' o 'failed' al terminar.
+    `ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS estado TEXT`,
+    `ALTER TABLE agent_runs ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ`,
     `CREATE TABLE IF NOT EXISTS action_queue (
       id BIGSERIAL PRIMARY KEY,
       tenant_id TEXT DEFAULT 'default',
@@ -415,6 +419,158 @@ const DDL: Record<Ambito, string[]> = {
       acciones  JSONB NOT NULL,
       creado_en TIMESTAMPTZ DEFAULT now()
     )`,
+
+    // ─── Recomendaciones: entidad central de inteligencia ──────────────────
+    // Evoluciona el viejo "agent_runs.decision (JSON efímero)" a una entidad
+    // persistente y trazable. Pensada para asociarse LUEGO (sin rehacerla) con
+    // una acción (action_queue_id), un resultado, un impacto económico, una
+    // decisión del usuario y una entrada de memoria (memory_entry_id).
+    //   Recommendation = intención  ·  action_queue = orden ejecutable.
+    // Una recomendación apunta a lo sumo a UNA fila de action_queue, para que
+    // nunca genere dos ejecuciones.
+    `CREATE TABLE IF NOT EXISTS recommendations (
+      id                BIGSERIAL PRIMARY KEY,
+      tenant_id         TEXT NOT NULL DEFAULT 'default',
+      agent_id          TEXT NOT NULL,
+      agent_run_id      BIGINT,
+      tipo              TEXT NOT NULL,
+      titulo            TEXT NOT NULL,
+      descripcion       TEXT,
+      prioridad         SMALLINT,
+      severidad         TEXT NOT NULL DEFAULT 'oportunidad',
+      impacto_estimado  NUMERIC(14,2),
+      impacto_moneda    TEXT DEFAULT 'ARS',
+      valor_esperado    NUMERIC(14,2),
+      confianza         SMALLINT,
+      esfuerzo_estimado TEXT,
+      evidencia         JSONB,
+      estado            TEXT NOT NULL DEFAULT 'new',
+      dedup_key         TEXT,
+      entity_type       TEXT,
+      entity_id         TEXT,
+      action_tool       TEXT,
+      action_input      JSONB,
+      action_queue_id   BIGINT,
+      result_id         BIGINT,
+      impact_id         BIGINT,
+      memory_entry_id   BIGINT,
+      created_at        TIMESTAMPTZ DEFAULT now(),
+      updated_at        TIMESTAMPTZ DEFAULT now(),
+      expires_at        TIMESTAMPTZ,
+      metadata          JSONB
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_reco_estado    ON recommendations (tenant_id, estado)`,
+    `CREATE INDEX IF NOT EXISTS idx_reco_dedup     ON recommendations (tenant_id, dedup_key)`,
+    `CREATE INDEX IF NOT EXISTS idx_reco_agent     ON recommendations (agent_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reco_run       ON recommendations (agent_run_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reco_entity    ON recommendations (entity_type, entity_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_reco_expires   ON recommendations (expires_at)`,
+    // Dedup real: una sola recomendación VIVA por (tenant, dedup_key). Las
+    // recomendaciones ya cerradas no bloquean que se cree una nueva.
+    `CREATE UNIQUE INDEX IF NOT EXISTS ux_reco_dedup_activo ON recommendations (tenant_id, dedup_key)
+       WHERE dedup_key IS NOT NULL
+         AND estado IN ('new','analyzing','proposed','pending_approval','postponed')`,
+
+    // ─── Fuentes de una recomendación (dedup multi-agente sin perder origen) ─
+    // Si 3 agentes detectan el mismo problema, hay 1 recommendation y 3 filas
+    // acá: se conserva quién la detectó y qué aportó cada uno.
+    `CREATE TABLE IF NOT EXISTS recommendation_sources (
+      id                BIGSERIAL PRIMARY KEY,
+      recommendation_id BIGINT NOT NULL,
+      agent_id          TEXT NOT NULL,
+      agent_run_id      BIGINT,
+      aporte            JSONB,
+      created_at        TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (recommendation_id, agent_id)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_reco_src_reco ON recommendation_sources (recommendation_id)`,
+
+    // ─── Evidencia de mercado: el scraping NO es fuente de verdad ───────────
+    // Capa normalizada por encima del scraping de competencia. Distingue precio
+    // observado / histórico / estimado / manual, con vencimiento y confianza
+    // por tipo de fuente. Sin evidencia vigente → no se recomienda cambiar precio.
+    `CREATE TABLE IF NOT EXISTS market_evidence (
+      id            BIGSERIAL PRIMARY KEY,
+      tenant_id     TEXT NOT NULL DEFAULT 'default',
+      product_id    TEXT,
+      match_nombre  TEXT,
+      precio        NUMERIC(14,2),
+      precio_tipo   TEXT NOT NULL DEFAULT 'observado',
+      fuente        TEXT,
+      fuente_tipo   TEXT NOT NULL DEFAULT 'observacion',
+      url           TEXT,
+      disponibilidad TEXT,
+      confianza     SMALLINT,
+      capturado_en  TIMESTAMPTZ DEFAULT now(),
+      vence_en      TIMESTAMPTZ,
+      metadata      JSONB
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_mktev_producto ON market_evidence (product_id, capturado_en DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_mktev_tipo     ON market_evidence (precio_tipo)`,
+    `CREATE INDEX IF NOT EXISTS idx_mktev_vence    ON market_evidence (vence_en)`,
+
+    // ─── Registro de acciones de escritura (enforcement + auditoría) ────────
+    // Cada intento de una tool de escritura por un agente: ejecutada / propuesta
+    // / bloqueada (con motivo). Alimenta los topes diarios de las políticas y
+    // deja trazabilidad de por qué una acción se bloqueó o esperó aprobación.
+    `CREATE TABLE IF NOT EXISTS agent_tool_actions (
+      id            BIGSERIAL PRIMARY KEY,
+      tenant_id     TEXT NOT NULL DEFAULT 'default',
+      agent_id      TEXT,
+      agent_run_id  BIGINT,
+      tool          TEXT NOT NULL,
+      modo          TEXT NOT NULL,
+      motivo        TEXT,
+      entity_id     TEXT,
+      created_at    TIMESTAMPTZ DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ata_tool_dia ON agent_tool_actions (tool, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_ata_agent    ON agent_tool_actions (agent_id, created_at)`,
+
+    // ─── Resumen del Jefe de Gabinete (coordina/prioriza/resume, NO ejecuta) ─
+    // Auditable: permite reconstruir por qué el Jefe eligió esas 3-5 prioridades.
+    // La selección de prioridades es DETERMINÍSTICA; la IA (si hay) solo redacta.
+    `CREATE TABLE IF NOT EXISTS jefe_resumen (
+      id             BIGSERIAL PRIMARY KEY,
+      tenant_id      TEXT NOT NULL DEFAULT 'default',
+      fecha          DATE NOT NULL,
+      consideradas   JSONB,   -- ids de recomendaciones leídas
+      seleccionadas  JSONB,   -- top 3-5 elegidas (id, titulo, prioridad, severidad)
+      conteos        JSONB,   -- {criticas, importantes, oportunidades}
+      prioridades    JSONB,   -- lista ordenada con su racional
+      conflictos     JSONB,   -- señales contradictorias detectadas + fuentes
+      agentes        JSONB,   -- agentes involucrados
+      uso_ia         BOOLEAN DEFAULT false,
+      costo_ia       REAL DEFAULT 0,
+      generado_por   TEXT,    -- 'reglas' | 'ia'
+      resultado      TEXT,    -- 'ok' | 'sin_datos' | 'error'
+      resumen        TEXT,
+      generado_en    TIMESTAMPTZ DEFAULT now(),
+      UNIQUE (tenant_id, fecha)
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_jefe_fecha ON jefe_resumen (tenant_id, fecha DESC)`,
+
+    // ─── Resultados de acciones (Fase 3: Recommendation → Action → Result) ──
+    // Registra lo que REALMENTE pasó tras ejecutar una acción, de forma trazable.
+    // 'ejecutada' se registra solo (determinístico). Los resultados que dependen
+    // de una señal externa (respondió/compró/no respondió/rechazó) se cargan a
+    // mano o por evento (Fase 7). valor_real = resultado económico REAL conocido
+    // (NULL = desconocido); nunca se mezcla con el valor_esperado (estimación).
+    `CREATE TABLE IF NOT EXISTS action_results (
+      id                BIGSERIAL PRIMARY KEY,
+      tenant_id         TEXT NOT NULL DEFAULT 'default',
+      recommendation_id BIGINT,
+      action_queue_id   BIGINT,
+      tipo              TEXT NOT NULL,
+      valor_real        NUMERIC(14,2),
+      detalle           JSONB,
+      fuente            TEXT,   -- 'sistema' | 'usuario' | 'evento'
+      venta_id          TEXT,   -- vínculo explícito con una venta, si corresponde
+      created_at        TIMESTAMPTZ DEFAULT now()
+    )`,
+    `CREATE INDEX IF NOT EXISTS idx_ares_reco ON action_results (recommendation_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_ares_tipo ON action_results (tipo, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_ares_aq   ON action_results (action_queue_id)`,
   ],
 
   // ─── Memoria compartida de la Empresa IA ─────────────────────────────────

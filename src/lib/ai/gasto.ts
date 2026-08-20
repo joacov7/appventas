@@ -1,16 +1,23 @@
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
 import { estimarCosto } from "./cost";
+import { nivelAlerta, featureDeAgente } from "./presupuesto.logic";
+import type { EstadoPresupuesto } from "./presupuesto.logic";
 import type { AICompleteResult } from "./types";
+
+export { nivelAlerta, featureDeAgente, resolverFeature } from "./presupuesto.logic";
+export type { EstadoPresupuesto, NivelAlerta } from "./presupuesto.logic";
 
 // Error cuando se alcanzó el tope mensual de gasto de IA.
 export class AIBudgetExceededError extends Error {}
 
 export interface PresupuestoIA {
-  limite_usd: number; // 0 = sin límite
+  limite_usd: number; // 0 = sin límite (global)
   cortar: boolean;    // si true, bloquea las llamadas al superar el límite
+  // Tope mensual por agente (USD). Opcional; 0 o ausente = sin tope propio.
+  porAgente?: Record<string, number>;
 }
-export const PRESUPUESTO_DEFAULT: PresupuestoIA = { limite_usd: 0, cortar: false };
+export const PRESUPUESTO_DEFAULT: PresupuestoIA = { limite_usd: 0, cortar: false, porAgente: {} };
 
 export async function loadPresupuestoIA(): Promise<PresupuestoIA> {
   try {
@@ -18,13 +25,22 @@ export async function loadPresupuestoIA(): Promise<PresupuestoIA> {
     const rows: any[] = await (prisma as any).$queryRawUnsafe(
       `SELECT config FROM catalog_config WHERE tipo = 'ia_presupuesto'`);
     const c = rows[0]?.config ?? {};
-    return { limite_usd: Number(c.limite_usd) || 0, cortar: !!c.cortar };
+    return {
+      limite_usd: Number(c.limite_usd) || 0,
+      cortar: !!c.cortar,
+      porAgente: (c.porAgente && typeof c.porAgente === "object") ? c.porAgente : {},
+    };
   } catch { return PRESUPUESTO_DEFAULT; }
 }
 
 export async function savePresupuestoIA(p: PresupuestoIA): Promise<void> {
   await ensureSchema("config");
-  const limpio = { limite_usd: Math.max(0, Number(p.limite_usd) || 0), cortar: !!p.cortar };
+  const porAgente: Record<string, number> = {};
+  for (const [k, v] of Object.entries(p.porAgente ?? {})) {
+    const n = Math.max(0, Number(v) || 0);
+    if (n > 0) porAgente[k] = n;
+  }
+  const limpio = { limite_usd: Math.max(0, Number(p.limite_usd) || 0), cortar: !!p.cortar, porAgente };
   await (prisma as any).$executeRawUnsafe(
     `INSERT INTO catalog_config (tipo, config) VALUES ('ia_presupuesto', $1::jsonb)
      ON CONFLICT (tipo) DO UPDATE SET config = $1::jsonb, updated_at = NOW()`,
@@ -40,6 +56,42 @@ export async function gastoDelMesIA(): Promise<number> {
        WHERE creado_en >= date_trunc('month', now())`);
     return Number(rows[0]?.total ?? 0);
   } catch { return 0; }
+}
+
+// Gasto del mes atribuido a un agente (por la feature "agente:<id>").
+export async function gastoDelMesAgente(agentId: string): Promise<number> {
+  try {
+    await ensureSchema("ia");
+    const rows: any[] = await (prisma as any).$queryRawUnsafe(
+      `SELECT COALESCE(SUM(costo_usd),0)::float AS total FROM ai_gasto
+        WHERE feature = $1 AND creado_en >= date_trunc('month', now())`,
+      featureDeAgente(agentId));
+    return Number(rows[0]?.total ?? 0);
+  } catch { return 0; }
+}
+
+// Verifica el tope POR AGENTE antes de una llamada. Lanza si está superado y
+// "cortar" está activo. Sin tope propio → no hace nada (los determinísticos ni
+// llegan acá porque no llaman a la IA).
+export async function verificarPresupuestoAgente(agentId: string, cfg?: PresupuestoIA): Promise<void> {
+  const p = cfg ?? await loadPresupuestoIA();
+  const limite = Number(p.porAgente?.[agentId]) || 0;
+  if (limite <= 0) return; // sin tope propio
+  const gastado = await gastoDelMesAgente(agentId);
+  if (p.cortar && gastado >= limite) {
+    throw new AIBudgetExceededError(`El agente "${agentId}" alcanzó su tope mensual de IA (US$${limite}).`);
+  }
+}
+
+// Estado del presupuesto por agente (para alertas 50/80/100 y reportes).
+export async function resumenPresupuestoAgentes(): Promise<Record<string, EstadoPresupuesto>> {
+  const p = await loadPresupuestoIA();
+  const out: Record<string, EstadoPresupuesto> = {};
+  for (const [agentId, limite] of Object.entries(p.porAgente ?? {})) {
+    const gastado = await gastoDelMesAgente(agentId);
+    out[agentId] = nivelAlerta(gastado, Number(limite) || 0);
+  }
+  return out;
 }
 
 // Registra el costo de una llamada (best-effort, nunca rompe el flujo).

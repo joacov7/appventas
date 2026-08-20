@@ -6,7 +6,7 @@ import { isAdmin } from "@/lib/admin-auth";
 import { prisma } from "@/lib/prisma";
 import { ensureSchema } from "@/lib/db/schema";
 import { registry } from "@/lib/tools";
-import { remember } from "@/lib/memory";
+import { aprobarAccion, rechazarAccion } from "@/lib/agents/acciones-exec";
 
 async function ensureCols() {
   // Asegura que la tabla y TODAS sus columnas existan. Tablas viejas de prod
@@ -59,38 +59,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "id y decision (aprobar|rechazar) requeridos" }, { status: 400 });
   }
 
-  const rows: any[] = await (prisma as any).$queryRawUnsafe(
-    `SELECT * FROM action_queue WHERE id = $1 AND estado = 'pendiente'`, Number(id)
-  );
-  const accion = rows[0];
-  if (!accion) return NextResponse.json({ error: "Acción no encontrada o ya resuelta" }, { status: 404 });
-
+  // Aprobar/rechazar reutilizando la lógica compartida (con enforcement).
   if (decision === "rechazar") {
-    await (prisma as any).$executeRawUnsafe(
-      `UPDATE action_queue SET estado = 'rechazada', resuelto_en = now() WHERE id = $1`, Number(id)
-    );
-    // Aprender del rechazo
-    remember({
-      namespace: "decisiones", kind: "accion_rechazada",
-      key: `accion:${id}`, value: { agente: accion.agent_id, tool: accion.tool, input: accion.input },
-      source: "aprobaciones", tags: ["rechazada", accion.tool], confidence: 0.7,
-    }).catch(() => {});
-    return NextResponse.json({ ok: true, estado: "rechazada" });
+    const r = await rechazarAccion(Number(id));
+    if (!r.ok && r.estado === "no_encontrada") return NextResponse.json({ error: r.motivo }, { status: 404 });
+    return NextResponse.json({ ok: r.ok, estado: r.estado });
   }
-
-  // Aprobar → ejecutar la tool con el input (editado por el usuario si lo mandó).
-  const inputFinal = (inputEditado && typeof inputEditado === "object") ? inputEditado : (accion.input ?? {});
-  const result = await registry.execute(accion.tool, inputFinal);
-  await (prisma as any).$executeRawUnsafe(
-    `UPDATE action_queue SET estado = $2, resultado = $3::jsonb, input = $4::jsonb, resuelto_en = now() WHERE id = $1`,
-    Number(id), result.ok ? "ejecutada" : "error", JSON.stringify(result), JSON.stringify(inputFinal)
-  );
-  if (result.ok) {
-    remember({
-      namespace: "decisiones", kind: "accion_aprobada",
-      key: `accion:${id}`, value: { agente: accion.agent_id, tool: accion.tool, input: inputFinal },
-      source: "aprobaciones", tags: ["aprobada", accion.tool], confidence: 0.8,
-    }).catch(() => {});
-  }
-  return NextResponse.json({ ok: result.ok, estado: result.ok ? "ejecutada" : "error", resultado: result });
+  const r = await aprobarAccion(Number(id), inputEditado);
+  if (r.estado === "no_encontrada") return NextResponse.json({ error: r.motivo }, { status: 404 });
+  if (r.estado === "bloqueada") return NextResponse.json({ error: `Bloqueado por política: ${r.motivo}`, motivo: r.motivo }, { status: 422 });
+  return NextResponse.json({ ok: r.ok, estado: r.estado, resultado: r.resultado });
 }

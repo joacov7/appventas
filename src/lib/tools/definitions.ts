@@ -10,7 +10,7 @@ import { calcularPresupuesto } from "@/lib/services/presupuesto.service";
 import { recolectarDatos } from "@/lib/briefing";
 import { remember, recall } from "@/lib/memory";
 import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
-import { resumenFinanciero, productosParaPromocionar } from "@/lib/services/finanzas.service";
+import { resumenFinanciero, productosParaPromocionar, analisisRentabilidad } from "@/lib/services/finanzas.service";
 import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
 import { proximasFechas } from "@/lib/services/calendario.service";
 import { generarCampana } from "@/lib/services/campana.service";
@@ -178,6 +178,15 @@ export const TOOLS: Tool[] = [
     input: z.object({}),
     params: [],
     run: () => resumenFinanciero(),
+  },
+  {
+    name: "analisis_rentabilidad",
+    description: "Rentabilidad por producto: margen, rotación (ventas 30d), stock y capital inmovilizado. Determinístico, 0 tokens.",
+    category: "Finanzas",
+    sideEffect: "read",
+    input: z.object({}),
+    params: [],
+    run: () => analisisRentabilidad(),
   },
   {
     name: "productos_para_promocionar",

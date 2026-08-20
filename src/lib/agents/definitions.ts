@@ -1,5 +1,6 @@
 import type { AgentDef } from "./types";
 import { calcularSugerencia } from "@/lib/services/pricing.service";
+import { clasificarRentabilidad } from "./rentabilidad.logic";
 
 export const AGENTS: AgentDef[] = [
   // ── CEO: resumen y prioridades del día (usa IA para redactar) ──
@@ -119,10 +120,10 @@ export const AGENTS: AgentDef[] = [
   {
     id: "finanzas",
     nombre: "Finanzas",
-    rol: "Cobros y salud financiera",
-    objetivo: "Reporta ingresos, ticket promedio y plata pendiente de cobro. Sin gastar tokens.",
+    rol: "Cobros, salud financiera y rentabilidad",
+    objetivo: "Reporta ingresos, ticket promedio y cobros pendientes, y analiza la rentabilidad por producto (margen, rotación e inmovilizado). Sin gastar tokens.",
     categoria: "Finanzas",
-    tools: ["resumen_financiero"],
+    tools: ["resumen_financiero", "analisis_rentabilidad"],
     defaultAutonomy: "manual",
     async handler(ctx) {
       const f = await ctx.tool<any>("resumen_financiero");
@@ -134,6 +135,14 @@ export const AGENTS: AgentDef[] = [
           titulo: `${ars(f.pendiente_de_cobro)} pendientes de cobro`,
           detalle: `Hay ${f.ordenes_pendientes} orden(es) sin pagar. Seguí esos cobros.`,
         });
+        // También al Centro de Decisiones (impacto real = monto pendiente).
+        await ctx.recommend({
+          tipo: "cobros_pendientes", titulo: `${ars(f.pendiente_de_cobro)} pendientes de cobro`,
+          descripcion: `Hay ${f.ordenes_pendientes} orden(es) sin pagar. Seguí esos cobros.`,
+          severidad: "importante", impactoEstimado: Number(f.pendiente_de_cobro) || null,
+          origenConfianza: "deterministico", dedupKey: "cobros_pendientes",
+          metadata: { origen: "finanzas:cobros" },
+        });
       }
       if (f.ticket_promedio != null) {
         recomendaciones.push({
@@ -141,9 +150,34 @@ export const AGENTS: AgentDef[] = [
           detalle: `Un combo o venta cruzada puede subirlo. Revisá el módulo Combos.`,
         });
       }
-      ctx.log(`ingresos 30d ${ars(f.ingresos_30d)} · ${f.ordenes_pagadas} pagadas · 0 tokens de IA`);
+
+      // ── Rentabilidad (Fase 5A): emite recomendaciones ESTRUCTURADAS al Centro
+      //    de Decisiones (con entidad producto, severidad e impacto cuando es real).
+      let alertasRent = 0;
+      try {
+        const items = await ctx.tool<any[]>("analisis_rentabilidad");
+        for (const p of items) {
+          const a = clasificarRentabilidad(p);
+          if (!a) continue;
+          alertasRent++;
+          await ctx.recommend({
+            tipo: `rentabilidad:${a.tipo}`, titulo: a.titulo, descripcion: a.descripcion,
+            severidad: a.severidad, entityType: "producto", entityId: p.id,
+            impactoEstimado: a.impactoEstimado ?? null, origenConfianza: "calculo",
+            evidencia: {
+              observado: { precio: p.precio, costo: p.costo, ventas_30d: p.ventas_30d, stock: p.stock },
+              calculo: { margen_pct: p.margen_pct, valor_inmovilizado: p.valor_inmovilizado },
+            },
+            metadata: { origen: "finanzas:rentabilidad", subtipo: a.tipo },
+          });
+        }
+      } catch (e: any) {
+        ctx.log(`✗ rentabilidad: ${e?.message ?? "error"}`);
+      }
+
+      ctx.log(`ingresos 30d ${ars(f.ingresos_30d)} · ${f.ordenes_pagadas} pagadas · ${alertasRent} alerta(s) de rentabilidad · 0 tokens de IA`);
       return {
-        resumen: `Ingresos aprobados: ${ars(f.ingresos_aprobados_total)} (${ars(f.ingresos_30d)} últimos 30 días). ${f.ordenes_pagadas} órdenes pagadas.`,
+        resumen: `Ingresos aprobados: ${ars(f.ingresos_aprobados_total)} (${ars(f.ingresos_30d)} últimos 30 días). ${f.ordenes_pagadas} órdenes pagadas.${alertasRent ? ` ${alertasRent} alerta(s) de rentabilidad.` : ""}`,
         recomendaciones,
         data: f,
       };

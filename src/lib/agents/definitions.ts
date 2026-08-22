@@ -1,6 +1,7 @@
 import type { AgentDef } from "./types";
 import { calcularSugerencia } from "@/lib/services/pricing.service";
 import { clasificarRentabilidad } from "./rentabilidad.logic";
+import { ameritaReactivacion } from "./crm.logic";
 
 export const AGENTS: AgentDef[] = [
   // ── CEO: resumen y prioridades del día (usa IA para redactar) ──
@@ -392,27 +393,52 @@ export const AGENTS: AgentDef[] = [
     id: "postventa",
     nombre: "Postventa / Fidelización",
     rol: "Reseñas y recompra",
-    objetivo: "Aprovecha a los que ya compraron: pide reseña tras la entrega y reactiva a los clientes que hace rato no compran.",
+    objetivo: "Aprovecha a los que ya compraron: pide reseña tras la entrega, calcula el Customer Score y reactiva a los clientes valiosos en riesgo de abandono.",
     categoria: "Comercial",
-    tools: ["oportunidades_postventa"],
+    tools: ["oportunidades_postventa", "customer_score"],
     defaultAutonomy: "manual",
     async handler(ctx) {
       const ops = await ctx.tool<any[]>("oportunidades_postventa", {});
-      if (!ops.length) {
-        ctx.log("sin oportunidades de postventa · 0 tokens de IA");
-        return { resumen: "No hay oportunidades de postventa por ahora.", recomendaciones: [] };
-      }
       const resenas = ops.filter(o => o.tipo === "resena").length;
       const recompras = ops.filter(o => o.tipo === "recompra").length;
-
       const recomendaciones = ops.slice(0, 15).map(o => ({
         titulo: `${o.tipo === "resena" ? "⭐ Pedir reseña" : "🔄 Reactivar"} — ${o.nombre}`,
         detalle: `${o.tipo === "resena" ? `Compró hace ${o.dias} días.` : `Sin comprar hace ${o.dias} días (${o.compras} compra/s, ${"$" + Math.round(o.total_gastado).toLocaleString("es-AR")}).`} Mensaje: "${o.mensaje_sugerido}"`,
       }));
 
-      ctx.log(`${ops.length} oportunidad(es): ${resenas} reseña(s), ${recompras} recompra(s) · 0 tokens de IA`);
+      // ── CRM Customer Score (Fase 5B): reactivar clientes VALIOSOS en riesgo ──
+      // Emite recomendaciones estructuradas (entidad cliente) para los buenos
+      // clientes con riesgo de abandono alto. Top 15 para no hacer ruido.
+      let reactivar = 0;
+      try {
+        const clientes = await ctx.tool<any[]>("customer_score");
+        const maxValor = clientes.reduce((mx, c) => Math.max(mx, c.total_gastado), 0);
+        const enRiesgo = clientes
+          .filter(c => ameritaReactivacion(c, c, { maxValor }))
+          .slice(0, 15);
+        for (const c of enRiesgo) {
+          reactivar++;
+          await ctx.recommend({
+            tipo: "crm:reactivar", severidad: "importante",
+            titulo: `Reactivar cliente valioso: ${c.nombre}`,
+            descripcion: `Score ${c.score}/100 · riesgo ${c.riesgo_abandono}. ${c.motivos.join(". ")}. Próxima acción: ${c.proxima_accion}.`,
+            entityType: "cliente", entityId: c.key,
+            impactoEstimado: c.ticket_promedio || null, // ≈ valor de la próxima compra (real)
+            confianza: c.confianza,
+            evidencia: {
+              observado: { total_gastado: c.total_gastado, compras: c.compras, dias_desde_ultima: c.dias_desde_ultima, ticket_promedio: c.ticket_promedio },
+              calculo: { score: c.score, frecuencia_dias: c.frecuencia_dias, riesgo: c.riesgo_abandono },
+            },
+            metadata: { origen: "postventa:crm", email: c.email, telefono: c.telefono },
+          });
+        }
+      } catch (e: any) {
+        ctx.log(`✗ customer_score: ${e?.message ?? "error"}`);
+      }
+
+      ctx.log(`${ops.length} oportunidad(es): ${resenas} reseña(s), ${recompras} recompra(s) · ${reactivar} reactivación(es) CRM · 0 tokens de IA`);
       return {
-        resumen: `${ops.length} oportunidad(es) de postventa: ${resenas} para pedir reseña y ${recompras} para reactivar. Revisalas en Postventa.`,
+        resumen: `${ops.length} oportunidad(es) de postventa (${resenas} reseñas, ${recompras} recompras)${reactivar ? ` · ${reactivar} cliente(s) valioso(s) en riesgo para reactivar` : ""}.`,
         recomendaciones,
       };
     },

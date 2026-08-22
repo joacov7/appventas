@@ -11,6 +11,7 @@ import { recolectarDatos } from "@/lib/briefing";
 import { remember, recall } from "@/lib/memory";
 import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 import { resumenFinanciero, productosParaPromocionar, analisisRentabilidad } from "@/lib/services/finanzas.service";
+import { scoringClientes } from "@/lib/services/crm.service";
 import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
 import { proximasFechas } from "@/lib/services/calendario.service";
 import { generarCampana } from "@/lib/services/campana.service";
@@ -187,6 +188,15 @@ export const TOOLS: Tool[] = [
     input: z.object({}),
     params: [],
     run: () => analisisRentabilidad(),
+  },
+  {
+    name: "customer_score",
+    description: "Customer Score por cliente: valor histórico, frecuencia, recencia, ticket, riesgo de abandono y próxima acción. Determinístico, 0 tokens.",
+    category: "Comercial",
+    sideEffect: "read",
+    input: z.object({ limit: z.number().int().positive().max(500).optional() }),
+    params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de clientes" }],
+    run: (i) => scoringClientes(i.limit),
   },
   {
     name: "productos_para_promocionar",

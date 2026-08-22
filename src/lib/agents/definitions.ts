@@ -154,14 +154,22 @@ export const AGENTS: AgentDef[] = [
         });
       }
 
-      // ── Rentabilidad (Fase 5A): emite recomendaciones ESTRUCTURADAS al Centro
-      //    de Decisiones (con entidad producto, severidad e impacto cuando es real).
+      // ── Rentabilidad (Fase 5A): emite recomendaciones ESTRUCTURADAS al Centro.
+      //    Para EVITAR RUIDO, no vuelca todo el catálogo: prioriza y emite solo
+      //    las TOP alertas por corrida (más severas / mayor impacto real).
+      const MAX_ALERTAS_RENT = 15;
+      const rankSev = (s: string) => (s === "critica" ? 3 : s === "importante" ? 2 : 1);
       let alertasRent = 0;
       try {
         const items = await ctx.tool<any[]>("analisis_rentabilidad");
-        for (const p of items) {
-          const a = clasificarRentabilidad(p);
-          if (!a) continue;
+        const candidatas = items
+          .map(p => ({ p, a: clasificarRentabilidad(p) }))
+          .filter((x): x is { p: any; a: NonNullable<ReturnType<typeof clasificarRentabilidad>> } => x.a != null)
+          .sort((x, y) =>
+            rankSev(y.a.severidad) - rankSev(x.a.severidad) ||
+            (y.a.impactoEstimado ?? 0) - (x.a.impactoEstimado ?? 0))
+          .slice(0, MAX_ALERTAS_RENT);
+        for (const { p, a } of candidatas) {
           alertasRent++;
           await ctx.recommend({
             tipo: `rentabilidad:${a.tipo}`, titulo: a.titulo, descripcion: a.descripcion,

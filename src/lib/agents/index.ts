@@ -33,6 +33,8 @@ export { scoreCliente, ameritaReactivacion } from "./crm.logic";
 export type { CustomerScore, Riesgo, MetricasCliente } from "./crm.logic";
 export { detectarVentaCruzada, confianzaPorSoporte } from "./oportunidades.logic";
 export type { OportunidadCruzada, ParComplementario, ClienteProductos } from "./oportunidades.logic";
+export { clasificarConversacion, intencionCompra, analizarConversacion, INTENCION_ALTA } from "./whatsapp-intel.logic";
+export type { TipoConversacion, ConversacionAnalizada } from "./whatsapp-intel.logic";
 export {
   analizar, deduplicar, detectarConflictos, priorizar, conteosPorSeveridad, textoPlantilla,
 } from "./jefe-gabinete.logic";

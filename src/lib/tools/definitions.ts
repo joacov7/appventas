@@ -13,7 +13,7 @@ import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 import { resumenFinanciero, productosParaPromocionar, analisisRentabilidad } from "@/lib/services/finanzas.service";
 import { scoringClientes } from "@/lib/services/crm.service";
 import { oportunidadesVentaCruzada } from "@/lib/services/oportunidades.service";
-import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
+import { conversacionesPendientes, enviarWhatsapp, conversacionesPriorizadas } from "@/lib/services/whatsapp.service";
 import { proximasFechas } from "@/lib/services/calendario.service";
 import { generarCampana } from "@/lib/services/campana.service";
 import { ejecutarAgentePorNombre } from "@/lib/services/agentes.service";
@@ -225,6 +225,15 @@ export const TOOLS: Tool[] = [
     input: z.object({ limit: z.number().int().positive().max(20).optional() }),
     params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de conversaciones" }],
     run: (i) => conversacionesPendientes(i.limit),
+  },
+  {
+    name: "conversaciones_priorizadas",
+    description: "Conversaciones pendientes de WhatsApp clasificadas (consulta/precio/pedido/reclamo/…) y con intención de compra (0-100), ordenadas por prioridad. Determinístico.",
+    category: "Atención al cliente",
+    sideEffect: "read",
+    input: z.object({ limit: z.number().int().positive().max(30).optional() }),
+    params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de conversaciones" }],
+    run: (i) => conversacionesPriorizadas(i.limit),
   },
   {
     name: "enviar_whatsapp",

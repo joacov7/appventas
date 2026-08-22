@@ -12,7 +12,8 @@ import { remember, recall } from "@/lib/memory";
 import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 import { resumenFinanciero, productosParaPromocionar, analisisRentabilidad } from "@/lib/services/finanzas.service";
 import { scoringClientes } from "@/lib/services/crm.service";
-import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
+import { oportunidadesVentaCruzada } from "@/lib/services/oportunidades.service";
+import { conversacionesPendientes, enviarWhatsapp, conversacionesPriorizadas } from "@/lib/services/whatsapp.service";
 import { proximasFechas } from "@/lib/services/calendario.service";
 import { generarCampana } from "@/lib/services/campana.service";
 import { ejecutarAgentePorNombre } from "@/lib/services/agentes.service";
@@ -199,6 +200,15 @@ export const TOOLS: Tool[] = [
     run: (i) => scoringClientes(i.limit),
   },
   {
+    name: "oportunidades_venta_cruzada",
+    description: "Detecta venta cruzada: pares de productos comprados juntos y, por cliente, el complementario que todavía no compró. Determinístico, 0 tokens.",
+    category: "Comercial",
+    sideEffect: "read",
+    input: z.object({ maxPorCliente: z.number().int().positive().max(10).optional() }),
+    params: [{ nombre: "maxPorCliente", tipo: "number", requerido: false, descripcion: "Máximo de sugerencias por cliente" }],
+    run: (i) => oportunidadesVentaCruzada(i.maxPorCliente),
+  },
+  {
     name: "productos_para_promocionar",
     description: "Ranking de productos candidatos a publicidad: mejor margen ponderado por ventas recientes.",
     category: "Marketing",
@@ -215,6 +225,15 @@ export const TOOLS: Tool[] = [
     input: z.object({ limit: z.number().int().positive().max(20).optional() }),
     params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de conversaciones" }],
     run: (i) => conversacionesPendientes(i.limit),
+  },
+  {
+    name: "conversaciones_priorizadas",
+    description: "Conversaciones pendientes de WhatsApp clasificadas (consulta/precio/pedido/reclamo/…) y con intención de compra (0-100), ordenadas por prioridad. Determinístico.",
+    category: "Atención al cliente",
+    sideEffect: "read",
+    input: z.object({ limit: z.number().int().positive().max(30).optional() }),
+    params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de conversaciones" }],
+    run: (i) => conversacionesPriorizadas(i.limit),
   },
   {
     name: "enviar_whatsapp",

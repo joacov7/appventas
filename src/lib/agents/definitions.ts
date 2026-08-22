@@ -274,38 +274,54 @@ export const AGENTS: AgentDef[] = [
     id: "whatsapp",
     nombre: "WhatsApp",
     rol: "Atención al cliente",
-    objetivo: "Detecta las conversaciones que el bot no pudo resolver y redacta una respuesta para tu aprobación.",
+    objetivo: "Clasifica las conversaciones pendientes, estima la intención de compra (0-100) y prioriza a quién responder. Redacta la respuesta con IA solo para los de alta intención.",
     categoria: "Atención al cliente",
-    tools: ["conversaciones_whatsapp_pendientes", "buscar_productos", "enviar_whatsapp"],
+    tools: ["conversaciones_priorizadas", "buscar_productos", "enviar_whatsapp"],
     defaultAutonomy: "manual",
     async handler(ctx) {
-      const pendientes = await ctx.tool<any[]>("conversaciones_whatsapp_pendientes", { limit: 5 });
-      if (!pendientes.length) {
+      const convs = await ctx.tool<any[]>("conversaciones_priorizadas", { limit: 15 });
+      if (!convs.length) {
         ctx.log("sin conversaciones pendientes · 0 tokens de IA");
         return { resumen: "No hay conversaciones de WhatsApp esperando atención. El bot resolvió todo.", recomendaciones: [] };
       }
 
-      const recomendaciones: { titulo: string; detalle: string }[] = [];
-      for (const c of pendientes) {
-        // Contexto real: productos que matcheen la consulta del cliente
-        const productos = await ctx.tool<any[]>("buscar_productos", { q: c.ultimo_cliente.slice(0, 40), limit: 3 });
-        // IA (último recurso) solo para redactar la respuesta difícil
-        const respuesta = await ctx.ai({
-          system: "Sos atención al cliente de una tienda argentina de mates. Respondé al cliente por WhatsApp de forma breve, cordial y útil, en español argentino. Usá solo los productos que te paso. Si no hay info suficiente, ofrecé ayuda humana. Devolvé SOLO el texto del mensaje.",
-          messages: [{ role: "user", content: `Cliente escribió: "${c.ultimo_cliente}"\n\nProductos relacionados: ${JSON.stringify(productos)}` }],
-          maxTokens: 250,
-        });
-        // Propone enviar la respuesta → cae en Aprobaciones (o se envía en autónomo)
-        await ctx.tool("enviar_whatsapp", { to: c.wa_id, texto: respuesta.trim() });
-        recomendaciones.push({
-          titulo: `Respuesta propuesta para ${c.wa_id}`,
-          detalle: `Cliente: "${c.ultimo_cliente.slice(0, 60)}..." → ${respuesta.trim().slice(0, 120)}`,
+      // 1) Emite una recomendación por conversación, priorizada por intención.
+      const INTENCION_ALTA = 50;
+      for (const c of convs) {
+        const alta = c.intencion >= INTENCION_ALTA;
+        await ctx.recommend({
+          tipo: `whatsapp:${c.tipo}`,
+          severidad: alta ? "importante" : c.tipo === "reclamo" ? "importante" : "oportunidad",
+          titulo: `Responder ${c.wa_id} — ${c.tipo} (intención ${c.intencion})`,
+          descripcion: `Cliente: "${String(c.ultimo_cliente).slice(0, 140)}"`,
+          entityType: "contacto", entityId: c.wa_id,
+          confianza: c.intencion, origenConfianza: "inferencia_media",
+          evidencia: { observado: { tipo: c.tipo, intencion: c.intencion, texto: String(c.ultimo_cliente).slice(0, 200) } },
+          metadata: { origen: "whatsapp:intencion", tipo: c.tipo },
         });
       }
-      ctx.log(`${pendientes.length} conversaciones · ${pendientes.length} respuestas redactadas`);
+
+      // 2) IA (solo hot leads): redacta la respuesta para los de MAYOR intención.
+      const calientes = convs.filter(c => c.intencion >= INTENCION_ALTA).slice(0, 3);
+      let redactadas = 0;
+      for (const c of calientes) {
+        try {
+          const productos = await ctx.tool<any[]>("buscar_productos", { q: String(c.ultimo_cliente).slice(0, 40), limit: 3 });
+          const respuesta = await ctx.ai({
+            system: "Sos atención al cliente de una tienda argentina de mates. Respondé breve, cordial y útil, en español argentino. Usá solo los productos que te paso. Si no alcanza, ofrecé ayuda humana. Devolvé SOLO el texto del mensaje.",
+            messages: [{ role: "user", content: `Cliente escribió: "${c.ultimo_cliente}"\n\nProductos relacionados: ${JSON.stringify(productos)}` }],
+            maxTokens: 250,
+          });
+          await ctx.tool("enviar_whatsapp", { to: c.wa_id, texto: respuesta.trim() });
+          redactadas++;
+        } catch (e: any) { ctx.log(`✗ redacción ${c.wa_id}: ${e?.message ?? "error"}`); }
+      }
+
+      const altas = convs.filter(c => c.intencion >= INTENCION_ALTA).length;
+      ctx.log(`${convs.length} conversaciones priorizadas · ${altas} de alta intención · ${redactadas} respuesta(s) redactada(s)`);
       return {
-        resumen: `${pendientes.length} conversación(es) necesitaban atención. Redacté las respuestas — revisalas en Aprobaciones.`,
-        recomendaciones,
+        resumen: `${convs.length} conversación(es) pendientes; ${altas} con alta intención de compra. ${redactadas ? `Redacté ${redactadas} respuesta(s) para los más calientes.` : "Priorizadas en el Centro de Decisiones."}`,
+        recomendaciones: [],
       };
     },
   },
@@ -440,6 +456,48 @@ export const AGENTS: AgentDef[] = [
       return {
         resumen: `${ops.length} oportunidad(es) de postventa (${resenas} reseñas, ${recompras} recompras)${reactivar ? ` · ${reactivar} cliente(s) valioso(s) en riesgo para reactivar` : ""}.`,
         recomendaciones,
+      };
+    },
+  },
+
+  // ── Oportunidades: venta cruzada (canasta) — sin IA para detectar ──
+  {
+    id: "oportunidades",
+    nombre: "Oportunidades",
+    rol: "Venta cruzada",
+    objetivo: "Cruza lo que cada cliente compró con los productos que suelen ir juntos y sugiere el complementario que le falta. Con evidencia (canasta), sin inventar.",
+    categoria: "Comercial",
+    tools: ["oportunidades_venta_cruzada"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      let ops: any[] = [];
+      try { ops = await ctx.tool<any[]>("oportunidades_venta_cruzada", { maxPorCliente: 3 }); }
+      catch (e: any) { ctx.log(`✗ venta_cruzada: ${e?.message ?? "error"}`); }
+
+      if (!ops.length) {
+        ctx.log("sin oportunidades de venta cruzada (poca historia de canasta) · 0 tokens");
+        return { resumen: "No hay oportunidades de venta cruzada por ahora (falta historia de compras conjuntas).", recomendaciones: [] };
+      }
+
+      // Emite las TOP 15 (mayor co-ocurrencia) para no hacer ruido.
+      let emitidas = 0;
+      for (const o of ops.slice(0, 15)) {
+        emitidas++;
+        await ctx.recommend({
+          tipo: "venta_cruzada", severidad: "oportunidad",
+          titulo: `Venta cruzada: ofrecer "${o.sugerido_nombre ?? o.sugerido}" a ${o.nombre}`,
+          descripcion: `Compró un producto que suele ir junto con "${o.sugerido_nombre ?? o.sugerido}" (${o.co} veces juntas). Todavía no lo compró.`,
+          entityType: "cliente", entityId: o.email,
+          confianza: o.confianza, origenConfianza: "inferencia_media",
+          evidencia: { observado: { tiene: o.tiene, co_ocurrencias: o.co }, inferencia: "correlación de canasta, no causalidad" },
+          metadata: { origen: "oportunidades:venta_cruzada", sugerido: o.sugerido, email: o.email },
+        });
+      }
+
+      ctx.log(`${ops.length} oportunidad(es) de venta cruzada · ${emitidas} emitida(s) · 0 tokens de IA`);
+      return {
+        resumen: `${ops.length} oportunidad(es) de venta cruzada detectada(s)${emitidas ? ` · ${emitidas} en el Centro de Decisiones` : ""}.`,
+        recomendaciones: [],
       };
     },
   },

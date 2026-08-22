@@ -571,6 +571,15 @@ const DDL: Record<Ambito, string[]> = {
     `CREATE INDEX IF NOT EXISTS idx_ares_reco ON action_results (recommendation_id)`,
     `CREATE INDEX IF NOT EXISTS idx_ares_tipo ON action_results (tipo, created_at)`,
     `CREATE INDEX IF NOT EXISTS idx_ares_aq   ON action_results (action_queue_id)`,
+
+    // ─── Índices de performance para los análisis de agentes (Fase 5) ───────
+    // Aceleran la rentabilidad (ventas 30d por producto), la venta cruzada
+    // (self-join por orden) y los cruces de CRM. Idempotentes; sobre tablas de
+    // Prisma (Postgres no distingue el "dueño" de la tabla).
+    `CREATE INDEX IF NOT EXISTS idx_order_items_product ON order_items ("productId")`,
+    `CREATE INDEX IF NOT EXISTS idx_order_items_order   ON order_items ("orderId")`,
+    `CREATE INDEX IF NOT EXISTS idx_orders_created_status ON orders ("createdAt", status)`,
+    `CREATE INDEX IF NOT EXISTS idx_variants_product ON product_variants ("productId", active)`,
   ],
 
   // ─── Memoria compartida de la Empresa IA ─────────────────────────────────

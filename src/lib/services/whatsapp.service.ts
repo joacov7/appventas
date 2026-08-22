@@ -90,3 +90,14 @@ export async function enviarWhatsappMedia(
   const conectado = !!process.env.WHATSAPP_ACCESS_TOKEN && !!process.env.WHATSAPP_PHONE_NUMBER_ID;
   return { ok: true, enviado: conectado };
 }
+
+// ─── Conversaciones priorizadas por intención de compra (Fase 5D) ────────────
+// Enriquece las conversaciones pendientes con su tipo e intención (0-100),
+// ordenadas de mayor a menor intención. Determinístico (sin IA para puntuar).
+export async function conversacionesPriorizadas(limitConv = 15) {
+  const { analizarConversacion } = await import("@/lib/agents/whatsapp-intel.logic");
+  const pendientes = await conversacionesPendientes(limitConv);
+  return pendientes
+    .map(c => ({ ...c, ...analizarConversacion(c.wa_id, c.ultimo_cliente) }))
+    .sort((a, b) => b.intencion - a.intencion);
+}

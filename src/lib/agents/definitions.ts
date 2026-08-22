@@ -443,6 +443,48 @@ export const AGENTS: AgentDef[] = [
       };
     },
   },
+
+  // ── Oportunidades: venta cruzada (canasta) — sin IA para detectar ──
+  {
+    id: "oportunidades",
+    nombre: "Oportunidades",
+    rol: "Venta cruzada",
+    objetivo: "Cruza lo que cada cliente compró con los productos que suelen ir juntos y sugiere el complementario que le falta. Con evidencia (canasta), sin inventar.",
+    categoria: "Comercial",
+    tools: ["oportunidades_venta_cruzada"],
+    defaultAutonomy: "manual",
+    async handler(ctx) {
+      let ops: any[] = [];
+      try { ops = await ctx.tool<any[]>("oportunidades_venta_cruzada", { maxPorCliente: 3 }); }
+      catch (e: any) { ctx.log(`✗ venta_cruzada: ${e?.message ?? "error"}`); }
+
+      if (!ops.length) {
+        ctx.log("sin oportunidades de venta cruzada (poca historia de canasta) · 0 tokens");
+        return { resumen: "No hay oportunidades de venta cruzada por ahora (falta historia de compras conjuntas).", recomendaciones: [] };
+      }
+
+      // Emite las TOP 15 (mayor co-ocurrencia) para no hacer ruido.
+      let emitidas = 0;
+      for (const o of ops.slice(0, 15)) {
+        emitidas++;
+        await ctx.recommend({
+          tipo: "venta_cruzada", severidad: "oportunidad",
+          titulo: `Venta cruzada: ofrecer "${o.sugerido_nombre ?? o.sugerido}" a ${o.nombre}`,
+          descripcion: `Compró un producto que suele ir junto con "${o.sugerido_nombre ?? o.sugerido}" (${o.co} veces juntas). Todavía no lo compró.`,
+          entityType: "cliente", entityId: o.email,
+          confianza: o.confianza, origenConfianza: "inferencia_media",
+          evidencia: { observado: { tiene: o.tiene, co_ocurrencias: o.co }, inferencia: "correlación de canasta, no causalidad" },
+          metadata: { origen: "oportunidades:venta_cruzada", sugerido: o.sugerido, email: o.email },
+        });
+      }
+
+      ctx.log(`${ops.length} oportunidad(es) de venta cruzada · ${emitidas} emitida(s) · 0 tokens de IA`);
+      return {
+        resumen: `${ops.length} oportunidad(es) de venta cruzada detectada(s)${emitidas ? ` · ${emitidas} en el Centro de Decisiones` : ""}.`,
+        recomendaciones: [],
+      };
+    },
+  },
 ];
 
 function etiquetaAlerta(tipo: string): string {

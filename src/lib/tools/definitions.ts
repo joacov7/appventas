@@ -12,6 +12,7 @@ import { remember, recall } from "@/lib/memory";
 import { aplicarPrecioSugerido } from "@/lib/services/pricing.service";
 import { resumenFinanciero, productosParaPromocionar, analisisRentabilidad } from "@/lib/services/finanzas.service";
 import { scoringClientes } from "@/lib/services/crm.service";
+import { oportunidadesVentaCruzada } from "@/lib/services/oportunidades.service";
 import { conversacionesPendientes, enviarWhatsapp } from "@/lib/services/whatsapp.service";
 import { proximasFechas } from "@/lib/services/calendario.service";
 import { generarCampana } from "@/lib/services/campana.service";
@@ -197,6 +198,15 @@ export const TOOLS: Tool[] = [
     input: z.object({ limit: z.number().int().positive().max(500).optional() }),
     params: [{ nombre: "limit", tipo: "number", requerido: false, descripcion: "Máximo de clientes" }],
     run: (i) => scoringClientes(i.limit),
+  },
+  {
+    name: "oportunidades_venta_cruzada",
+    description: "Detecta venta cruzada: pares de productos comprados juntos y, por cliente, el complementario que todavía no compró. Determinístico, 0 tokens.",
+    category: "Comercial",
+    sideEffect: "read",
+    input: z.object({ maxPorCliente: z.number().int().positive().max(10).optional() }),
+    params: [{ nombre: "maxPorCliente", tipo: "number", requerido: false, descripcion: "Máximo de sugerencias por cliente" }],
+    run: (i) => oportunidadesVentaCruzada(i.maxPorCliente),
   },
   {
     name: "productos_para_promocionar",

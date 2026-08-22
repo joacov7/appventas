@@ -31,6 +31,8 @@ export {
 export type { DecisionValue, MemNamespace } from "./memoria-estructurada";
 export { scoreCliente, ameritaReactivacion } from "./crm.logic";
 export type { CustomerScore, Riesgo, MetricasCliente } from "./crm.logic";
+export { detectarVentaCruzada, confianzaPorSoporte } from "./oportunidades.logic";
+export type { OportunidadCruzada, ParComplementario, ClienteProductos } from "./oportunidades.logic";
 export {
   analizar, deduplicar, detectarConflictos, priorizar, conteosPorSeveridad, textoPlantilla,
 } from "./jefe-gabinete.logic";

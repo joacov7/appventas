@@ -126,11 +126,14 @@ export const AGENTS: AgentDef[] = [
     tools: ["resumen_financiero", "analisis_rentabilidad"],
     defaultAutonomy: "manual",
     async handler(ctx) {
-      const f = await ctx.tool<any>("resumen_financiero");
+      // Robusto: si el resumen financiero falla, NO se aborta la rentabilidad.
+      let f: any = {};
+      try { f = (await ctx.tool<any>("resumen_financiero")) ?? {}; }
+      catch (e: any) { ctx.log(`✗ resumen_financiero: ${e?.message ?? "error"}`); }
       const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(n);
       const recomendaciones: { titulo: string; detalle: string }[] = [];
 
-      if (f.pendiente_de_cobro > 0) {
+      if (Number(f.pendiente_de_cobro) > 0) {
         recomendaciones.push({
           titulo: `${ars(f.pendiente_de_cobro)} pendientes de cobro`,
           detalle: `Hay ${f.ordenes_pendientes} orden(es) sin pagar. Seguí esos cobros.`,
@@ -175,9 +178,10 @@ export const AGENTS: AgentDef[] = [
         ctx.log(`✗ rentabilidad: ${e?.message ?? "error"}`);
       }
 
-      ctx.log(`ingresos 30d ${ars(f.ingresos_30d)} · ${f.ordenes_pagadas} pagadas · ${alertasRent} alerta(s) de rentabilidad · 0 tokens de IA`);
+      const ingresosTot = Number(f.ingresos_aprobados_total) || 0, ingresos30 = Number(f.ingresos_30d) || 0, pagadas = Number(f.ordenes_pagadas) || 0;
+      ctx.log(`ingresos 30d ${ars(ingresos30)} · ${pagadas} pagadas · ${alertasRent} alerta(s) de rentabilidad · 0 tokens de IA`);
       return {
-        resumen: `Ingresos aprobados: ${ars(f.ingresos_aprobados_total)} (${ars(f.ingresos_30d)} últimos 30 días). ${f.ordenes_pagadas} órdenes pagadas.${alertasRent ? ` ${alertasRent} alerta(s) de rentabilidad.` : ""}`,
+        resumen: `Ingresos aprobados: ${ars(ingresosTot)} (${ars(ingresos30)} últimos 30 días). ${pagadas} órdenes pagadas.${alertasRent ? ` ${alertasRent} alerta(s) de rentabilidad.` : ""}`,
         recomendaciones,
         data: f,
       };

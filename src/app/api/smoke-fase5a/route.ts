@@ -48,9 +48,11 @@ export async function GET(req: NextRequest) {
         WHERE agent_id='finanzas' AND id > $1 AND estado IN (${vivos})`, recoMax);
     const bienFormadas = nuevas.every(r =>
       (r.tipo?.startsWith("rentabilidad:") ? r.entity_type === "producto" : true));
+    // Si el análisis encontró candidatos, Finanzas DEBE haber emitido recomendaciones.
+    const huboCandidatos = items.some(i => clasificarRentabilidad(i) != null);
     push("3. Finanzas ejecuta y emite recomendaciones estructuradas",
-      (res.ok || res.ok === false) && bienFormadas,
-      `run.ok=${res.ok} · recos_nuevas=${nuevas.length}`);
+      res.ok === true && bienFormadas && (!huboCandidatos || nuevas.length > 0),
+      `run.ok=${res.ok} · candidatos=${huboCandidatos} · recos_nuevas=${nuevas.length}`);
 
     // 4. Una recomendación de rentabilidad se persiste agrupable (tenant aislado).
     const { recommendation } = await createOrMerge({

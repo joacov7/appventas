@@ -1,5 +1,7 @@
 import type { AgentDef } from "./types";
 import { calcularSugerencia } from "@/lib/services/pricing.service";
+import { clasificarRentabilidad } from "./rentabilidad.logic";
+import { ameritaReactivacion } from "./crm.logic";
 
 export const AGENTS: AgentDef[] = [
   // ── CEO: resumen y prioridades del día (usa IA para redactar) ──
@@ -119,20 +121,31 @@ export const AGENTS: AgentDef[] = [
   {
     id: "finanzas",
     nombre: "Finanzas",
-    rol: "Cobros y salud financiera",
-    objetivo: "Reporta ingresos, ticket promedio y plata pendiente de cobro. Sin gastar tokens.",
+    rol: "Cobros, salud financiera y rentabilidad",
+    objetivo: "Reporta ingresos, ticket promedio y cobros pendientes, y analiza la rentabilidad por producto (margen, rotación e inmovilizado). Sin gastar tokens.",
     categoria: "Finanzas",
-    tools: ["resumen_financiero"],
+    tools: ["resumen_financiero", "analisis_rentabilidad"],
     defaultAutonomy: "manual",
     async handler(ctx) {
-      const f = await ctx.tool<any>("resumen_financiero");
+      // Robusto: si el resumen financiero falla, NO se aborta la rentabilidad.
+      let f: any = {};
+      try { f = (await ctx.tool<any>("resumen_financiero")) ?? {}; }
+      catch (e: any) { ctx.log(`✗ resumen_financiero: ${e?.message ?? "error"}`); }
       const ars = (n: number) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", minimumFractionDigits: 0 }).format(n);
       const recomendaciones: { titulo: string; detalle: string }[] = [];
 
-      if (f.pendiente_de_cobro > 0) {
+      if (Number(f.pendiente_de_cobro) > 0) {
         recomendaciones.push({
           titulo: `${ars(f.pendiente_de_cobro)} pendientes de cobro`,
           detalle: `Hay ${f.ordenes_pendientes} orden(es) sin pagar. Seguí esos cobros.`,
+        });
+        // También al Centro de Decisiones (impacto real = monto pendiente).
+        await ctx.recommend({
+          tipo: "cobros_pendientes", titulo: `${ars(f.pendiente_de_cobro)} pendientes de cobro`,
+          descripcion: `Hay ${f.ordenes_pendientes} orden(es) sin pagar. Seguí esos cobros.`,
+          severidad: "importante", impactoEstimado: Number(f.pendiente_de_cobro) || null,
+          origenConfianza: "deterministico", dedupKey: "cobros_pendientes",
+          metadata: { origen: "finanzas:cobros" },
         });
       }
       if (f.ticket_promedio != null) {
@@ -141,9 +154,43 @@ export const AGENTS: AgentDef[] = [
           detalle: `Un combo o venta cruzada puede subirlo. Revisá el módulo Combos.`,
         });
       }
-      ctx.log(`ingresos 30d ${ars(f.ingresos_30d)} · ${f.ordenes_pagadas} pagadas · 0 tokens de IA`);
+
+      // ── Rentabilidad (Fase 5A): emite recomendaciones ESTRUCTURADAS al Centro.
+      //    Para EVITAR RUIDO, no vuelca todo el catálogo: prioriza y emite solo
+      //    las TOP alertas por corrida (más severas / mayor impacto real).
+      const MAX_ALERTAS_RENT = 15;
+      const rankSev = (s: string) => (s === "critica" ? 3 : s === "importante" ? 2 : 1);
+      let alertasRent = 0;
+      try {
+        const items = await ctx.tool<any[]>("analisis_rentabilidad");
+        const candidatas = items
+          .map(p => ({ p, a: clasificarRentabilidad(p) }))
+          .filter((x): x is { p: any; a: NonNullable<ReturnType<typeof clasificarRentabilidad>> } => x.a != null)
+          .sort((x, y) =>
+            rankSev(y.a.severidad) - rankSev(x.a.severidad) ||
+            (y.a.impactoEstimado ?? 0) - (x.a.impactoEstimado ?? 0))
+          .slice(0, MAX_ALERTAS_RENT);
+        for (const { p, a } of candidatas) {
+          alertasRent++;
+          await ctx.recommend({
+            tipo: `rentabilidad:${a.tipo}`, titulo: a.titulo, descripcion: a.descripcion,
+            severidad: a.severidad, entityType: "producto", entityId: p.id,
+            impactoEstimado: a.impactoEstimado ?? null, origenConfianza: "calculo",
+            evidencia: {
+              observado: { precio: p.precio, costo: p.costo, ventas_30d: p.ventas_30d, stock: p.stock },
+              calculo: { margen_pct: p.margen_pct, valor_inmovilizado: p.valor_inmovilizado },
+            },
+            metadata: { origen: "finanzas:rentabilidad", subtipo: a.tipo },
+          });
+        }
+      } catch (e: any) {
+        ctx.log(`✗ rentabilidad: ${e?.message ?? "error"}`);
+      }
+
+      const ingresosTot = Number(f.ingresos_aprobados_total) || 0, ingresos30 = Number(f.ingresos_30d) || 0, pagadas = Number(f.ordenes_pagadas) || 0;
+      ctx.log(`ingresos 30d ${ars(ingresos30)} · ${pagadas} pagadas · ${alertasRent} alerta(s) de rentabilidad · 0 tokens de IA`);
       return {
-        resumen: `Ingresos aprobados: ${ars(f.ingresos_aprobados_total)} (${ars(f.ingresos_30d)} últimos 30 días). ${f.ordenes_pagadas} órdenes pagadas.`,
+        resumen: `Ingresos aprobados: ${ars(ingresosTot)} (${ars(ingresos30)} últimos 30 días). ${pagadas} órdenes pagadas.${alertasRent ? ` ${alertasRent} alerta(s) de rentabilidad.` : ""}`,
         recomendaciones,
         data: f,
       };
@@ -346,27 +393,52 @@ export const AGENTS: AgentDef[] = [
     id: "postventa",
     nombre: "Postventa / Fidelización",
     rol: "Reseñas y recompra",
-    objetivo: "Aprovecha a los que ya compraron: pide reseña tras la entrega y reactiva a los clientes que hace rato no compran.",
+    objetivo: "Aprovecha a los que ya compraron: pide reseña tras la entrega, calcula el Customer Score y reactiva a los clientes valiosos en riesgo de abandono.",
     categoria: "Comercial",
-    tools: ["oportunidades_postventa"],
+    tools: ["oportunidades_postventa", "customer_score"],
     defaultAutonomy: "manual",
     async handler(ctx) {
       const ops = await ctx.tool<any[]>("oportunidades_postventa", {});
-      if (!ops.length) {
-        ctx.log("sin oportunidades de postventa · 0 tokens de IA");
-        return { resumen: "No hay oportunidades de postventa por ahora.", recomendaciones: [] };
-      }
       const resenas = ops.filter(o => o.tipo === "resena").length;
       const recompras = ops.filter(o => o.tipo === "recompra").length;
-
       const recomendaciones = ops.slice(0, 15).map(o => ({
         titulo: `${o.tipo === "resena" ? "⭐ Pedir reseña" : "🔄 Reactivar"} — ${o.nombre}`,
         detalle: `${o.tipo === "resena" ? `Compró hace ${o.dias} días.` : `Sin comprar hace ${o.dias} días (${o.compras} compra/s, ${"$" + Math.round(o.total_gastado).toLocaleString("es-AR")}).`} Mensaje: "${o.mensaje_sugerido}"`,
       }));
 
-      ctx.log(`${ops.length} oportunidad(es): ${resenas} reseña(s), ${recompras} recompra(s) · 0 tokens de IA`);
+      // ── CRM Customer Score (Fase 5B): reactivar clientes VALIOSOS en riesgo ──
+      // Emite recomendaciones estructuradas (entidad cliente) para los buenos
+      // clientes con riesgo de abandono alto. Top 15 para no hacer ruido.
+      let reactivar = 0;
+      try {
+        const clientes = await ctx.tool<any[]>("customer_score");
+        const maxValor = clientes.reduce((mx, c) => Math.max(mx, c.total_gastado), 0);
+        const enRiesgo = clientes
+          .filter(c => ameritaReactivacion(c, c, { maxValor }))
+          .slice(0, 15);
+        for (const c of enRiesgo) {
+          reactivar++;
+          await ctx.recommend({
+            tipo: "crm:reactivar", severidad: "importante",
+            titulo: `Reactivar cliente valioso: ${c.nombre}`,
+            descripcion: `Score ${c.score}/100 · riesgo ${c.riesgo_abandono}. ${c.motivos.join(". ")}. Próxima acción: ${c.proxima_accion}.`,
+            entityType: "cliente", entityId: c.key,
+            impactoEstimado: c.ticket_promedio || null, // ≈ valor de la próxima compra (real)
+            confianza: c.confianza,
+            evidencia: {
+              observado: { total_gastado: c.total_gastado, compras: c.compras, dias_desde_ultima: c.dias_desde_ultima, ticket_promedio: c.ticket_promedio },
+              calculo: { score: c.score, frecuencia_dias: c.frecuencia_dias, riesgo: c.riesgo_abandono },
+            },
+            metadata: { origen: "postventa:crm", email: c.email, telefono: c.telefono },
+          });
+        }
+      } catch (e: any) {
+        ctx.log(`✗ customer_score: ${e?.message ?? "error"}`);
+      }
+
+      ctx.log(`${ops.length} oportunidad(es): ${resenas} reseña(s), ${recompras} recompra(s) · ${reactivar} reactivación(es) CRM · 0 tokens de IA`);
       return {
-        resumen: `${ops.length} oportunidad(es) de postventa: ${resenas} para pedir reseña y ${recompras} para reactivar. Revisalas en Postventa.`,
+        resumen: `${ops.length} oportunidad(es) de postventa (${resenas} reseñas, ${recompras} recompras)${reactivar ? ` · ${reactivar} cliente(s) valioso(s) en riesgo para reactivar` : ""}.`,
         recomendaciones,
       };
     },

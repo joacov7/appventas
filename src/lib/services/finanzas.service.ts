@@ -76,3 +76,43 @@ export async function productosParaPromocionar(limit = 8): Promise<CandidatoProm
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 }
+
+// ─── Rentabilidad por producto (Fase 5A): margen, rotación e inmovilizado ────
+// Determinístico, 0 tokens. Reutiliza el mismo cruce products + pricing + ventas
+// que "promocionar", sumando el stock para calcular el capital inmovilizado.
+export interface RentabilidadItem {
+  id: string; nombre: string; precio: number; costo: number | null;
+  margen_pct: number | null; ventas_30d: number; stock: number; valor_inmovilizado: number | null;
+}
+export async function analisisRentabilidad(): Promise<RentabilidadItem[]> {
+  const rows: any[] = await (prisma as any).$queryRawUnsafe(`
+    SELECT p.id, p.name,
+      (SELECT MIN(v.price)::float FROM product_variants v WHERE v."productId" = p.id AND v.active = TRUE) AS precio,
+      (SELECT COALESCE(SUM(v.stock),0)::int FROM product_variants v WHERE v."productId" = p.id AND v.active = TRUE) AS stock,
+      pp.costo::float AS costo,
+      COALESCE((
+        SELECT SUM(oi.quantity)::int FROM order_items oi
+        JOIN orders o ON o.id = oi."orderId"
+        WHERE oi."productId" = p.id AND o."createdAt" >= NOW() - INTERVAL '30 days'
+          AND o.status IN ('PROCESSING','SHIPPED','DELIVERED')
+      ), 0) AS ventas_30d
+    FROM products p
+    LEFT JOIN product_pricing pp ON pp.product_id = p.id
+    WHERE p.active = TRUE
+  `).catch(() => []);
+
+  return rows
+    .filter(r => r.precio != null && r.precio > 0)
+    .map(r => {
+      const precio = Number(r.precio);
+      const costo = r.costo != null ? Number(r.costo) : null;
+      const margen = costo != null ? ((precio - costo) / precio) * 100 : null;
+      const stock = Number(r.stock ?? 0);
+      return {
+        id: r.id, nombre: r.name, precio, costo,
+        margen_pct: margen != null ? Math.round(margen * 10) / 10 : null,
+        ventas_30d: Number(r.ventas_30d ?? 0), stock,
+        valor_inmovilizado: costo != null ? Math.round(stock * costo) : null,
+      };
+    });
+}

@@ -238,16 +238,21 @@ function CatalogPreviewPage({
 // ─── Página de aclaraciones (última hoja del PDF) ─────────────────────────────
 function AclaracionesPDFPage({ cfg, tipo, items }: { cfg: CatalogConfig; tipo: "ar" | "usa"; items: { titulo: string; texto: string }[] }) {
   return (
-    <div style={{ background: "white", width: "100%", padding: "40px 48px 56px" }}>
-      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 20, color: cfg.colorPrincipal }}>
-        {tipo === "usa" ? "Terms & Conditions" : "Aclaraciones y condiciones"}
-      </h2>
-      {items.map((it, i) => (
-        <div key={i} style={{ marginBottom: 16 }}>
-          <p style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 3 }}>{it.titulo}</p>
-          <p style={{ fontSize: 13.5, color: "#4b5563", lineHeight: 1.5, whiteSpace: "pre-wrap", margin: 0 }}>{it.texto}</p>
-        </div>
-      ))}
+    // Root sin padding (igual que las páginas de productos): el padding va en el
+    // div interno para que el elemento capturado mida exactamente el ancho de la
+    // hoja y no se desborde/corte por la derecha.
+    <div style={{ background: "white", width: "100%" }}>
+      <div style={{ padding: "40px 48px 56px" }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 20, color: cfg.colorPrincipal }}>
+          {tipo === "usa" ? "Terms & Conditions" : "Aclaraciones y condiciones"}
+        </h2>
+        {items.map((it, i) => (
+          <div key={i} style={{ marginBottom: 16 }}>
+            <p style={{ fontWeight: 700, fontSize: 15, color: "#111827", marginBottom: 3 }}>{it.titulo}</p>
+            <p style={{ fontSize: 13.5, color: "#4b5563", lineHeight: 1.5, whiteSpace: "pre-wrap", margin: 0 }}>{it.texto}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

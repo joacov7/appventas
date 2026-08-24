@@ -111,7 +111,7 @@ async function productosDeCategoria(catId: string) {
   } catch { return []; }
 }
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://appventas-iota.vercel.app";
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "https://regionalespormayor.com.ar";
 
 // ── Send a text message via Meta Cloud API ───────────────────────────────────
 
@@ -271,7 +271,10 @@ function precioDesde(
 ): { precio: number; esMayorista: boolean } {
   if (seg === "minorista") return { precio: variantPrice, esMayorista: false };
   const m = may[productId];
-  return m ? { precio: m, esMayorista: true } : { precio: variantPrice, esMayorista: false };
+  // El precio_mayorista suele venir de importaciones (pack ÷ unidades) con
+  // decimales feos ($17.866,67). Se redondea a la decena más cercana para
+  // mostrarlo limpio en el bot, sin alterar el valor guardado.
+  return m ? { precio: Math.round(m / 10) * 10, esMayorista: true } : { precio: variantPrice, esMayorista: false };
 }
 
 // ── Bot responses ─────────────────────────────────────────────────────────────
